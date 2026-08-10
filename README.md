@@ -64,40 +64,59 @@ Para tener una URL fija accesible desde cualquier dispositivo, con los datos gua
 verdad (no solo en tu compu), hace falta una base de datos alcanzable por red — Turso — y un
 hosting — Vercel. Los dos tienen plan gratis y alcanza de sobra para uso personal.
 
+Todo este flujo se puede hacer 100% desde el navegador (celular incluido) — no hace falta
+computadora ni terminal.
+
 ### 1. Crear la base de datos en Turso
 
-1. Entra a [turso.tech](https://turso.tech) y creá una cuenta gratis (podés entrar con GitHub).
+1. Entra a [turso.tech](https://turso.tech) y creá una cuenta gratis (con Google o GitHub, da
+   igual — son cuentas independientes de la de Vercel).
 2. En el dashboard, creá una base de datos nueva (botón "Create Database"). Cualquier nombre y
    región están bien.
 3. Una vez creada, andá a la base de datos y buscá:
    - **Database URL** (empieza con `libsql://...`)
    - Generá un **Auth Token** (botón "Create Token")
-4. Guardá esos dos valores, los vas a necesitar en el paso 3.
+4. Guardá esos dos valores, los vas a necesitar en el paso 2.
 
-### 2. Aplicar las migraciones a esa base de datos
+### 2. Desplegar en Vercel
 
-Desde tu compu, en la carpeta del proyecto:
+1. Entra a [vercel.com](https://vercel.com) y creá una cuenta gratis con GitHub (la misma
+   cuenta de GitHub donde está el repo de MovieMatch).
+2. "Add New" → "Project" → importá el repositorio `MovieMatch`, rama a publicar.
+3. En "Environment Variables" agregá:
+   - `DATABASE_URL` = la URL `libsql://...` de Turso
+   - `TURSO_AUTH_TOKEN` = el token de Turso
+   - `AUTH_SECRET` = un secreto random (cualquier texto largo)
+   - `SEED_SECRET` = otro secreto inventado (lo usás en el paso 3)
+   - `TMDB_API_KEY` = opcional, tu token de TMDB si lo tenés
+4. Dale a "Deploy". A los pocos minutos te da una URL pública tipo
+   `https://moviematch-tu-usuario.vercel.app`, accesible desde cualquier navegador.
+
+### 3. Crear las tablas y cargar el catálogo
+
+La base de Turso está vacía todavía. Con el sitio ya desplegado, abrí esta URL una vez (desde
+el navegador, celular o donde sea) reemplazando el dominio y el secreto:
+
+```
+https://moviematch-tu-usuario.vercel.app/api/admin/seed?secret=EL_SEED_SECRET_QUE_PUSISTE
+```
+
+Esto crea las tablas y carga el catálogo (TMDB si configuraste `TMDB_API_KEY`, si no el
+dataset local) directamente en Turso. Da un JSON como respuesta confirmando cuántos títulos y
+personas cargó. Es seguro visitarla de nuevo — si ya hay datos, no hace nada (a menos que le
+agregues `&force=1` al final para forzar una recarga, por ejemplo después de agregar una
+`TMDB_API_KEY` que no tenías antes).
+
+Con eso ya está: entrá a la URL de tu app y registrate.
+
+### Alternativa con terminal (si tenés compu)
+
+Si preferís aplicar las migraciones vos mismo en lugar de usar `/api/admin/seed`:
 
 ```bash
 DATABASE_URL="libsql://tu-base-xxxx.turso.io" TURSO_AUTH_TOKEN="tu-token" npx prisma migrate deploy
 DATABASE_URL="libsql://tu-base-xxxx.turso.io" TURSO_AUTH_TOKEN="tu-token" npm run db:seed
 ```
-
-Esto crea las tablas y carga el catálogo directamente en la base de Turso (usa TMDB si le
-pasás también `TMDB_API_KEY`, si no carga el dataset local).
-
-### 3. Desplegar en Vercel
-
-1. Entra a [vercel.com](https://vercel.com) y creá una cuenta gratis con GitHub.
-2. "Add New" → "Project" → importá el repositorio de MovieMatch (la rama que quieras publicar).
-3. En "Environment Variables" agregá:
-   - `DATABASE_URL` = la URL `libsql://...` de Turso
-   - `TURSO_AUTH_TOKEN` = el token de Turso
-   - `AUTH_SECRET` = un secreto random (`openssl rand -base64 32`)
-   - `TMDB_API_KEY` = opcional, tu token de TMDB si lo tenés
-4. Dale a "Deploy". A los pocos minutos te da una URL pública tipo
-   `https://moviematch-tu-usuario.vercel.app`, accesible desde cualquier navegador (celular
-   incluido) y con los datos persistidos en Turso.
 
 Cada vez que hagas push a la rama conectada, Vercel vuelve a desplegar solo.
 
