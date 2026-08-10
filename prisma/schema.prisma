@@ -1,0 +1,163 @@
+// MovieMatch data model.
+// Content-based recommender: users rate titles (movies/series) they've seen,
+// rate actors/directors, and set genre/country weights. Recommendations score
+// unrated titles against those signals.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum TitleType {
+  MOVIE
+  SERIES
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  passwordHash          String
+  name                  String?
+  createdAt             DateTime  @default(now())
+  onboardingCompletedAt DateTime?
+
+  titleRatings       UserTitleRating[]
+  personRatings      UserPersonRating[]
+  genrePreferences   UserGenrePreference[]
+  countryPreferences UserCountryPreference[]
+}
+
+model Title {
+  id             String    @id @default(cuid())
+  tmdbId         Int       @unique
+  type           TitleType
+  name           String
+  originalName   String?
+  overview       String?
+  releaseYear    Int?
+  posterPath     String?
+  backdropPath   String?
+  popularity     Float?
+  voteAverage    Float?
+  originCountry  String? // primary ISO 3166-1 country code
+  onboardingRank Int? // lower = shown earlier during onboarding ("top 100")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  genres  TitleGenre[]
+  cast    TitleCast[]
+  crew    TitleCrew[]
+  ratings UserTitleRating[]
+
+  @@index([onboardingRank])
+  @@index([type])
+}
+
+model Genre {
+  id   Int    @id // TMDB genre id
+  name String @unique
+
+  titles      TitleGenre[]
+  preferences UserGenrePreference[]
+}
+
+model TitleGenre {
+  titleId String
+  genreId Int
+  title   Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, genreId])
+}
+
+model Person {
+  id                 String  @id @default(cuid())
+  tmdbId             Int     @unique
+  name               String
+  profilePath        String?
+  knownForDepartment String?
+
+  castRoles TitleCast[]
+  crewRoles TitleCrew[]
+  ratings   UserPersonRating[]
+
+  @@index([knownForDepartment])
+}
+
+model TitleCast {
+  titleId   String
+  personId  String
+  character String?
+  order     Int     @default(0)
+  title     Title   @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  person    Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, personId])
+  @@index([personId])
+}
+
+// Directors / creators (job = "Director" for movies, "Creator" for series)
+model TitleCrew {
+  titleId  String
+  personId String
+  job      String
+  title    Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, personId, job])
+  @@index([personId])
+}
+
+model UserTitleRating {
+  id      String   @id @default(cuid())
+  userId  String
+  titleId String
+  seen    Boolean  @default(true)
+  score   Int? // 1-10, null when seen=false
+  ratedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId])
+}
+
+// Covers both actors and directors (Person is shared between the two roles)
+model UserPersonRating {
+  id       String @id @default(cuid())
+  userId   String
+  personId String
+  score    Int // -1 dislike, 0 neutral, 1 like (simple 3-way scale)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, personId])
+  @@index([userId])
+}
+
+model UserGenrePreference {
+  id      String @id @default(cuid())
+  userId  String
+  genreId Int
+  weight  Int // -2..2
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, genreId])
+  @@index([userId])
+}
+
+model UserCountryPreference {
+  id          String @id @default(cuid())
+  userId      String
+  countryCode String
+  weight      Int // -2..2
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, countryCode])
+  @@index([userId])
+}
