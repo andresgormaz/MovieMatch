@@ -25,9 +25,10 @@ modelo, así que mientras más usas la app, mejor se pone.
 ## Stack
 
 - **Next.js 16 (App Router) + TypeScript + Tailwind CSS 4** — full-stack en un solo proyecto.
-- **Prisma 7 + SQLite** (vía `@prisma/adapter-better-sqlite3`) como base de datos. Fácil de
-  migrar a Postgres más adelante si crece (multi-usuario ya está soportado desde el modelo de
-  datos).
+- **Prisma 7 + SQLite** (vía `@prisma/adapter-libsql`) como base de datos. En local usa un
+  archivo (`dev.db`); en producción apunta a [Turso](https://turso.tech) (SQLite alojado,
+  gratis) sin cambiar el schema — es lo que permite desplegarla en un hosting serverless como
+  Vercel. Multi-usuario ya está soportado desde el modelo de datos.
 - **NextAuth (Auth.js) v5** con login por email/contraseña (JWT sessions). Pensado para escalar
   a múltiples usuarios, cada uno con su propio historial y recomendaciones.
 - **TMDB (The Movie Database)** como fuente de datos — es el reemplazo estándar y gratuito a
@@ -56,6 +57,49 @@ Abre [http://localhost:3000](http://localhost:3000).
 3. Pégalo en `.env` como `TMDB_API_KEY`.
 4. Corre `npm run db:seed` de nuevo — esta vez importa ~130 títulos reales (con pósters,
    elenco y país) desde TMDB en vez del dataset local.
+
+## Desplegar en producción (link público permanente)
+
+Para tener una URL fija accesible desde cualquier dispositivo, con los datos guardados de
+verdad (no solo en tu compu), hace falta una base de datos alcanzable por red — Turso — y un
+hosting — Vercel. Los dos tienen plan gratis y alcanza de sobra para uso personal.
+
+### 1. Crear la base de datos en Turso
+
+1. Entra a [turso.tech](https://turso.tech) y creá una cuenta gratis (podés entrar con GitHub).
+2. En el dashboard, creá una base de datos nueva (botón "Create Database"). Cualquier nombre y
+   región están bien.
+3. Una vez creada, andá a la base de datos y buscá:
+   - **Database URL** (empieza con `libsql://...`)
+   - Generá un **Auth Token** (botón "Create Token")
+4. Guardá esos dos valores, los vas a necesitar en el paso 3.
+
+### 2. Aplicar las migraciones a esa base de datos
+
+Desde tu compu, en la carpeta del proyecto:
+
+```bash
+DATABASE_URL="libsql://tu-base-xxxx.turso.io" TURSO_AUTH_TOKEN="tu-token" npx prisma migrate deploy
+DATABASE_URL="libsql://tu-base-xxxx.turso.io" TURSO_AUTH_TOKEN="tu-token" npm run db:seed
+```
+
+Esto crea las tablas y carga el catálogo directamente en la base de Turso (usa TMDB si le
+pasás también `TMDB_API_KEY`, si no carga el dataset local).
+
+### 3. Desplegar en Vercel
+
+1. Entra a [vercel.com](https://vercel.com) y creá una cuenta gratis con GitHub.
+2. "Add New" → "Project" → importá el repositorio de MovieMatch (la rama que quieras publicar).
+3. En "Environment Variables" agregá:
+   - `DATABASE_URL` = la URL `libsql://...` de Turso
+   - `TURSO_AUTH_TOKEN` = el token de Turso
+   - `AUTH_SECRET` = un secreto random (`openssl rand -base64 32`)
+   - `TMDB_API_KEY` = opcional, tu token de TMDB si lo tenés
+4. Dale a "Deploy". A los pocos minutos te da una URL pública tipo
+   `https://moviematch-tu-usuario.vercel.app`, accesible desde cualquier navegador (celular
+   incluido) y con los datos persistidos en Turso.
+
+Cada vez que hagas push a la rama conectada, Vercel vuelve a desplegar solo.
 
 ### Scripts útiles
 
@@ -91,5 +135,6 @@ src/app/api/*                 # Endpoints (ratings, preferencias, recomendacione
 - El motor de recomendaciones es content-based (géneros, país, actores/directores calificados
   + popularidad). Una mejora futura natural sería sumar filtrado colaborativo una vez haya
   varios usuarios con historial.
-- Actualmente usa SQLite para simplicidad local; para producción con varios usuarios
-  concurrentes conviene migrar el `datasource` de Prisma a Postgres.
+- Para uso personal o con pocos usuarios, Turso (SQLite alojado) alcanza perfectamente. Si en
+  algún momento crece mucho el volumen de escrituras concurrentes, migrar a Postgres es sencillo
+  cambiando el `datasource` de Prisma y el adapter del cliente.
