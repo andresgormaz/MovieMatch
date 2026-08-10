@@ -31,9 +31,9 @@ export default function RecommendationsPage() {
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <div>
         <h1 className="text-2xl font-bold">Tus recomendaciones</h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          Se actualizan cada vez que calificás algo nuevo. Calificá lo que ya viste para afinarlas
-          más.
+        <p className="mt-1 text-sm text-muted">
+          Se actualizan cada vez que calificas algo nuevo. Marca lo que ya viste para afinarlas
+          todavía más.
         </p>
       </div>
 
@@ -46,10 +46,10 @@ export default function RecommendationsPage() {
           <button
             key={tab.value}
             onClick={() => setFilter(tab.value)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
               filter === tab.value
-                ? "bg-white text-neutral-900"
-                : "border border-neutral-700 text-neutral-300 hover:border-neutral-500"
+                ? "bg-accent text-white"
+                : "border border-white/15 text-neutral-300 hover:border-white/30"
             }`}
           >
             {tab.label}
@@ -58,10 +58,10 @@ export default function RecommendationsPage() {
       </div>
 
       <div className="flex flex-col gap-3">
-        {loading && <p className="text-center text-sm text-neutral-500">Cargando…</p>}
+        {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
         {!loading && recs.length === 0 && (
-          <p className="rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-center text-sm text-neutral-400">
-            No encontramos más recomendaciones nuevas por ahora. Calificá más títulos, actores o
+          <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
+            No encontramos más recomendaciones nuevas por ahora. Califica más títulos, actores o
             géneros para descubrir más.
           </p>
         )}

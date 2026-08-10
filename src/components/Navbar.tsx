@@ -6,16 +6,16 @@ export async function Navbar() {
   const session = await auth();
 
   return (
-    <header className="sticky top-0 z-20 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-        <Link href="/" className="text-lg font-bold tracking-tight text-white">
-          🎬 MovieMatch
+    <header className="sticky top-0 z-30 border-b border-white/5 bg-gradient-to-b from-black/95 to-black/70 backdrop-blur-md">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <Link href="/" className="flex items-center gap-1.5 text-xl font-black tracking-tight text-white">
+          <span className="text-accent">Movie</span>Match
         </Link>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-3 text-sm sm:gap-5">
           {session?.user ? (
             <>
-              <Link href="/dashboard" className="text-neutral-300 hover:text-white transition-colors">
-                Panel
+              <Link href="/dashboard" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
+                Mi panel
               </Link>
               <Link href="/recommendations" className="text-neutral-300 hover:text-white transition-colors">
                 Recomendaciones
@@ -25,13 +25,13 @@ export async function Navbar() {
           ) : (
             <>
               <Link href="/login" className="text-neutral-300 hover:text-white transition-colors">
-                Entrar
+                Iniciar sesión
               </Link>
               <Link
                 href="/register"
-                className="rounded-full bg-white px-3 py-1.5 font-medium text-neutral-900 hover:bg-neutral-200 transition-colors"
+                className="rounded-md bg-accent px-3.5 py-1.5 font-semibold text-white hover:bg-accent-hover transition-colors"
               >
-                Crear cuenta
+                Registrarme
               </Link>
             </>
           )}

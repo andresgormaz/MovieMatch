@@ -42,9 +42,9 @@ export default function OnboardingTitlesPage() {
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <div>
         <h1 className="text-2xl font-bold">¿Viste estas películas y series?</h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          Marcá si las viste y calificalas del 1 al 10. Cuantas más califiques, mejores serán tus
-          recomendaciones.
+        <p className="mt-1 text-sm text-muted">
+          Marca si las viste y califícalas del 1 al 10. Cuantas más títulos califiques, mejores
+          serán tus recomendaciones.
         </p>
       </div>
 
@@ -53,7 +53,7 @@ export default function OnboardingTitlesPage() {
       {progress.rated >= GOAL && (
         <Link
           href="/onboarding/actors"
-          className="rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-3 text-center text-sm font-medium text-white hover:border-neutral-500 transition-colors"
+          className="rounded-xl border border-white/15 bg-surface px-4 py-3 text-center text-sm font-medium text-white hover:border-white/30 transition-colors"
         >
           Ya califiqué suficientes → Seguir con actores y directores
         </Link>
@@ -64,17 +64,17 @@ export default function OnboardingTitlesPage() {
           <TitleCard key={t.id} title={t} onRated={handleRated} />
         ))}
         {!loading && titles.length === 0 && progress.rated >= progress.total && progress.total > 0 && (
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-6 text-center">
+          <div className="rounded-2xl border border-border bg-surface p-6 text-center">
             <p className="mb-3 text-white">¡Calificaste todo el catálogo inicial! 🎉</p>
             <Link
               href="/onboarding/actors"
-              className="inline-block rounded-full bg-white px-6 py-2.5 font-semibold text-neutral-900 hover:bg-neutral-200 transition-colors"
+              className="inline-block rounded-md bg-accent px-6 py-2.5 font-bold text-white hover:bg-accent-hover transition-colors"
             >
               Seguir con actores y directores
             </Link>
           </div>
         )}
-        {loading && <p className="text-center text-sm text-neutral-500">Cargando…</p>}
+        {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ async function seedFallback() {
 
   const personCache = new Map<string, string>(); // name -> Person.id
 
-  async function upsertPerson(name: string) {
+  async function upsertPerson(name: string, department: "Actuación" | "Dirección") {
     const cached = personCache.get(name);
     if (cached) return cached;
 
@@ -29,7 +29,7 @@ async function seedFallback() {
     const person = await prisma.person.upsert({
       where: { tmdbId: syntheticId },
       update: { name },
-      create: { tmdbId: syntheticId, name, knownForDepartment: "Acting" },
+      create: { tmdbId: syntheticId, name, knownForDepartment: department },
     });
     personCache.set(name, person.id);
     return person.id;
@@ -68,7 +68,7 @@ async function seedFallback() {
       });
     }
 
-    const directorId = await upsertPerson(t.director);
+    const directorId = await upsertPerson(t.director, "Dirección");
     await prisma.titleCrew.upsert({
       where: { titleId_personId_job: { titleId: title.id, personId: directorId, job: "Director" } },
       update: {},
@@ -78,7 +78,7 @@ async function seedFallback() {
     let order = 0;
     for (const actorName of t.cast) {
       if (actorName === "Various") continue;
-      const personId = await upsertPerson(actorName);
+      const personId = await upsertPerson(actorName, "Actuación");
       await prisma.titleCast.upsert({
         where: { titleId_personId: { titleId: title.id, personId } },
         update: { order },

@@ -35,9 +35,9 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="text-sm text-neutral-400">
-          Email
+          Correo electrónico
         </label>
         <input
           id="email"
@@ -45,10 +45,10 @@ function LoginForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-neutral-400"
+          className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
         />
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <label htmlFor="password" className="text-sm text-neutral-400">
           Contraseña
         </label>
@@ -58,21 +58,21 @@ function LoginForm() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-neutral-400"
+          className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
         />
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
       <button
         type="submit"
         disabled={loading}
-        className="rounded-full bg-white px-6 py-2.5 font-semibold text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-50"
+        className="rounded-md bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
       >
-        {loading ? "Entrando…" : "Entrar"}
+        {loading ? "Entrando…" : "Iniciar sesión"}
       </button>
       <p className="text-center text-sm text-neutral-400">
-        ¿No tenés cuenta?{" "}
+        ¿No tienes cuenta?{" "}
         <Link href="/register" className="text-white underline">
-          Creá una
+          Regístrate
         </Link>
       </p>
     </form>
@@ -81,11 +81,14 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-6 px-4 py-16">
-      <h1 className="text-2xl font-bold">Entrar a MovieMatch</h1>
-      <Suspense>
-        <LoginForm />
-      </Suspense>
+    <div className="relative flex min-h-[calc(100vh-57px)] items-center justify-center overflow-hidden px-4 py-16">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-950/30 via-background to-background" />
+      <div className="relative flex w-full max-w-sm flex-col items-center gap-6 rounded-2xl border border-border bg-surface/90 p-8 backdrop-blur">
+        <h1 className="text-2xl font-bold">Iniciar sesión</h1>
+        <Suspense>
+          <LoginForm />
+        </Suspense>
+      </div>
     </div>
   );
 }

@@ -42,63 +42,66 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-6 px-4 py-16">
-      <h1 className="text-2xl font-bold">Creá tu cuenta</h1>
-      <form onSubmit={handleSubmit} className="flex w-full max-w-sm flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="name" className="text-sm text-neutral-400">
-            Nombre
-          </label>
-          <input
-            id="name"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-neutral-400"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="email" className="text-sm text-neutral-400">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-neutral-400"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="password" className="text-sm text-neutral-400">
-            Contraseña (mín. 8 caracteres)
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 outline-none focus:border-neutral-400"
-          />
-        </div>
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-full bg-white px-6 py-2.5 font-semibold text-neutral-900 hover:bg-neutral-200 transition-colors disabled:opacity-50"
-        >
-          {loading ? "Creando…" : "Crear cuenta"}
-        </button>
-        <p className="text-center text-sm text-neutral-400">
-          ¿Ya tenés cuenta?{" "}
-          <Link href="/login" className="text-white underline">
-            Entrá
-          </Link>
-        </p>
-      </form>
+    <div className="relative flex min-h-[calc(100vh-57px)] items-center justify-center overflow-hidden px-4 py-16">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-950/30 via-background to-background" />
+      <div className="relative flex w-full max-w-sm flex-col items-center gap-6 rounded-2xl border border-border bg-surface/90 p-8 backdrop-blur">
+        <h1 className="text-2xl font-bold">Crea tu cuenta</h1>
+        <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="name" className="text-sm text-neutral-400">
+              Nombre
+            </label>
+            <input
+              id="name"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="email" className="text-sm text-neutral-400">
+              Correo electrónico
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="password" className="text-sm text-neutral-400">
+              Contraseña (mín. 8 caracteres)
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+            />
+          </div>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-md bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+          >
+            {loading ? "Creando…" : "Crear cuenta"}
+          </button>
+          <p className="text-center text-sm text-neutral-400">
+            ¿Ya tienes cuenta?{" "}
+            <Link href="/login" className="text-white underline">
+              Inicia sesión
+            </Link>
+          </p>
+        </form>
+      </div>
     </div>
   );
 }

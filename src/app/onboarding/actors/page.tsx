@@ -43,8 +43,8 @@ export default function OnboardingActorsPage() {
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <div>
         <h1 className="text-2xl font-bold">¿Qué actores y directores te gustan?</h1>
-        <p className="mt-1 text-sm text-neutral-400">
-          Priorizamos gente que sale en títulos que ya viste. Calificá los que reconozcas.
+        <p className="mt-1 text-sm text-muted">
+          Priorizamos gente que sale en títulos que ya viste. Califica los que reconozcas.
         </p>
       </div>
 
@@ -53,7 +53,7 @@ export default function OnboardingActorsPage() {
       {rated >= GOAL && (
         <Link
           href="/onboarding/preferences"
-          className="rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-3 text-center text-sm font-medium text-white hover:border-neutral-500 transition-colors"
+          className="rounded-xl border border-white/15 bg-surface px-4 py-3 text-center text-sm font-medium text-white hover:border-white/30 transition-colors"
         >
           Ya califiqué suficientes → Últimas preguntas
         </Link>
@@ -63,10 +63,10 @@ export default function OnboardingActorsPage() {
         {people.map((p) => (
           <PersonCard key={p.id} person={p} onRated={handleRated} />
         ))}
-        {loading && <p className="text-center text-sm text-neutral-500">Cargando…</p>}
+        {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
       </div>
 
-      <Link href="/onboarding/preferences" className="text-center text-sm text-neutral-500 underline">
+      <Link href="/onboarding/preferences" className="text-center text-sm text-muted underline">
         Saltar este paso
       </Link>
     </div>

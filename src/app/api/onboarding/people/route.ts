@@ -5,6 +5,21 @@ import { tmdbProfileUrl } from "@/lib/tmdb";
 
 const BATCH_SIZE = 12;
 
+const DEPARTMENT_ES: Record<string, string> = {
+  Acting: "Actuación",
+  Directing: "Dirección",
+  Writing: "Guion",
+  Production: "Producción",
+  Camera: "Fotografía",
+  Editing: "Edición",
+  Sound: "Sonido",
+};
+
+function translateDepartment(department: string | null): string | null {
+  if (!department) return null;
+  return DEPARTMENT_ES[department] ?? department;
+}
+
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -52,7 +67,7 @@ export async function GET() {
       id: p.id,
       name: p.name,
       photoUrl: tmdbProfileUrl(p.profilePath),
-      department: p.knownForDepartment,
+      department: translateDepartment(p.knownForDepartment),
     })),
     progress: { rated: ratedCount },
   });

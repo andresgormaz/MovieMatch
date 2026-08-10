@@ -19,7 +19,14 @@ export interface RecommendationResult {
   genres: string[];
   directors: string[];
   score: number;
+  matchPercent: number;
   reasons: string[];
+}
+
+// Presentational "match %" (à la Netflix) derived from the raw score, not a
+// calibrated probability -- just a friendlier way to show relative fit.
+function toMatchPercent(score: number): number {
+  return Math.max(35, Math.min(99, Math.round(50 + score * 6)));
 }
 
 export async function getRecommendations(
@@ -97,6 +104,7 @@ export async function getRecommendations(
       genres: title.genres.map((g) => g.genre.name),
       directors: title.crew.map((c) => c.person.name),
       score,
+      matchPercent: toMatchPercent(score),
       reasons: reasons.slice(0, 3),
     };
   });

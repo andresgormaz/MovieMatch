@@ -30,24 +30,26 @@ export function PersonCard({
   }
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-      <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-full bg-neutral-800">
-        {person.photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={person.photoUrl} alt={person.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl">🎭</div>
-        )}
+    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex items-center gap-3 p-4">
+        <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-full bg-black/40">
+          {person.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={person.photoUrl} alt={person.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xl">🎭</div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium leading-tight text-white">{person.name}</p>
+          {person.department && <p className="text-xs text-muted">{person.department}</p>}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-white">{person.name}</p>
-        {person.department && <p className="text-xs text-neutral-500">{person.department}</p>}
-      </div>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
         <button
           disabled={submitting}
           onClick={() => rate(-1)}
-          className="rounded-full border border-neutral-700 px-3 py-2 text-lg hover:border-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
+          className="py-2.5 text-xl hover:bg-accent/15 transition-colors disabled:opacity-50"
           aria-label="No me gusta"
         >
           👎
@@ -55,7 +57,7 @@ export function PersonCard({
         <button
           disabled={submitting}
           onClick={() => rate(0)}
-          className="rounded-full border border-neutral-700 px-3 py-2 text-lg hover:border-neutral-400 transition-colors disabled:opacity-50"
+          className="py-2.5 text-xl hover:bg-surface-hover transition-colors disabled:opacity-50"
           aria-label="Neutral"
         >
           😐
@@ -63,7 +65,7 @@ export function PersonCard({
         <button
           disabled={submitting}
           onClick={() => rate(1)}
-          className="rounded-full border border-neutral-700 px-3 py-2 text-lg hover:border-green-400 hover:bg-green-400/10 transition-colors disabled:opacity-50"
+          className="py-2.5 text-xl hover:bg-green-500/15 transition-colors disabled:opacity-50"
           aria-label="Me gusta"
         >
           👍

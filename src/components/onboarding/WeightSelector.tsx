@@ -18,7 +18,7 @@ export function WeightSelector({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-2.5">
       <span className="truncate text-sm text-white">{label}</span>
       <div className="flex gap-1">
         {LEVELS.map((l) => (
@@ -26,7 +26,7 @@ export function WeightSelector({
             key={l.value}
             onClick={() => onChange(l.value)}
             className={`rounded-full px-2 py-1 text-base transition-colors ${
-              value === l.value ? "bg-white" : "hover:bg-neutral-800"
+              value === l.value ? "bg-accent" : "hover:bg-surface-hover"
             }`}
             aria-label={String(l.value)}
           >
