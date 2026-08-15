@@ -394,15 +394,28 @@ async function enrichTitles(
   });
   const personIdByTmdbId = new Map(persistedPeople.map((p) => [p.tmdbId, p.id]));
 
-  // `toEnrich` only contains titles with zero existing cast rows, and TMDB
-  // credits don't repeat a person within one title's cast/crew list, so
-  // these composite keys (titleId+personId[+job]) can't collide -- safe to
-  // createMany without skipDuplicates (which SQLite doesn't support anyway).
+  // `toEnrich` selects titles with zero cast rows, which *should* mean
+  // they've never been enriched -- but a run that got killed mid-batch
+  // (e.g. a timeout) can leave crew rows written without cast, or vice
+  // versa, for a title from an earlier attempt. Re-check what's actually
+  // there for this exact batch instead of assuming, so a retry after a
+  // partial failure never trips a unique-constraint error.
+  const titleIdsInBatch = titles.map((t) => t.id);
+  const [existingCast, existingCrew] = await Promise.all([
+    prisma.titleCast.findMany({ where: { titleId: { in: titleIdsInBatch } }, select: { titleId: true, personId: true } }),
+    prisma.titleCrew.findMany({
+      where: { titleId: { in: titleIdsInBatch } },
+      select: { titleId: true, personId: true, job: true },
+    }),
+  ]);
+  const existingCastKeys = new Set(existingCast.map((r) => `${r.titleId}:${r.personId}`));
+  const existingCrewKeys = new Set(existingCrew.map((r) => `${r.titleId}:${r.personId}:${r.job}`));
+
   const castRows: { titleId: string; personId: string; order: number }[] = [];
   for (const [titleId, cast] of castByTitleId) {
     cast.forEach((c, order) => {
       const personId = personIdByTmdbId.get(c.tmdbId);
-      if (personId) castRows.push({ titleId, personId, order });
+      if (personId && !existingCastKeys.has(`${titleId}:${personId}`)) castRows.push({ titleId, personId, order });
     });
   }
   if (castRows.length > 0) {
@@ -413,7 +426,8 @@ async function enrichTitles(
   for (const [titleId, crew] of crewByTitleId) {
     for (const c of crew) {
       const personId = personIdByTmdbId.get(c.credit.tmdbId);
-      if (personId) crewRowsByKey.set(`${titleId}:${personId}:${c.job}`, { titleId, personId, job: c.job });
+      const key = `${titleId}:${personId}:${c.job}`;
+      if (personId && !existingCrewKeys.has(key)) crewRowsByKey.set(key, { titleId, personId, job: c.job });
     }
   }
   if (crewRowsByKey.size > 0) {
