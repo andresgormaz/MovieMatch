@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { hasTmdbKey, sleep, tmdb, type TmdbListItem } from "./tmdb";
-import { SCHEMA_STATEMENTS, ALTER_STATEMENTS } from "./schema-sql";
+import { TABLE_STATEMENTS, ALTER_STATEMENTS, INDEX_STATEMENTS } from "./schema-sql";
 import {
   FALLBACK_GENRES,
   FALLBACK_TITLES,
@@ -25,7 +25,7 @@ export interface SeedResult {
 // "duplicate column" failures are swallowed (already applied) and anything
 // else is rethrown.
 export async function ensureSchema() {
-  for (const statement of SCHEMA_STATEMENTS) {
+  for (const statement of TABLE_STATEMENTS) {
     await prisma.$executeRawUnsafe(statement);
   }
   for (const statement of ALTER_STATEMENTS) {
@@ -35,6 +35,11 @@ export async function ensureSchema() {
       const message = err instanceof Error ? err.message : String(err);
       if (!/duplicate column name/i.test(message)) throw err;
     }
+  }
+  // Indexes last -- a column an ALTER just added must exist before an index
+  // on it can be created.
+  for (const statement of INDEX_STATEMENTS) {
+    await prisma.$executeRawUnsafe(statement);
   }
 }
 

@@ -1,9 +1,11 @@
-// Idempotent copy of prisma/migrations/20260810034231_init/migration.sql,
-// used by the /api/admin/setup route to create the schema on a brand new
-// Turso database without needing a computer/terminal to run `prisma
-// migrate deploy`. Keep in sync with the Prisma schema by hand -- this
-// project only has one migration so far.
-export const SCHEMA_STATEMENTS = [
+// Idempotent copy of the migrations under prisma/migrations/, used by the
+// /api/admin/seed route to create/evolve the schema on Turso without a
+// computer/terminal to run `prisma migrate deploy`. Keep in sync with the
+// Prisma schema by hand. Run in this order (see ensureSchema() in
+// seedCatalog.ts): TABLE_STATEMENTS, then ALTER_STATEMENTS (new columns on
+// tables that already existed), then INDEX_STATEMENTS -- indexes on a
+// column that was just ALTERed in would fail if created first.
+export const TABLE_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
@@ -99,6 +101,9 @@ export const SCHEMA_STATEMENTS = [
     "weight" INTEGER NOT NULL,
     CONSTRAINT "UserCountryPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+];
+
+export const INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Title_tmdbId_key" ON "Title"("tmdbId")`,
   `CREATE INDEX IF NOT EXISTS "Title_onboardingRank_idx" ON "Title"("onboardingRank")`,
