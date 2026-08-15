@@ -10,6 +10,13 @@ const WEIGHTS = {
   popularity: 0.5,
 };
 
+// The catalog can be thousands of titles now (TMDB + anime import); scoring
+// every single unrated one on every request doesn't scale and was timing
+// out the recommendations endpoint. Rank the most popular slice first --
+// a title with a handful of votes buried in the tail was unlikely to be a
+// great recommendation anyway, and popularity already factors into scoring.
+const CANDIDATE_POOL_SIZE = 600;
+
 export interface RecommendationResult {
   id: string;
   name: string;
@@ -35,6 +42,8 @@ type CandidateTitle = Awaited<ReturnType<typeof fetchCandidates>>[number];
 function fetchCandidates(where: Prisma.TitleWhereInput) {
   return prisma.title.findMany({
     where,
+    orderBy: { popularity: "desc" },
+    take: CANDIDATE_POOL_SIZE,
     include: {
       genres: { include: { genre: true } },
       cast: { include: { person: true }, orderBy: { order: "asc" }, take: 8 },
@@ -108,7 +117,7 @@ function scoreCandidates(
 
 export async function getRecommendations(
   userId: string,
-  opts: { type?: TitleType; limit?: number } = {},
+  opts: { filters?: Prisma.TitleWhereInput; limit?: number } = {},
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
 
@@ -124,7 +133,7 @@ export async function getRecommendations(
 
   const candidates = await fetchCandidates({
     ratings: { none: { userId } },
-    ...(opts.type ? { type: opts.type } : {}),
+    ...(opts.filters ?? {}),
   });
 
   const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, "");
@@ -137,7 +146,7 @@ export async function getRecommendations(
 // -- the point is finding something new for the group to watch together.
 export async function getGroupRecommendations(
   groupId: string,
-  opts: { type?: TitleType; limit?: number } = {},
+  opts: { filters?: Prisma.TitleWhereInput; limit?: number } = {},
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
 
@@ -157,7 +166,7 @@ export async function getGroupRecommendations(
 
   const candidates = await fetchCandidates({
     ratings: { none: { userId: { in: memberIds }, seen: true } },
-    ...(opts.type ? { type: opts.type } : {}),
+    ...(opts.filters ?? {}),
   });
 
   const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, " del grupo");

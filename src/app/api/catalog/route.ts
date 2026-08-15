@@ -3,62 +3,20 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
 import type { Prisma } from "@/generated/prisma/client";
+import { parseTitleFilterParams, buildTitleWhere } from "@/lib/titleFilters";
 
 const PAGE_SIZE = 24;
-
-function parseNum(value: string | null): number | undefined {
-  if (value === null || value === "") return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function parseList(value: string | null): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
-}
 
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const typeParam = searchParams.get("type");
-  const type = typeParam === "MOVIE" || typeParam === "SERIES" ? typeParam : undefined;
-
-  const yearFrom = parseNum(searchParams.get("yearFrom"));
-  const yearTo = parseNum(searchParams.get("yearTo"));
-  const scoreFrom = parseNum(searchParams.get("scoreFrom"));
-  const scoreTo = parseNum(searchParams.get("scoreTo"));
-  const votesMin = parseNum(searchParams.get("votesMin"));
-  const budgetFrom = parseNum(searchParams.get("budgetFrom"));
-  const budgetTo = parseNum(searchParams.get("budgetTo"));
-  const genreIds = parseList(searchParams.get("genreIds")).map(Number).filter(Number.isFinite);
-  const countries = parseList(searchParams.get("countries"));
-  const actorId = searchParams.get("actorId") || undefined;
-  const directorId = searchParams.get("directorId") || undefined;
+  const filterParams = parseTitleFilterParams(searchParams);
+  const where = buildTitleWhere(filterParams);
   const sort = searchParams.get("sort") ?? "popularity";
-  const page = Math.max(1, parseNum(searchParams.get("page")) ?? 1);
-
-  const where: Prisma.TitleWhereInput = {
-    ...(type ? { type } : {}),
-    ...(yearFrom !== undefined || yearTo !== undefined
-      ? { releaseYear: { gte: yearFrom, lte: yearTo } }
-      : {}),
-    ...(scoreFrom !== undefined || scoreTo !== undefined
-      ? { voteAverage: { gte: scoreFrom, lte: scoreTo } }
-      : {}),
-    ...(votesMin !== undefined ? { voteCount: { gte: votesMin } } : {}),
-    ...(budgetFrom !== undefined || budgetTo !== undefined
-      ? { budget: { gte: budgetFrom, lte: budgetTo } }
-      : {}),
-    ...(genreIds.length > 0 ? { genres: { some: { genreId: { in: genreIds } } } } : {}),
-    ...(countries.length > 0 ? { originCountry: { in: countries } } : {}),
-    ...(actorId ? { cast: { some: { personId: actorId } } } : {}),
-    ...(directorId ? { crew: { some: { personId: directorId, job: { in: ["Director", "Creator"] } } } } : {}),
-  };
+  const pageParam = Number(searchParams.get("page"));
+  const page = Math.max(1, Number.isFinite(pageParam) ? pageParam : 1);
 
   const orderBy: Prisma.TitleOrderByWithRelationInput =
     sort === "year"

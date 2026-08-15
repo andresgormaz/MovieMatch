@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGroupRecommendations } from "@/lib/recommend";
 import { tmdbPosterUrl } from "@/lib/tmdb";
+import { parseTitleFilterParams, buildTitleWhere } from "@/lib/titleFilters";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -15,10 +16,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!membership) return NextResponse.json({ error: "No sos miembro de este grupo" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
-  const typeParam = searchParams.get("type");
-  const type = typeParam === "MOVIE" || typeParam === "SERIES" ? typeParam : undefined;
+  const filters = buildTitleWhere(parseTitleFilterParams(searchParams));
 
-  const recommendations = await getGroupRecommendations(id, { type, limit: 24 });
+  const recommendations = await getGroupRecommendations(id, { filters, limit: 24 });
 
   return NextResponse.json({
     recommendations: recommendations.map((r) => ({ ...r, posterUrl: tmdbPosterUrl(r.posterPath) })),
