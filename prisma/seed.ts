@@ -11,11 +11,15 @@ async function main() {
     return;
   }
 
-  const source =
-    result.mode === "tmdb"
-      ? "TMDB (catálogo real)"
-      : "dataset local curado (sin TMDB_API_KEY configurada)";
-  console.log(`${source}: ${result.titles} títulos y ${result.people} personas cargadas.`);
+  if (result.mode === "tmdb") {
+    console.log(
+      `TMDB: +${result.titles} títulos este lote (${result.moviesTotal} películas / ${result.seriesTotal} series en total), ${result.people} personas nuevas.`,
+    );
+    console.log(result.done ? "Catálogo completo, no quedan más páginas." : "Corré de nuevo para seguir sumando más.");
+    return;
+  }
+
+  console.log(`Dataset local: ${result.titles} títulos y ${result.people} personas cargadas.`);
 }
 
 main()

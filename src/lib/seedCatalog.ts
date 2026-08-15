@@ -12,6 +12,9 @@ export interface SeedResult {
   skipped: boolean;
   titles: number;
   people: number;
+  moviesTotal?: number;
+  seriesTotal?: number;
+  done?: boolean; // tmdb mode only: true once /discover has no more pages left
 }
 
 // Creates the schema if it doesn't exist yet. Lets a brand new Turso
@@ -26,13 +29,16 @@ export async function ensureSchema() {
 export async function seedCatalog(opts: { force?: boolean } = {}): Promise<SeedResult> {
   await ensureSchema();
 
-  const existing = await prisma.title.count();
-  if (existing > 0 && !opts.force) {
-    return { mode: hasTmdbKey() ? "tmdb" : "fallback", skipped: true, titles: existing, people: 0 };
+  if (hasTmdbKey()) {
+    // Incremental/resumable: every call fetches the next batch of pages and
+    // enriches a bounded number of titles, so revisiting the seed endpoint
+    // keeps growing the catalog without ever timing out a single request.
+    return seedFromTmdb();
   }
 
-  if (hasTmdbKey()) {
-    return seedFromTmdb();
+  const existing = await prisma.title.count();
+  if (existing > 0 && !opts.force) {
+    return { mode: "fallback", skipped: true, titles: existing, people: 0 };
   }
   return seedFallback();
 }
@@ -128,41 +134,76 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-const MOVIE_PAGES = 5; // 20/page -> 100 movies
-const TV_PAGES = 3; // 20/page -> ~60 series
-const DETAILS_LIMIT = 90; // titles to enrich with cast/crew (rate-limit friendly)
+const FROM_DATE = "2000-01-01"; // "principales películas/series del 2000 a la fecha"
+const PAGE_SIZE = 20; // fixed by the TMDB API
+const MOVIE_PAGES_PER_CALL = 8; // ~160 movies per call
+const TV_PAGES_PER_CALL = 5; // ~100 series per call
+const ENRICH_PER_CALL = 70; // cast/crew/country lookups per call (rate + time budget)
 
+// Resumable: figures out where the last call left off from what's already
+// in the DB (no separate cursor table needed), fetches the next batch of
+// /discover pages, and enriches a bounded number of titles that are still
+// missing cast/crew. Safe to call repeatedly -- every write is an upsert.
 async function seedFromTmdb(): Promise<SeedResult> {
+  // Real TMDB data supersedes the local fallback dataset (negative synthetic
+  // ids) -- drop it once so the catalog doesn't show duplicates.
+  await prisma.title.deleteMany({ where: { tmdbId: { lt: 0 } } });
+  await prisma.person.deleteMany({ where: { tmdbId: { lt: 0 } } });
+
   const [movieGenres, tvGenres] = await Promise.all([tmdb.movieGenres(), tmdb.tvGenres()]);
-  const allGenres = [...movieGenres.genres, ...tvGenres.genres];
-  for (const g of allGenres) {
+  const genreNameById = new Map<number, string>();
+  for (const g of [...movieGenres.genres, ...tvGenres.genres]) {
+    genreNameById.set(g.id, g.name);
     await prisma.genre.upsert({ where: { id: g.id }, update: { name: g.name }, create: g });
   }
 
+  const [movieCount, seriesCount, maxRankRow] = await Promise.all([
+    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0 } } }),
+    prisma.title.count({ where: { type: "SERIES", tmdbId: { gt: 0 } } }),
+    prisma.title.aggregate({ _max: { onboardingRank: true } }),
+  ]);
+
+  const startMoviePage = Math.floor(movieCount / PAGE_SIZE) + 1;
+  const startTvPage = Math.floor(seriesCount / PAGE_SIZE) + 1;
+  let nextRank = (maxRankRow._max.onboardingRank ?? 0) + 1;
+
   const movies: TmdbListItem[] = [];
-  for (let page = 1; page <= MOVIE_PAGES; page++) {
-    const res = await tmdb.topRatedMovies(page);
+  let moviesExhausted = false;
+  for (let i = 0; i < MOVIE_PAGES_PER_CALL; i++) {
+    const page = startMoviePage + i;
+    const res = await tmdb.discoverMovies(page, FROM_DATE);
     movies.push(...res.results);
-    await sleep(150);
+    await sleep(100);
+    if (page >= res.total_pages) {
+      moviesExhausted = true;
+      break;
+    }
   }
 
   const series: TmdbListItem[] = [];
-  for (let page = 1; page <= TV_PAGES; page++) {
-    const res = await tmdb.topRatedTv(page);
+  let seriesExhausted = false;
+  for (let i = 0; i < TV_PAGES_PER_CALL; i++) {
+    const page = startTvPage + i;
+    const res = await tmdb.discoverTv(page, FROM_DATE);
     series.push(...res.results);
-    await sleep(150);
+    await sleep(100);
+    if (page >= res.total_pages) {
+      seriesExhausted = true;
+      break;
+    }
   }
 
+  // Both lists are already popularity-sorted (via /discover); merging keeps
+  // that order so onboardingRank stays a meaningful "most likely seen" sort
+  // across movies and series combined, round after round.
   const combined = [
     ...movies.map((m) => ({ item: m, type: "MOVIE" as const })),
     ...series.map((s) => ({ item: s, type: "SERIES" as const })),
-  ].sort((a, b) => b.item.vote_count - a.item.vote_count);
+  ].sort((a, b) => b.item.popularity - a.item.popularity);
 
-  const peopleSeen = new Set<number>();
-  let rank = 0;
   for (const { item, type } of combined) {
-    rank += 1;
-    const title = await prisma.title.upsert({
+    const rank = nextRank++;
+    const titleRow = await prisma.title.upsert({
       where: { tmdbId: item.id },
       update: {
         onboardingRank: rank,
@@ -180,17 +221,51 @@ async function seedFromTmdb(): Promise<SeedResult> {
         backdropPath: item.backdrop_path,
         popularity: item.popularity,
         voteAverage: item.vote_average,
+        originCountry: type === "SERIES" ? item.origin_country?.[0] : undefined,
         onboardingRank: rank,
       },
+      select: { id: true },
     });
 
-    if (rank <= DETAILS_LIMIT) {
-      await enrichTitle(title.id, item.id, type, peopleSeen);
-      await sleep(150);
+    for (const genreId of item.genre_ids ?? []) {
+      if (!genreNameById.has(genreId)) continue;
+      await prisma.titleGenre.upsert({
+        where: { titleId_genreId: { titleId: titleRow.id, genreId } },
+        update: {},
+        create: { titleId: titleRow.id, genreId },
+      });
     }
   }
 
-  return { mode: "tmdb", skipped: false, titles: combined.length, people: peopleSeen.size };
+  // Enrich the most popular titles that don't have cast/crew yet -- catches
+  // up on previous rounds too, not just this round's new titles.
+  const toEnrich = await prisma.title.findMany({
+    where: { tmdbId: { gt: 0 }, cast: { none: {} } },
+    orderBy: { popularity: "desc" },
+    take: ENRICH_PER_CALL,
+    select: { id: true, tmdbId: true, type: true },
+  });
+
+  const peopleSeen = new Set<number>();
+  for (const t of toEnrich) {
+    await enrichTitle(t.id, t.tmdbId, t.type, peopleSeen);
+    await sleep(100);
+  }
+
+  const [moviesTotal, seriesTotal] = await Promise.all([
+    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0 } } }),
+    prisma.title.count({ where: { type: "SERIES", tmdbId: { gt: 0 } } }),
+  ]);
+
+  return {
+    mode: "tmdb",
+    skipped: false,
+    titles: combined.length,
+    people: peopleSeen.size,
+    moviesTotal,
+    seriesTotal,
+    done: moviesExhausted && seriesExhausted,
+  };
 }
 
 async function enrichTitle(
@@ -200,14 +275,6 @@ async function enrichTitle(
   peopleSeen: Set<number>,
 ) {
   const details = type === "MOVIE" ? await tmdb.movieDetails(tmdbId) : await tmdb.tvDetails(tmdbId);
-
-  for (const g of details.genres) {
-    await prisma.titleGenre.upsert({
-      where: { titleId_genreId: { titleId, genreId: g.id } },
-      update: {},
-      create: { titleId, genreId: g.id },
-    });
-  }
 
   const country =
     type === "MOVIE"

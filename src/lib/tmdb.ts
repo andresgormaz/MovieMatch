@@ -58,6 +58,8 @@ export interface TmdbListItem {
   popularity: number;
   vote_average: number;
   vote_count: number;
+  genre_ids?: number[];
+  origin_country?: string[]; // present on /discover/tv results
 }
 
 export interface TmdbPersonCredit {
@@ -99,13 +101,34 @@ export interface TmdbTvDetails extends TmdbListItem {
   credits: TmdbCredits;
 }
 
+export interface TmdbDiscoverResponse {
+  results: TmdbListItem[];
+  page: number;
+  total_pages: number;
+  total_results: number;
+}
+
 export const tmdb = {
   movieGenres: () => tmdbFetch<{ genres: TmdbGenre[] }>("/genre/movie/list"),
   tvGenres: () => tmdbFetch<{ genres: TmdbGenre[] }>("/genre/tv/list"),
-  topRatedMovies: (page: number) =>
-    tmdbFetch<{ results: TmdbListItem[]; total_pages: number }>("/movie/top_rated", { page }),
-  topRatedTv: (page: number) =>
-    tmdbFetch<{ results: TmdbListItem[]; total_pages: number }>("/tv/top_rated", { page }),
+  // Popular movies/series released from `fromDate` onward, most popular first.
+  // Used instead of /movie|tv/top_rated so we can cover a whole date range
+  // (e.g. "everything popular since 2000") rather than a fixed top-N list.
+  discoverMovies: (page: number, fromDate: string) =>
+    tmdbFetch<TmdbDiscoverResponse>("/discover/movie", {
+      page,
+      "primary_release_date.gte": fromDate,
+      "vote_count.gte": 50,
+      sort_by: "popularity.desc",
+      include_adult: "false",
+    }),
+  discoverTv: (page: number, fromDate: string) =>
+    tmdbFetch<TmdbDiscoverResponse>("/discover/tv", {
+      page,
+      "first_air_date.gte": fromDate,
+      "vote_count.gte": 50,
+      sort_by: "popularity.desc",
+    }),
   movieDetails: (id: number) =>
     tmdbFetch<TmdbMovieDetails>(`/movie/${id}`, { append_to_response: "credits" }),
   tvDetails: (id: number) =>
