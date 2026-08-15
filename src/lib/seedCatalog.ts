@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { hasTmdbKey, sleep, tmdb, type TmdbListItem } from "./tmdb";
 import { jikan, translateAnimeGenre, ANIME_ID_OFFSET, ANIME_PAGE_SIZE, type JikanAnime } from "./jikan";
-import { TABLE_STATEMENTS, ALTER_STATEMENTS, INDEX_STATEMENTS } from "./schema-sql";
+import { TABLE_STATEMENTS, ALTER_STATEMENTS, DROP_INDEX_STATEMENTS, INDEX_STATEMENTS } from "./schema-sql";
 import { STREAMING_REGIONS } from "./countries";
 import {
   FALLBACK_GENRES,
@@ -38,6 +38,9 @@ export async function ensureSchema() {
       const message = err instanceof Error ? err.message : String(err);
       if (!/duplicate column name/i.test(message)) throw err;
     }
+  }
+  for (const statement of DROP_INDEX_STATEMENTS) {
+    await prisma.$executeRawUnsafe(statement);
   }
   // Indexes last -- a column an ALTER just added must exist before an index
   // on it can be created.
@@ -99,7 +102,7 @@ async function seedFallback(): Promise<SeedResult> {
   for (const t of FALLBACK_TITLES) {
     const syntheticId = -(hashString(`${t.type}:${t.name}:${t.year}`) % 1_000_000_000 || 1);
     const title = await prisma.title.upsert({
-      where: { tmdbId: syntheticId },
+      where: { tmdbId_type: { tmdbId: syntheticId, type: t.type } },
       update: {
         name: t.name,
         type: t.type,
@@ -243,18 +246,28 @@ async function seedFromTmdb(): Promise<SeedResult> {
   ].sort((a, b) => b.item.popularity - a.item.popularity);
 
   if (combined.length > 0) {
-    // Titles we already have (rare -- only at page boundaries between
-    // calls) keep their existing row/rank; only genuinely new ones get
-    // inserted, and only new ones need their genre pairs written.
+    // TMDB movie ids and TV ids are separate number spaces, so a movie and a
+    // series can legitimately share a numeric id -- key everything by
+    // "id:type" instead of just id, both against what's already in the DB
+    // and within this batch (pagination can occasionally repeat an entry at
+    // a page boundary), or a same-type duplicate slips into createMany and
+    // trips the unique constraint.
+    const compositeKey = (id: number, type: "MOVIE" | "SERIES") => `${id}:${type}`;
+
     const alreadyPersisted = new Set(
       (
         await prisma.title.findMany({
           where: { tmdbId: { in: combined.map((c) => c.item.id) } },
-          select: { tmdbId: true },
+          select: { tmdbId: true, type: true },
         })
-      ).map((t) => t.tmdbId),
+      ).map((t) => compositeKey(t.tmdbId, t.type)),
     );
-    const newCombined = combined.filter((c) => !alreadyPersisted.has(c.item.id));
+    const newCombinedByKey = new Map<string, (typeof combined)[number]>();
+    for (const c of combined) {
+      const key = compositeKey(c.item.id, c.type);
+      if (!alreadyPersisted.has(key)) newCombinedByKey.set(key, c);
+    }
+    const newCombined = [...newCombinedByKey.values()];
 
     if (newCombined.length > 0) {
       const titleRows = newCombined.map(({ item, type }) => ({
@@ -276,13 +289,13 @@ async function seedFromTmdb(): Promise<SeedResult> {
 
       const persisted = await prisma.title.findMany({
         where: { tmdbId: { in: newCombined.map((c) => c.item.id) } },
-        select: { id: true, tmdbId: true },
+        select: { id: true, tmdbId: true, type: true },
       });
-      const titleIdByTmdbId = new Map(persisted.map((p) => [p.tmdbId, p.id]));
+      const titleIdByKey = new Map(persisted.map((p) => [compositeKey(p.tmdbId, p.type), p.id]));
 
       const genrePairs: { titleId: string; genreId: number }[] = [];
-      for (const { item } of newCombined) {
-        const titleId = titleIdByTmdbId.get(item.id);
+      for (const { item, type } of newCombined) {
+        const titleId = titleIdByKey.get(compositeKey(item.id, type));
         if (!titleId) continue;
         for (const genreId of item.genre_ids ?? []) {
           if (!knownGenreIds.has(genreId)) continue;

@@ -62,7 +62,10 @@ model GroupMember {
 
 model Title {
   id             String    @id @default(cuid())
-  tmdbId         Int       @unique
+  // Not globally unique on its own: TMDB movie ids and TV ids are separate
+  // number spaces, so a movie and a series can legitimately share the same
+  // tmdbId. Uniqueness only holds combined with type.
+  tmdbId         Int
   type           TitleType
   name           String
   originalName   String?
@@ -85,6 +88,8 @@ model Title {
   ratings   UserTitleRating[]
   providers TitleProvider[]
 
+  @@unique([tmdbId, type])
+  @@index([tmdbId])
   @@index([onboardingRank])
   @@index([type])
   @@index([releaseYear])

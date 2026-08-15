@@ -135,7 +135,12 @@ export const TABLE_STATEMENTS = [
 
 export const INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS "Title_tmdbId_key" ON "Title"("tmdbId")`,
+  // No plain unique index on tmdbId alone -- TMDB movie ids and TV ids are
+  // separate number spaces, so a movie and a series can legitimately share
+  // one. See DROP_INDEX_STATEMENTS below for dropping the old constraint on
+  // a database created before this.
+  `CREATE INDEX IF NOT EXISTS "Title_tmdbId_idx" ON "Title"("tmdbId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Title_tmdbId_type_key" ON "Title"("tmdbId", "type")`,
   `CREATE INDEX IF NOT EXISTS "Title_onboardingRank_idx" ON "Title"("onboardingRank")`,
   `CREATE INDEX IF NOT EXISTS "Title_type_idx" ON "Title"("type")`,
   `CREATE INDEX IF NOT EXISTS "Title_releaseYear_idx" ON "Title"("releaseYear")`,
@@ -169,4 +174,15 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "voteCount" INTEGER`,
   `ALTER TABLE "Title" ADD COLUMN "budget" INTEGER`,
   `ALTER TABLE "User" ADD COLUMN "country" TEXT`,
+];
+
+// Drops indexes from an older version of the schema that INDEX_STATEMENTS no
+// longer creates. "IF EXISTS" makes these safe to run against a database
+// that never had them (fresh installs) as well as one that does (existing
+// Turso databases) -- run once, before INDEX_STATEMENTS, in ensureSchema().
+export const DROP_INDEX_STATEMENTS = [
+  // Replaced by "Title_tmdbId_type_key": a plain unique index on tmdbId
+  // alone rejected the legitimate case of a movie and a series sharing a
+  // TMDB id (movie/TV ids are separate number spaces on TMDB).
+  `DROP INDEX IF EXISTS "Title_tmdbId_key"`,
 ];
