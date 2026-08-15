@@ -14,6 +14,11 @@ export function tmdbProfileUrl(path: string | null | undefined, size: "w185" = "
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 
+export function tmdbLogoUrl(path: string | null | undefined, size: "w45" | "w92" = "w45") {
+  if (!path) return null;
+  return `${TMDB_IMAGE_BASE}/${size}${path}`;
+}
+
 export function hasTmdbKey() {
   return Boolean(process.env.TMDB_API_KEY);
 }
@@ -85,11 +90,25 @@ export interface TmdbCountry {
   name: string;
 }
 
+export interface TmdbWatchProvider {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+}
+
+// Keyed by ISO 3166-1 country code. "flatrate" = included with a
+// subscription (Netflix, HBO Max, etc) -- what we care about; rent/buy are
+// intentionally not tracked for now.
+export interface TmdbWatchProviders {
+  results: Record<string, { flatrate?: TmdbWatchProvider[] }>;
+}
+
 export interface TmdbMovieDetails extends TmdbListItem {
   genres: TmdbGenre[];
   production_countries: TmdbCountry[];
   budget: number; // USD, 0 when unknown -- TV has no equivalent field
   credits: TmdbCredits;
+  "watch/providers": TmdbWatchProviders;
 }
 
 export interface TmdbCreatedBy {
@@ -103,6 +122,7 @@ export interface TmdbTvDetails extends TmdbListItem {
   origin_country: string[];
   created_by: TmdbCreatedBy[];
   credits: TmdbCredits;
+  "watch/providers": TmdbWatchProviders;
 }
 
 export interface TmdbDiscoverResponse {
@@ -134,9 +154,9 @@ export const tmdb = {
       sort_by: "popularity.desc",
     }),
   movieDetails: (id: number) =>
-    tmdbFetch<TmdbMovieDetails>(`/movie/${id}`, { append_to_response: "credits" }),
+    tmdbFetch<TmdbMovieDetails>(`/movie/${id}`, { append_to_response: "credits,watch/providers" }),
   tvDetails: (id: number) =>
-    tmdbFetch<TmdbTvDetails>(`/tv/${id}`, { append_to_response: "credits" }),
+    tmdbFetch<TmdbTvDetails>(`/tv/${id}`, { append_to_response: "credits,watch/providers" }),
 };
 
 export function sleep(ms: number) {

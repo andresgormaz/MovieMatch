@@ -9,12 +9,14 @@ import {
   type CatalogFilters,
   type Genre,
   type Country,
+  type Provider,
 } from "@/components/explore/FilterPanel";
 
 export default function GroupRecommendationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [genres, setGenres] = useState<Genre[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [filters, setFilters] = useState<CatalogFilters>(EMPTY_CATALOG_FILTERS);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,9 +24,14 @@ export default function GroupRecommendationsPage({ params }: { params: Promise<{
 
   useEffect(() => {
     (async () => {
-      const [genresRes, countriesRes] = await Promise.all([fetch("/api/genres"), fetch("/api/countries")]);
+      const [genresRes, countriesRes, providersRes] = await Promise.all([
+        fetch("/api/genres"),
+        fetch("/api/countries"),
+        fetch("/api/providers"),
+      ]);
       setGenres((await genresRes.json()).genres);
       setCountries((await countriesRes.json()).countries);
+      setProviders((await providersRes.json()).providers);
     })();
   }, []);
 
@@ -77,6 +84,7 @@ export default function GroupRecommendationsPage({ params }: { params: Promise<{
             onChange={setFilters}
             genres={genres}
             countries={countries}
+            providers={providers}
             onApply={applyFilters}
             onClear={clearFilters}
           />

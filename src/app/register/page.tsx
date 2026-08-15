@@ -4,12 +4,14 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { STREAMING_REGIONS, countryName } from "@/lib/countries";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [country, setCountry] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +23,7 @@ export default function RegisterPage() {
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, country }),
     });
 
     if (!res.ok) {
@@ -85,6 +87,30 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="country" className="text-sm text-neutral-400">
+              ¿Desde qué país nos ves?
+            </label>
+            <select
+              id="country"
+              required
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+            >
+              <option value="" disabled>
+                Selecciona tu país
+              </option>
+              {STREAMING_REGIONS.map((code) => (
+                <option key={code} value={code}>
+                  {countryName(code)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-neutral-500">
+              Lo usamos para mostrarte en qué plataformas de streaming está cada título.
+            </p>
           </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <button

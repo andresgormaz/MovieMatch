@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { RangeInput } from "@/components/explore/RangeInput";
 import { PersonAutocomplete } from "@/components/explore/PersonAutocomplete";
 
@@ -17,6 +18,11 @@ export interface Country {
   code: string;
   name: string;
 }
+export interface Provider {
+  id: number;
+  name: string;
+  logoPath: string | null;
+}
 
 export type SortOption = "popularity" | "year" | "score" | "votes";
 
@@ -31,6 +37,7 @@ export interface CatalogFilters {
   budgetTo: number | "";
   genreIds: number[];
   countries: string[];
+  providerIds: number[];
   actor: PersonOption | null;
   director: PersonOption | null;
   sort: SortOption;
@@ -47,6 +54,7 @@ export const EMPTY_CATALOG_FILTERS: CatalogFilters = {
   budgetTo: "",
   genreIds: [],
   countries: [],
+  providerIds: [],
   actor: null,
   director: null,
   sort: "popularity",
@@ -64,9 +72,35 @@ export function buildCatalogQuery(filters: CatalogFilters): URLSearchParams {
   if (filters.budgetTo !== "") params.set("budgetTo", String(filters.budgetTo));
   if (filters.genreIds.length) params.set("genreIds", filters.genreIds.join(","));
   if (filters.countries.length) params.set("countries", filters.countries.join(","));
+  if (filters.providerIds.length) params.set("providerIds", filters.providerIds.join(","));
   if (filters.actor) params.set("actorId", filters.actor.id);
   if (filters.director) params.set("directorId", filters.director.id);
   return params;
+}
+
+function FilterSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between text-left text-sm font-semibold text-white"
+      >
+        {title}
+        <span className="text-muted">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && <div className="mt-3 flex flex-col gap-4">{children}</div>}
+    </div>
+  );
 }
 
 export function FilterPanel({
@@ -74,6 +108,7 @@ export function FilterPanel({
   onChange,
   genres,
   countries,
+  providers,
   onApply,
   onClear,
   showSort = false,
@@ -83,6 +118,7 @@ export function FilterPanel({
   onChange: (updater: (prev: CatalogFilters) => CatalogFilters) => void;
   genres: Genre[];
   countries: Country[];
+  providers: Provider[];
   onApply: () => void;
   onClear: () => void;
   showSort?: boolean;
@@ -99,6 +135,13 @@ export function FilterPanel({
     onChange((f) => ({
       ...f,
       countries: f.countries.includes(code) ? f.countries.filter((c) => c !== code) : [...f.countries, code],
+    }));
+  }
+
+  function toggleProvider(id: number) {
+    onChange((f) => ({
+      ...f,
+      providerIds: f.providerIds.includes(id) ? f.providerIds.filter((p) => p !== id) : [...f.providerIds, id],
     }));
   }
 
@@ -128,96 +171,125 @@ export function FilterPanel({
         </div>
       )}
 
-      <RangeInput
-        label="Año"
-        from={filters.yearFrom}
-        to={filters.yearTo}
-        min={1900}
-        max={2100}
-        onChange={(from, to) => onChange((f) => ({ ...f, yearFrom: from, yearTo: to }))}
-      />
+      <FilterSection title="Plataformas, puntaje, popularidad y año">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-muted">Plataformas de streaming</label>
+          {providers.length === 0 ? (
+            <p className="text-xs text-muted">
+              Configurá tu país en tu perfil para filtrar por plataforma.
+            </p>
+          ) : (
+            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pr-1">
+              {providers.map((p) => (
+                <label key={p.id} className="flex items-center gap-2 text-sm text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={filters.providerIds.includes(p.id)}
+                    onChange={() => toggleProvider(p.id)}
+                    className="accent-[var(--accent)]"
+                  />
+                  {p.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <RangeInput
-        label="Puntaje (0-10)"
-        from={filters.scoreFrom}
-        to={filters.scoreTo}
-        step={0.5}
-        min={0}
-        max={10}
-        onChange={(from, to) => onChange((f) => ({ ...f, scoreFrom: from, scoreTo: to }))}
-      />
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-muted">Popularidad mínima (cantidad de votos)</label>
-        <input
-          type="number"
+        <RangeInput
+          label="Puntaje (TMDB, 0-10)"
+          from={filters.scoreFrom}
+          to={filters.scoreTo}
+          step={0.5}
           min={0}
-          value={filters.votesMin}
-          placeholder="Ej: 500"
-          onChange={(e) => onChange((f) => ({ ...f, votesMin: e.target.value === "" ? "" : Number(e.target.value) }))}
-          className="rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+          max={10}
+          onChange={(from, to) => onChange((f) => ({ ...f, scoreFrom: from, scoreTo: to }))}
         />
-      </div>
 
-      <RangeInput
-        label="Presupuesto (USD, solo películas)"
-        from={filters.budgetFrom}
-        to={filters.budgetTo}
-        step={1_000_000}
-        min={0}
-        onChange={(from, to) => onChange((f) => ({ ...f, budgetFrom: from, budgetTo: to }))}
-      />
-
-      <PersonAutocomplete
-        label="Actor"
-        placeholder="Buscar actor…"
-        selected={filters.actor}
-        onSelect={(p) => onChange((f) => ({ ...f, actor: p }))}
-      />
-
-      <PersonAutocomplete
-        label="Director"
-        placeholder="Buscar director…"
-        selected={filters.director}
-        onSelect={(p) => onChange((f) => ({ ...f, director: p }))}
-      />
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-muted">Géneros</label>
-        <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pr-1">
-          {genres.map((g) => (
-            <label key={g.id} className="flex items-center gap-2 text-sm text-neutral-300">
-              <input
-                type="checkbox"
-                checked={filters.genreIds.includes(g.id)}
-                onChange={() => toggleGenre(g.id)}
-                className="accent-[var(--accent)]"
-              />
-              {g.name}
-            </label>
-          ))}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-muted">Popularidad mínima (cantidad de votos)</label>
+          <input
+            type="number"
+            min={0}
+            value={filters.votesMin}
+            placeholder="Ej: 500"
+            onChange={(e) =>
+              onChange((f) => ({ ...f, votesMin: e.target.value === "" ? "" : Number(e.target.value) }))
+            }
+            className="rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+          />
         </div>
-      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-muted">País</label>
-        <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pr-1">
-          {countries.map((c) => (
-            <label key={c.code} className="flex items-center gap-2 text-sm text-neutral-300">
-              <input
-                type="checkbox"
-                checked={filters.countries.includes(c.code)}
-                onChange={() => toggleCountry(c.code)}
-                className="accent-[var(--accent)]"
-              />
-              {c.name}
-            </label>
-          ))}
+        <RangeInput
+          label="Año"
+          from={filters.yearFrom}
+          to={filters.yearTo}
+          min={1900}
+          max={2100}
+          onChange={(from, to) => onChange((f) => ({ ...f, yearFrom: from, yearTo: to }))}
+        />
+      </FilterSection>
+
+      <FilterSection title="Más filtros">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-muted">Géneros</label>
+          <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pr-1">
+            {genres.map((g) => (
+              <label key={g.id} className="flex items-center gap-2 text-sm text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={filters.genreIds.includes(g.id)}
+                  onChange={() => toggleGenre(g.id)}
+                  className="accent-[var(--accent)]"
+                />
+                {g.name}
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-muted">País</label>
+          <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pr-1">
+            {countries.map((c) => (
+              <label key={c.code} className="flex items-center gap-2 text-sm text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={filters.countries.includes(c.code)}
+                  onChange={() => toggleCountry(c.code)}
+                  className="accent-[var(--accent)]"
+                />
+                {c.name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <PersonAutocomplete
+          label="Actor"
+          placeholder="Buscar actor…"
+          selected={filters.actor}
+          onSelect={(p) => onChange((f) => ({ ...f, actor: p }))}
+        />
+
+        <PersonAutocomplete
+          label="Director"
+          placeholder="Buscar director…"
+          selected={filters.director}
+          onSelect={(p) => onChange((f) => ({ ...f, director: p }))}
+        />
+
+        <RangeInput
+          label="Presupuesto (USD, solo películas)"
+          from={filters.budgetFrom}
+          to={filters.budgetTo}
+          step={1_000_000}
+          min={0}
+          onChange={(from, to) => onChange((f) => ({ ...f, budgetFrom: from, budgetTo: to }))}
+        />
+      </FilterSection>
 
       {showSort && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 border-t border-white/10 pt-3">
           <label className="text-xs text-muted">Ordenar por</label>
           <select
             value={filters.sort}
@@ -226,7 +298,7 @@ export function FilterPanel({
           >
             <option value="popularity">Popularidad</option>
             <option value="year">Año (más nuevas primero)</option>
-            <option value="score">Puntaje</option>
+            <option value="score">Puntaje (TMDB)</option>
             <option value="votes">Cantidad de votos</option>
           </select>
         </div>

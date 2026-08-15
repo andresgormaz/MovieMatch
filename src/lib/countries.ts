@@ -11,8 +11,19 @@ export const COUNTRY_NAMES: Record<string, string> = {
   SA: "Arabia Saudita", AE: "Emiratos Árabes Unidos", NG: "Nigeria", KE: "Kenia",
   HK: "Hong Kong", TW: "Taiwán", VN: "Vietnam", PK: "Pakistán", BD: "Bangladés",
   RO: "Rumania", UA: "Ucrania", RS: "Serbia", HR: "Croacia", IR: "Irán", LB: "Líbano",
+  EC: "Ecuador", BO: "Bolivia", PY: "Paraguay", DO: "República Dominicana",
+  GT: "Guatemala", CR: "Costa Rica", PA: "Panamá", HN: "Honduras", SV: "El Salvador",
+  NI: "Nicaragua", PR: "Puerto Rico",
 };
 
 export function countryName(code: string): string {
   return COUNTRY_NAMES[code] ?? code;
 }
+
+// Countries we fetch/store streaming-availability data for (TMDB returns
+// every region in one response; we only keep these to bound storage).
+// Covers the Spanish-speaking Americas + Brazil, Spain and the US.
+export const STREAMING_REGIONS = [
+  "CL", "MX", "AR", "CO", "PE", "BR", "UY", "VE", "EC", "BO", "PY",
+  "DO", "GT", "CR", "PA", "HN", "SV", "NI", "PR", "US", "ES",
+];

@@ -11,6 +11,7 @@ export interface TitleFilterParams {
   budgetTo?: number;
   genreIds: number[];
   countries: string[];
+  providerIds: number[];
   actorId?: string;
   directorId?: string;
 }
@@ -42,12 +43,16 @@ export function parseTitleFilterParams(searchParams: URLSearchParams): TitleFilt
     budgetTo: parseNum(searchParams.get("budgetTo")),
     genreIds: parseList(searchParams.get("genreIds")).map(Number).filter(Number.isFinite),
     countries: parseList(searchParams.get("countries")),
+    providerIds: parseList(searchParams.get("providerIds")).map(Number).filter(Number.isFinite),
     actorId: searchParams.get("actorId") || undefined,
     directorId: searchParams.get("directorId") || undefined,
   };
 }
 
-export function buildTitleWhere(params: TitleFilterParams): Prisma.TitleWhereInput {
+// `userCountry` is per-user (from the session), not a URL param -- passed
+// separately so the provider filter can be scoped to "available on one of
+// these services IN THIS USER'S country" rather than any country.
+export function buildTitleWhere(params: TitleFilterParams, userCountry?: string | null): Prisma.TitleWhereInput {
   return {
     ...(params.type ? { type: params.type } : {}),
     ...(params.yearFrom !== undefined || params.yearTo !== undefined
@@ -62,6 +67,9 @@ export function buildTitleWhere(params: TitleFilterParams): Prisma.TitleWhereInp
       : {}),
     ...(params.genreIds.length > 0 ? { genres: { some: { genreId: { in: params.genreIds } } } } : {}),
     ...(params.countries.length > 0 ? { originCountry: { in: params.countries } } : {}),
+    ...(params.providerIds.length > 0 && userCountry
+      ? { providers: { some: { providerId: { in: params.providerIds }, countryCode: userCountry } } }
+      : {}),
     ...(params.actorId ? { cast: { some: { personId: params.actorId } } } : {}),
     ...(params.directorId
       ? { crew: { some: { personId: params.directorId, job: { in: ["Director", "Creator"] } } } }

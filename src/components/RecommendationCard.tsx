@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Poster } from "@/components/Poster";
+import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 
 export interface Recommendation {
   id: string;
@@ -12,6 +13,8 @@ export interface Recommendation {
   posterUrl: string | null;
   genres: string[];
   directors: string[];
+  voteAverage: number | null;
+  providers: ProviderBadge[];
   matchPercent: number;
   reasons: string[];
 }
@@ -50,6 +53,11 @@ export function RecommendationCard({
             <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-bold text-green-400">
               {rec.matchPercent}% match
             </span>
+            {rec.voteAverage != null && (
+              <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-medium text-neutral-300">
+                ★ {rec.voteAverage.toFixed(1)} <span className="text-neutral-500">(TMDB)</span>
+              </span>
+            )}
           </div>
           <h3 className="font-semibold text-white">
             {rec.name} {rec.releaseYear ? <span className="text-neutral-500">({rec.releaseYear})</span> : null}
@@ -59,6 +67,7 @@ export function RecommendationCard({
             {rec.directors.length ? ` · ${rec.directors.join(", ")}` : ""}
           </p>
           <p className="mt-1 text-xs text-muted">{rec.genres.join(" · ")}</p>
+          <ProviderBadges providers={rec.providers} />
           {rec.reasons.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {rec.reasons.map((r, i) => (

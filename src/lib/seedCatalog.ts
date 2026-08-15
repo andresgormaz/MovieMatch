@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { hasTmdbKey, sleep, tmdb, type TmdbListItem } from "./tmdb";
 import { jikan, translateAnimeGenre, ANIME_ID_OFFSET, ANIME_PAGE_SIZE, type JikanAnime } from "./jikan";
 import { TABLE_STATEMENTS, ALTER_STATEMENTS, INDEX_STATEMENTS } from "./schema-sql";
+import { STREAMING_REGIONS } from "./countries";
 import {
   FALLBACK_GENRES,
   FALLBACK_TITLES,
@@ -193,9 +194,13 @@ async function seedFromTmdb(): Promise<SeedResult> {
     await prisma.genre.createMany({ data: newGenres });
   }
 
+  // gt:0/lt:ANIME_ID_OFFSET scopes these to real TMDB rows -- anime rows
+  // (tmdbId = ANIME_ID_OFFSET + mal_id) are also positive and would
+  // otherwise throw the page-counting math off and get "enriched" against
+  // TMDB with a bogus id.
   const [movieCount, seriesCount, maxRankRow] = await Promise.all([
-    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0 } } }),
-    prisma.title.count({ where: { type: "SERIES", tmdbId: { gt: 0 } } }),
+    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET } } }),
+    prisma.title.count({ where: { type: "SERIES", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET } } }),
     prisma.title.aggregate({ _max: { onboardingRank: true } }),
   ]);
 
@@ -291,9 +296,15 @@ async function seedFromTmdb(): Promise<SeedResult> {
   }
 
   // Enrich the most popular titles that don't have cast/crew yet -- catches
-  // up on previous rounds too, not just this round's new titles.
+  // up on previous rounds too, not just this round's new titles. Also
+  // catches titles enriched before streaming-providers support existed
+  // (cast present, providers missing), so that data backfills over
+  // subsequent calls instead of staying permanently empty.
   const toEnrich = await prisma.title.findMany({
-    where: { tmdbId: { gt: 0 }, cast: { none: {} } },
+    where: {
+      tmdbId: { gt: 0, lt: ANIME_ID_OFFSET },
+      OR: [{ cast: { none: {} } }, { providers: { none: {} } }],
+    },
     orderBy: { popularity: "desc" },
     take: ENRICH_PER_CALL,
     select: { id: true, tmdbId: true, type: true },
@@ -302,8 +313,8 @@ async function seedFromTmdb(): Promise<SeedResult> {
   const peopleCount = await enrichTitles(toEnrich);
 
   const [moviesTotal, seriesTotal] = await Promise.all([
-    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0 } } }),
-    prisma.title.count({ where: { type: "SERIES", tmdbId: { gt: 0 } } }),
+    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET } } }),
+    prisma.title.count({ where: { type: "SERIES", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET } } }),
   ]);
 
   return {
@@ -324,6 +335,12 @@ interface FetchedCredit {
   department: "Actuación" | "Dirección";
 }
 
+interface FetchedProvider {
+  id: number;
+  name: string;
+  logoPath: string | null;
+}
+
 // Fetches details/credits for each title (unavoidably one TMDB call per
 // title), then writes everything in a handful of batched round trips
 // instead of ~10 per title.
@@ -335,6 +352,8 @@ async function enrichTitles(
   const castByTitleId = new Map<string, FetchedCredit[]>();
   const crewByTitleId = new Map<string, { credit: FetchedCredit; job: "Director" | "Creator" }[]>();
   const allPeople = new Map<number, FetchedCredit>();
+  const providersByTitleId = new Map<string, { providerId: number; countryCode: string }[]>();
+  const allProviders = new Map<number, FetchedProvider>();
 
   for (const t of titles) {
     const details = t.type === "MOVIE" ? await tmdb.movieDetails(t.tmdbId) : await tmdb.tvDetails(t.tmdbId);
@@ -369,6 +388,19 @@ async function enrichTitles(
     );
     crewByTitleId.set(t.id, crew);
     for (const c of crew) allPeople.set(c.credit.tmdbId, c.credit);
+
+    // Only "flatrate" (subscription-included) availability is tracked, and
+    // only for the countries we actually serve -- TMDB returns every region
+    // in one response, most of which we'd never use.
+    const watchResults = details["watch/providers"]?.results ?? {};
+    const providerEntries: { providerId: number; countryCode: string }[] = [];
+    for (const region of STREAMING_REGIONS) {
+      for (const p of watchResults[region]?.flatrate ?? []) {
+        allProviders.set(p.provider_id, { id: p.provider_id, name: p.provider_name, logoPath: p.logo_path });
+        providerEntries.push({ providerId: p.provider_id, countryCode: region });
+      }
+    }
+    providersByTitleId.set(t.id, providerEntries);
   }
 
   if (allPeople.size === 0) return 0;
@@ -440,6 +472,45 @@ async function enrichTitles(
   }
   if (crewRowsByKey.size > 0) {
     await prisma.titleCrew.createMany({ data: [...crewRowsByKey.values()] });
+  }
+
+  if (allProviders.size > 0) {
+    const existingProviderIds = new Set(
+      (
+        await prisma.provider.findMany({
+          where: { id: { in: [...allProviders.keys()] } },
+          select: { id: true },
+        })
+      ).map((p) => p.id),
+    );
+    const newProviders = [...allProviders.values()].filter((p) => !existingProviderIds.has(p.id));
+    if (newProviders.length > 0) {
+      await prisma.provider.createMany({
+        data: newProviders.map((p) => ({ id: p.id, name: p.name, logoPath: p.logoPath })),
+      });
+    }
+
+    const existingTitleProviders = await prisma.titleProvider.findMany({
+      where: { titleId: { in: titleIdsInBatch } },
+      select: { titleId: true, providerId: true, countryCode: true },
+    });
+    const existingTitleProviderKeys = new Set(
+      existingTitleProviders.map((r) => `${r.titleId}:${r.providerId}:${r.countryCode}`),
+    );
+
+    const titleProviderRows: { titleId: string; providerId: number; countryCode: string }[] = [];
+    for (const [titleId, entries] of providersByTitleId) {
+      for (const e of entries) {
+        const key = `${titleId}:${e.providerId}:${e.countryCode}`;
+        if (!existingTitleProviderKeys.has(key)) {
+          titleProviderRows.push({ titleId, providerId: e.providerId, countryCode: e.countryCode });
+          existingTitleProviderKeys.add(key);
+        }
+      }
+    }
+    if (titleProviderRows.length > 0) {
+      await prisma.titleProvider.createMany({ data: titleProviderRows });
+    }
   }
 
   const titleIdsNeedingUpdate = new Set([...countryByTitleId.keys(), ...budgetByTitleId.keys()]);

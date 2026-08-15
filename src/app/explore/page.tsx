@@ -9,11 +9,13 @@ import {
   type CatalogFilters,
   type Genre,
   type Country,
+  type Provider,
 } from "@/components/explore/FilterPanel";
 
 export default function ExplorePage() {
   const [genres, setGenres] = useState<Genre[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [filters, setFilters] = useState<CatalogFilters>(EMPTY_CATALOG_FILTERS);
   const [titles, setTitles] = useState<ExploreTitle[]>([]);
   const [page, setPage] = useState(1);
@@ -23,9 +25,14 @@ export default function ExplorePage() {
 
   useEffect(() => {
     (async () => {
-      const [genresRes, countriesRes] = await Promise.all([fetch("/api/genres"), fetch("/api/countries")]);
+      const [genresRes, countriesRes, providersRes] = await Promise.all([
+        fetch("/api/genres"),
+        fetch("/api/countries"),
+        fetch("/api/providers"),
+      ]);
       setGenres((await genresRes.json()).genres);
       setCountries((await countriesRes.json()).countries);
+      setProviders((await providersRes.json()).providers);
     })();
   }, []);
 
@@ -66,6 +73,7 @@ export default function ExplorePage() {
             onChange={setFilters}
             genres={genres}
             countries={countries}
+            providers={providers}
             onApply={applyFilters}
             onClear={clearFilters}
             showSort

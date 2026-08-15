@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { CountrySelector } from "@/components/CountrySelector";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -30,6 +31,8 @@ export default async function DashboardPage() {
         <Stat label="Géneros con preferencia" value={genreCount} />
         <Stat label="Países con preferencia" value={countryCount} />
       </div>
+
+      <CountrySelector initialCountry={user?.country ?? null} />
 
       {onboardingDone ? (
         <Link

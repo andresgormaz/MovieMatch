@@ -1,9 +1,13 @@
 import { z } from "zod";
+import { STREAMING_REGIONS } from "./countries";
 
 export const registerSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(80),
   email: z.string().trim().toLowerCase().email("Email inválido"),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").max(200),
+  country: z.enum(STREAMING_REGIONS as [string, ...string[]], {
+    message: "Selecciona tu país",
+  }),
 });
 
 export const titleRatingSchema = z.object({

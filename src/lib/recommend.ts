@@ -17,6 +17,12 @@ const WEIGHTS = {
 // great recommendation anyway, and popularity already factors into scoring.
 const CANDIDATE_POOL_SIZE = 600;
 
+export interface RecommendationProvider {
+  id: number;
+  name: string;
+  logoPath: string | null;
+}
+
 export interface RecommendationResult {
   id: string;
   name: string;
@@ -26,6 +32,8 @@ export interface RecommendationResult {
   overview: string | null;
   genres: string[];
   directors: string[];
+  voteAverage: number | null;
+  providers: RecommendationProvider[];
   score: number;
   matchPercent: number;
   reasons: string[];
@@ -39,7 +47,9 @@ function toMatchPercent(score: number): number {
 
 type CandidateTitle = Awaited<ReturnType<typeof fetchCandidates>>[number];
 
-function fetchCandidates(where: Prisma.TitleWhereInput) {
+// `userCountry` scopes the provider relation to one country -- without it
+// every stored country's availability would come back for each title.
+function fetchCandidates(where: Prisma.TitleWhereInput, userCountry?: string | null) {
   return prisma.title.findMany({
     where,
     orderBy: { popularity: "desc" },
@@ -48,6 +58,9 @@ function fetchCandidates(where: Prisma.TitleWhereInput) {
       genres: { include: { genre: true } },
       cast: { include: { person: true }, orderBy: { order: "asc" }, take: 8 },
       crew: { include: { person: true } },
+      // Empty placeholder country code when the user hasn't set one yet --
+      // matches nothing, same effect as omitting providers entirely.
+      providers: { where: { countryCode: userCountry ?? "" }, include: { provider: true } },
     },
   });
 }
@@ -105,6 +118,12 @@ function scoreCandidates(
       overview: title.overview,
       genres: title.genres.map((g) => g.genre.name),
       directors: title.crew.map((c) => c.person.name),
+      voteAverage: title.voteAverage,
+      providers: title.providers.map((p) => ({
+        id: p.provider.id,
+        name: p.provider.name,
+        logoPath: p.provider.logoPath,
+      })),
       score,
       matchPercent: toMatchPercent(score),
       reasons: reasons.slice(0, 3),
@@ -117,7 +136,7 @@ function scoreCandidates(
 
 export async function getRecommendations(
   userId: string,
-  opts: { filters?: Prisma.TitleWhereInput; limit?: number } = {},
+  opts: { filters?: Prisma.TitleWhereInput; limit?: number; userCountry?: string | null } = {},
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
 
@@ -131,10 +150,13 @@ export async function getRecommendations(
   const countryWeight = new Map(countryPrefs.map((c) => [c.countryCode, c.weight]));
   const personScore = new Map(personRatings.map((p) => [p.personId, p.score]));
 
-  const candidates = await fetchCandidates({
-    ratings: { none: { userId } },
-    ...(opts.filters ?? {}),
-  });
+  const candidates = await fetchCandidates(
+    {
+      ratings: { none: { userId } },
+      ...(opts.filters ?? {}),
+    },
+    opts.userCountry,
+  );
 
   const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, "");
   return results.slice(0, limit);
@@ -146,7 +168,7 @@ export async function getRecommendations(
 // -- the point is finding something new for the group to watch together.
 export async function getGroupRecommendations(
   groupId: string,
-  opts: { filters?: Prisma.TitleWhereInput; limit?: number } = {},
+  opts: { filters?: Prisma.TitleWhereInput; limit?: number; userCountry?: string | null } = {},
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
 
@@ -164,10 +186,13 @@ export async function getGroupRecommendations(
   const countryWeight = sumBy(countryPrefs, (c) => c.countryCode, (c) => c.weight);
   const personScore = sumBy(personRatings, (p) => p.personId, (p) => p.score);
 
-  const candidates = await fetchCandidates({
-    ratings: { none: { userId: { in: memberIds }, seen: true } },
-    ...(opts.filters ?? {}),
-  });
+  const candidates = await fetchCandidates(
+    {
+      ratings: { none: { userId: { in: memberIds }, seen: true } },
+      ...(opts.filters ?? {}),
+    },
+    opts.userCountry,
+  );
 
   const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, " del grupo");
   return results.slice(0, limit);

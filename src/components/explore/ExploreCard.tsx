@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Poster } from "@/components/Poster";
+import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 
 export interface ExploreTitle {
   id: string;
@@ -14,6 +15,7 @@ export interface ExploreTitle {
   budget: number | null;
   genres: string[];
   directors: string[];
+  providers: ProviderBadge[];
   myRating: { seen: boolean; score: number | null } | null;
 }
 
@@ -53,10 +55,11 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
           {title.name}
         </h3>
         <p className="text-[11px] text-muted">
-          {title.releaseYear ?? "—"} {title.voteAverage ? `· ⭐ ${title.voteAverage.toFixed(1)}` : ""}
+          {title.releaseYear ?? "—"} {title.voteAverage ? `· ⭐ ${title.voteAverage.toFixed(1)} (TMDB)` : ""}
         </p>
         {title.genres.length > 0 && <p className="truncate text-[11px] text-muted">{title.genres.join(" · ")}</p>}
         {title.budget ? <p className="text-[11px] text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}
+        <ProviderBadges providers={title.providers} />
       </div>
 
       {rating && !editing ? (

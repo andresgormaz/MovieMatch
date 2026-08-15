@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { tmdbPosterUrl } from "@/lib/tmdb";
+import { tmdbPosterUrl, tmdbLogoUrl } from "@/lib/tmdb";
 import type { Prisma } from "@/generated/prisma/client";
 import { parseTitleFilterParams, buildTitleWhere } from "@/lib/titleFilters";
 
@@ -11,9 +11,12 @@ export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
+  const userCountry = user?.country ?? null;
+
   const { searchParams } = new URL(request.url);
   const filterParams = parseTitleFilterParams(searchParams);
-  const where = buildTitleWhere(filterParams);
+  const where = buildTitleWhere(filterParams, userCountry);
   const sort = searchParams.get("sort") ?? "popularity";
   const pageParam = Number(searchParams.get("page"));
   const page = Math.max(1, Number.isFinite(pageParam) ? pageParam : 1);
@@ -37,12 +40,14 @@ export async function GET(request: Request) {
         genres: { include: { genre: true } },
         crew: { where: { job: { in: ["Director", "Creator"] } }, include: { person: true } },
         ratings: { where: { userId: session.user.id }, select: { seen: true, score: true } },
+        providers: { where: { countryCode: userCountry ?? "" }, include: { provider: true } },
       },
     }),
     prisma.title.count({ where }),
   ]);
 
   return NextResponse.json({
+    userCountry,
     titles: titles.map((t) => ({
       id: t.id,
       name: t.name,
@@ -56,6 +61,11 @@ export async function GET(request: Request) {
       budget: t.budget,
       genres: t.genres.map((g) => g.genre.name),
       directors: t.crew.map((c) => c.person.name),
+      providers: t.providers.map((p) => ({
+        id: p.provider.id,
+        name: p.provider.name,
+        logoUrl: tmdbLogoUrl(p.provider.logoPath),
+      })),
       myRating: t.ratings[0] ?? null,
     })),
     page,

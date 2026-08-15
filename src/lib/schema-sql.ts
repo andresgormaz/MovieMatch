@@ -11,6 +11,7 @@ export const TABLE_STATEMENTS = [
     "email" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
     "name" TEXT,
+    "country" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "onboardingCompletedAt" DATETIME
   )`,
@@ -117,6 +118,19 @@ export const TABLE_STATEMENTS = [
     CONSTRAINT "GroupMember_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "GroupMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "Provider" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "name" TEXT NOT NULL,
+    "logoPath" TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS "TitleProvider" (
+    "titleId" TEXT NOT NULL,
+    "providerId" INTEGER NOT NULL,
+    "countryCode" TEXT NOT NULL,
+    PRIMARY KEY ("titleId", "providerId", "countryCode"),
+    CONSTRAINT "TitleProvider_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "TitleProvider_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "Provider" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -143,6 +157,7 @@ export const INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "Group_inviteCode_key" ON "Group"("inviteCode")`,
   `CREATE INDEX IF NOT EXISTS "GroupMember_userId_idx" ON "GroupMember"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "GroupMember_groupId_userId_key" ON "GroupMember"("groupId", "userId")`,
+  `CREATE INDEX IF NOT EXISTS "TitleProvider_countryCode_idx" ON "TitleProvider"("countryCode")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
@@ -153,4 +168,5 @@ export const INDEX_STATEMENTS = [
 export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "voteCount" INTEGER`,
   `ALTER TABLE "Title" ADD COLUMN "budget" INTEGER`,
+  `ALTER TABLE "User" ADD COLUMN "country" TEXT`,
 ];

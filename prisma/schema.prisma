@@ -22,6 +22,7 @@ model User {
   email                 String    @unique
   passwordHash          String
   name                  String?
+  country               String? // ISO 3166-1 code -- which country's streaming catalog to show
   createdAt             DateTime  @default(now())
   onboardingCompletedAt DateTime?
 
@@ -78,16 +79,39 @@ model Title {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  genres  TitleGenre[]
-  cast    TitleCast[]
-  crew    TitleCrew[]
-  ratings UserTitleRating[]
+  genres    TitleGenre[]
+  cast      TitleCast[]
+  crew      TitleCrew[]
+  ratings   UserTitleRating[]
+  providers TitleProvider[]
 
   @@index([onboardingRank])
   @@index([type])
   @@index([releaseYear])
   @@index([voteAverage])
   @@index([voteCount])
+}
+
+// A streaming service (Netflix, HBO Max, etc) per TMDB/JustWatch.
+model Provider {
+  id       Int    @id // TMDB provider_id
+  name     String
+  logoPath String?
+
+  titles TitleProvider[]
+}
+
+// Where a title streams (subscription/"flatrate" only), per country -- the
+// same title is on different services in different countries.
+model TitleProvider {
+  titleId     String
+  providerId  Int
+  countryCode String
+  title       Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, providerId, countryCode])
+  @@index([countryCode])
 }
 
 model Genre {
