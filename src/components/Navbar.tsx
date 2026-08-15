@@ -17,6 +17,9 @@ export async function Navbar() {
               <Link href="/dashboard" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
                 Mi panel
               </Link>
+              <Link href="/explore" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
+                Explorar
+              </Link>
               <Link href="/recommendations" className="text-neutral-300 hover:text-white transition-colors">
                 Recomendaciones
               </Link>

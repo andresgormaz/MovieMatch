@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { hasTmdbKey, sleep, tmdb, type TmdbListItem } from "./tmdb";
-import { SCHEMA_STATEMENTS } from "./schema-sql";
+import { SCHEMA_STATEMENTS, ALTER_STATEMENTS } from "./schema-sql";
 import {
   FALLBACK_GENRES,
   FALLBACK_TITLES,
@@ -17,12 +17,24 @@ export interface SeedResult {
   done?: boolean; // tmdb mode only: true once /discover has no more pages left
 }
 
-// Creates the schema if it doesn't exist yet. Lets a brand new Turso
-// database go from empty to ready without running `prisma migrate deploy`
-// from a computer -- every statement is idempotent (IF NOT EXISTS).
+// Creates the schema if it doesn't exist yet, and applies any column
+// additions from later on (e.g. adding `budget`/`voteCount` to an already
+// -seeded Turso database). Lets the catalog evolve without ever needing to
+// run `prisma migrate deploy` from a computer. Every CREATE is idempotent
+// (IF NOT EXISTS); ALTER TABLE ADD COLUMN has no such guard in SQLite, so
+// "duplicate column" failures are swallowed (already applied) and anything
+// else is rethrown.
 export async function ensureSchema() {
   for (const statement of SCHEMA_STATEMENTS) {
     await prisma.$executeRawUnsafe(statement);
+  }
+  for (const statement of ALTER_STATEMENTS) {
+    try {
+      await prisma.$executeRawUnsafe(statement);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/duplicate column name/i.test(message)) throw err;
+    }
   }
 }
 
@@ -238,6 +250,7 @@ async function seedFromTmdb(): Promise<SeedResult> {
         backdropPath: item.backdrop_path,
         popularity: item.popularity,
         voteAverage: item.vote_average,
+        voteCount: item.vote_count,
         originCountry: type === "SERIES" ? (item.origin_country?.[0] ?? null) : null,
         onboardingRank: nextRank++,
       }));
@@ -305,6 +318,7 @@ async function enrichTitles(
   titles: { id: string; tmdbId: number; type: "MOVIE" | "SERIES" }[],
 ): Promise<number> {
   const countryByTitleId = new Map<string, string>();
+  const budgetByTitleId = new Map<string, number>();
   const castByTitleId = new Map<string, FetchedCredit[]>();
   const crewByTitleId = new Map<string, { credit: FetchedCredit; job: "Director" | "Creator" }[]>();
   const allPeople = new Map<number, FetchedCredit>();
@@ -318,6 +332,11 @@ async function enrichTitles(
         ? (details as { production_countries: { iso_3166_1: string }[] }).production_countries[0]?.iso_3166_1
         : (details as { origin_country: string[] }).origin_country[0];
     if (country) countryByTitleId.set(t.id, country);
+
+    if (t.type === "MOVIE") {
+      const budget = (details as { budget: number }).budget;
+      if (budget > 0) budgetByTitleId.set(t.id, budget);
+    }
 
     const cast = details.credits.cast.slice(0, 8).map(
       (c): FetchedCredit => ({ tmdbId: c.id, name: c.name, profilePath: c.profile_path, department: "Actuación" }),
@@ -396,8 +415,15 @@ async function enrichTitles(
     await prisma.titleCrew.createMany({ data: [...crewRowsByKey.values()] });
   }
 
-  for (const [titleId, country] of countryByTitleId) {
-    await prisma.title.update({ where: { id: titleId }, data: { originCountry: country } });
+  const titleIdsNeedingUpdate = new Set([...countryByTitleId.keys(), ...budgetByTitleId.keys()]);
+  for (const titleId of titleIdsNeedingUpdate) {
+    await prisma.title.update({
+      where: { id: titleId },
+      data: {
+        originCountry: countryByTitleId.get(titleId),
+        budget: budgetByTitleId.get(titleId),
+      },
+    });
   }
 
   return allPeople.size;

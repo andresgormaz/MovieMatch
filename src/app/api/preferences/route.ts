@@ -3,13 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { genrePreferenceSchema, countryPreferenceSchema } from "@/lib/validation";
-
-const COUNTRY_NAMES: Record<string, string> = {
-  US: "Estados Unidos", GB: "Reino Unido", FR: "Francia", ES: "España", MX: "México",
-  AR: "Argentina", BR: "Brasil", JP: "Japón", KR: "Corea del Sur", DE: "Alemania",
-  IT: "Italia", NZ: "Nueva Zelanda", AU: "Australia", CA: "Canadá", IN: "India",
-  CN: "China", SE: "Suecia", DK: "Dinamarca", RU: "Rusia",
-};
+import { countryName } from "@/lib/countries";
 
 export async function GET() {
   const session = await auth();
@@ -30,7 +24,7 @@ export async function GET() {
   const countries = countryRows
     .map((r) => r.originCountry!)
     .sort()
-    .map((code) => ({ code, name: COUNTRY_NAMES[code] ?? code }));
+    .map((code) => ({ code, name: countryName(code) }));
 
   return NextResponse.json({
     genres,

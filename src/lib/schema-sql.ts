@@ -24,6 +24,8 @@ export const SCHEMA_STATEMENTS = [
     "backdropPath" TEXT,
     "popularity" REAL,
     "voteAverage" REAL,
+    "voteCount" INTEGER,
+    "budget" INTEGER,
     "originCountry" TEXT,
     "onboardingRank" INTEGER,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -101,6 +103,9 @@ export const SCHEMA_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "Title_tmdbId_key" ON "Title"("tmdbId")`,
   `CREATE INDEX IF NOT EXISTS "Title_onboardingRank_idx" ON "Title"("onboardingRank")`,
   `CREATE INDEX IF NOT EXISTS "Title_type_idx" ON "Title"("type")`,
+  `CREATE INDEX IF NOT EXISTS "Title_releaseYear_idx" ON "Title"("releaseYear")`,
+  `CREATE INDEX IF NOT EXISTS "Title_voteAverage_idx" ON "Title"("voteAverage")`,
+  `CREATE INDEX IF NOT EXISTS "Title_voteCount_idx" ON "Title"("voteCount")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Genre_name_key" ON "Genre"("name")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Person_tmdbId_key" ON "Person"("tmdbId")`,
   `CREATE INDEX IF NOT EXISTS "Person_knownForDepartment_idx" ON "Person"("knownForDepartment")`,
@@ -114,4 +119,14 @@ export const SCHEMA_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserGenrePreference_userId_genreId_key" ON "UserGenrePreference"("userId", "genreId")`,
   `CREATE INDEX IF NOT EXISTS "UserCountryPreference_userId_idx" ON "UserCountryPreference"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserCountryPreference_userId_countryCode_key" ON "UserCountryPreference"("userId", "countryCode")`,
+];
+
+// SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
+// ensureSchema() with per-statement "duplicate column" errors swallowed
+// (see seedCatalog.ts). Needed to evolve a Turso database that was created
+// before these columns existed -- CREATE TABLE IF NOT EXISTS above is a
+// no-op once the table already exists.
+export const ALTER_STATEMENTS = [
+  `ALTER TABLE "Title" ADD COLUMN "voteCount" INTEGER`,
+  `ALTER TABLE "Title" ADD COLUMN "budget" INTEGER`,
 ];

@@ -85,6 +85,7 @@ export interface TmdbCountry {
 export interface TmdbMovieDetails extends TmdbListItem {
   genres: TmdbGenre[];
   production_countries: TmdbCountry[];
+  budget: number; // USD, 0 when unknown -- TV has no equivalent field
   credits: TmdbCredits;
 }
 

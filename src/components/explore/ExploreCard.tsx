@@ -1,0 +1,104 @@
+"use client";
+
+import { useState } from "react";
+import { Poster } from "@/components/Poster";
+
+export interface ExploreTitle {
+  id: string;
+  name: string;
+  type: "MOVIE" | "SERIES";
+  releaseYear: number | null;
+  posterUrl: string | null;
+  voteAverage: number | null;
+  voteCount: number | null;
+  budget: number | null;
+  genres: string[];
+  directors: string[];
+  myRating: { seen: boolean; score: number | null } | null;
+}
+
+const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+function formatBudget(n: number) {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(0)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n}`;
+}
+
+export function ExploreCard({ title }: { title: ExploreTitle }) {
+  const [rating, setRating] = useState(title.myRating);
+  const [editing, setEditing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function rate(seen: boolean, score: number | null) {
+    if (submitting) return;
+    setSubmitting(true);
+    await fetch("/api/titles/rate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titleId: title.id, seen, score }),
+    });
+    setRating({ seen, score });
+    setSubmitting(false);
+    setEditing(false);
+  }
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="aspect-[2/3] w-full">
+        <Poster name={title.name} type={title.type} posterUrl={title.posterUrl} />
+      </div>
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
+        <h3 className="truncate text-sm font-semibold text-white" title={title.name}>
+          {title.name}
+        </h3>
+        <p className="text-[11px] text-muted">
+          {title.releaseYear ?? "—"} {title.voteAverage ? `· ⭐ ${title.voteAverage.toFixed(1)}` : ""}
+        </p>
+        {title.genres.length > 0 && <p className="truncate text-[11px] text-muted">{title.genres.join(" · ")}</p>}
+        {title.budget ? <p className="text-[11px] text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}
+      </div>
+
+      {rating && !editing ? (
+        <button
+          onClick={() => setEditing(true)}
+          className="border-t border-border py-2 text-center text-xs text-muted hover:bg-surface-hover transition-colors"
+        >
+          {rating.seen ? `Tu nota: ${rating.score} · cambiar` : "No vista · cambiar"}
+        </button>
+      ) : !editing ? (
+        <div className="grid grid-cols-2 divide-x divide-border border-t border-border">
+          <button
+            disabled={submitting}
+            onClick={() => rate(false, null)}
+            className="py-2 text-xs font-medium text-neutral-400 hover:bg-surface-hover transition-colors disabled:opacity-50"
+          >
+            No la vi
+          </button>
+          <button
+            disabled={submitting}
+            onClick={() => setEditing(true)}
+            className="py-2 text-xs font-bold text-white hover:bg-accent transition-colors disabled:opacity-50"
+          >
+            La vi ✓
+          </button>
+        </div>
+      ) : (
+        <div className="border-t border-border p-2">
+          <div className="grid grid-cols-5 gap-1">
+            {SCORES.map((s) => (
+              <button
+                key={s}
+                disabled={submitting}
+                onClick={() => rate(true, s)}
+                className="rounded border border-white/15 py-1.5 text-xs font-medium hover:border-accent hover:bg-accent transition-colors disabled:opacity-50"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

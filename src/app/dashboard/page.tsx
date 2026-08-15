@@ -48,6 +48,9 @@ export default async function DashboardPage() {
       )}
 
       <div className="flex flex-col gap-2 text-sm">
+        <Link href="/explore" className="text-muted hover:text-white transition-colors">
+          → Explorar el catálogo con filtros
+        </Link>
         <Link href="/onboarding/titles" className="text-muted hover:text-white transition-colors">
           → Seguir calificando películas y series
         </Link>

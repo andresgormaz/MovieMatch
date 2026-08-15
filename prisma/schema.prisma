@@ -43,6 +43,8 @@ model Title {
   backdropPath   String?
   popularity     Float?
   voteAverage    Float?
+  voteCount      Int? // TMDB vote count -- used as the "masividad" filter
+  budget         Int? // USD, movies only (TMDB doesn't report it for series)
   originCountry  String? // primary ISO 3166-1 country code
   onboardingRank Int? // lower = shown earlier during onboarding ("top 100")
   createdAt      DateTime  @default(now())
@@ -55,6 +57,9 @@ model Title {
 
   @@index([onboardingRank])
   @@index([type])
+  @@index([releaseYear])
+  @@index([voteAverage])
+  @@index([voteCount])
 }
 
 model Genre {
