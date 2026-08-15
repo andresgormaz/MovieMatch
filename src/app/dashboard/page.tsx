@@ -51,6 +51,9 @@ export default async function DashboardPage() {
         <Link href="/explore" className="text-muted hover:text-white transition-colors">
           → Explorar el catálogo con filtros
         </Link>
+        <Link href="/groups" className="text-muted hover:text-white transition-colors">
+          → Vincular cuentas y ver recomendaciones en grupo
+        </Link>
         <Link href="/onboarding/titles" className="text-muted hover:text-white transition-colors">
           → Seguir calificando películas y series
         </Link>

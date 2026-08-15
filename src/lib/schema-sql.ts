@@ -101,6 +101,22 @@ export const TABLE_STATEMENTS = [
     "weight" INTEGER NOT NULL,
     CONSTRAINT "UserCountryPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "Group" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT,
+    "inviteCode" TEXT NOT NULL,
+    "ownerId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Group_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "GroupMember" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "groupId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "joinedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "GroupMember_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "GroupMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -124,6 +140,9 @@ export const INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserGenrePreference_userId_genreId_key" ON "UserGenrePreference"("userId", "genreId")`,
   `CREATE INDEX IF NOT EXISTS "UserCountryPreference_userId_idx" ON "UserCountryPreference"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserCountryPreference_userId_countryCode_key" ON "UserCountryPreference"("userId", "countryCode")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Group_inviteCode_key" ON "Group"("inviteCode")`,
+  `CREATE INDEX IF NOT EXISTS "GroupMember_userId_idx" ON "GroupMember"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "GroupMember_groupId_userId_key" ON "GroupMember"("groupId", "userId")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
