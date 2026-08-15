@@ -4,7 +4,8 @@ import { prisma } from "../src/lib/prisma";
 
 async function main() {
   const forced = process.argv.includes("--force");
-  const result = await seedCatalog({ force: forced });
+  const source = process.argv.includes("--anime") ? "anime" : "auto";
+  const result = await seedCatalog({ force: forced, source });
 
   if (result.skipped) {
     console.log(`Ya hay ${result.titles} títulos cargados -> nada que hacer (usá --force para forzar).`);
@@ -16,6 +17,12 @@ async function main() {
       `TMDB: +${result.titles} títulos este lote (${result.moviesTotal} películas / ${result.seriesTotal} series en total), ${result.people} personas nuevas.`,
     );
     console.log(result.done ? "Catálogo completo, no quedan más páginas." : "Corré de nuevo para seguir sumando más.");
+    return;
+  }
+
+  if (result.mode === "anime") {
+    console.log(`Jikan: +${result.titles} animes este lote (${result.animeTotal} en total).`);
+    console.log(result.done ? "Catálogo de anime completo." : "Corré de nuevo (con --anime) para seguir sumando más.");
     return;
   }
 

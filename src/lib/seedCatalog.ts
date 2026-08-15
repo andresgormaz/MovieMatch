@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { hasTmdbKey, sleep, tmdb, type TmdbListItem } from "./tmdb";
+import { jikan, translateAnimeGenre, ANIME_ID_OFFSET, ANIME_PAGE_SIZE, type JikanAnime } from "./jikan";
 import { TABLE_STATEMENTS, ALTER_STATEMENTS, INDEX_STATEMENTS } from "./schema-sql";
 import {
   FALLBACK_GENRES,
@@ -8,13 +9,14 @@ import {
 } from "../../prisma/seed-data/fallback";
 
 export interface SeedResult {
-  mode: "tmdb" | "fallback";
+  mode: "tmdb" | "fallback" | "anime";
   skipped: boolean;
   titles: number;
   people: number;
   moviesTotal?: number;
   seriesTotal?: number;
-  done?: boolean; // tmdb mode only: true once /discover has no more pages left
+  animeTotal?: number;
+  done?: boolean; // tmdb/anime mode only: true once there are no more pages left
 }
 
 // Creates the schema if it doesn't exist yet, and applies any column
@@ -43,8 +45,14 @@ export async function ensureSchema() {
   }
 }
 
-export async function seedCatalog(opts: { force?: boolean } = {}): Promise<SeedResult> {
+export async function seedCatalog(
+  opts: { force?: boolean; source?: "auto" | "anime" } = {},
+): Promise<SeedResult> {
   await ensureSchema();
+
+  if (opts.source === "anime") {
+    return seedAnimeFromJikan();
+  }
 
   if (hasTmdbKey()) {
     // Incremental/resumable: every call fetches the next batch of pages and
@@ -446,4 +454,146 @@ async function enrichTitles(
   }
 
   return allPeople.size;
+}
+
+const ANIME_PAGES_PER_CALL = 6; // ~150 anime per call -- no per-title enrichment call needed
+
+// Anime import from Jikan. Unlike TMDB, genres/score/studio all come back in
+// the same list response, so there's no separate enrichment phase -- one
+// batch of list pages plus a few batched writes per call, comfortably under
+// the time budget. Resumes the same way as seedFromTmdb: next page is
+// derived from how many anime rows already exist.
+async function seedAnimeFromJikan(): Promise<SeedResult> {
+  const animeCount = await prisma.title.count({ where: { tmdbId: { gte: ANIME_ID_OFFSET } } });
+  const startPage = Math.floor(animeCount / ANIME_PAGE_SIZE) + 1;
+
+  const maxRankRow = await prisma.title.aggregate({ _max: { onboardingRank: true } });
+  let nextRank = (maxRankRow._max.onboardingRank ?? 0) + 1;
+
+  const items: JikanAnime[] = [];
+  let exhausted = false;
+  for (let i = 0; i < ANIME_PAGES_PER_CALL; i++) {
+    const page = startPage + i;
+    const res = await jikan.listAnime(page);
+    items.push(...res.data);
+    await sleep(400); // Jikan's public rate limit is ~3 req/s
+    if (!res.pagination.has_next_page) {
+      exhausted = true;
+      break;
+    }
+  }
+
+  if (items.length === 0) {
+    const animeTotal = await prisma.title.count({ where: { tmdbId: { gte: ANIME_ID_OFFSET } } });
+    return { mode: "anime", skipped: false, titles: 0, people: 0, animeTotal, done: true };
+  }
+
+  const alreadyPersisted = new Set(
+    (
+      await prisma.title.findMany({
+        where: { tmdbId: { in: items.map((it) => ANIME_ID_OFFSET + it.mal_id) } },
+        select: { tmdbId: true },
+      })
+    ).map((t) => t.tmdbId),
+  );
+  const newItems = items.filter((it) => !alreadyPersisted.has(ANIME_ID_OFFSET + it.mal_id));
+
+  let studioCount = 0;
+  if (newItems.length > 0) {
+    // "Anime" tags every import so it's a one-click filter regardless of
+    // sub-genre; the rest map onto existing genres where there's an
+    // equivalent (translateAnimeGenre), or get created the first time seen.
+    const genreNames = new Set<string>(["Anime"]);
+    for (const it of newItems) for (const g of it.genres) genreNames.add(translateAnimeGenre(g.name));
+
+    const genreIdByName = new Map<string, number>();
+    for (const g of await prisma.genre.findMany({ where: { name: { in: [...genreNames] } } })) {
+      genreIdByName.set(g.name, g.id);
+    }
+    const missingGenreNames = [...genreNames].filter((n) => !genreIdByName.has(n));
+    if (missingGenreNames.length > 0) {
+      // Genre.id has no DB-generated default in the Prisma schema, so new
+      // rows need an explicit id -- allocate sequentially above 50000,
+      // clear of every real TMDB genre id, instead of relying on a hash
+      // (which could theoretically collide).
+      const maxCustom = await prisma.genre.aggregate({ where: { id: { gte: 50_000 } }, _max: { id: true } });
+      let nextGenreId = Math.max(50_000, (maxCustom._max.id ?? 49_999) + 1);
+      for (const name of missingGenreNames) {
+        await prisma.genre.create({ data: { id: nextGenreId, name } });
+        genreIdByName.set(name, nextGenreId);
+        nextGenreId++;
+      }
+    }
+
+    const titleRows = newItems.map((it) => ({
+      tmdbId: ANIME_ID_OFFSET + it.mal_id,
+      type: it.type === "Movie" ? ("MOVIE" as const) : ("SERIES" as const),
+      name: it.title_english || it.title,
+      originalName: it.title,
+      overview: it.synopsis,
+      releaseYear: it.year,
+      posterPath: it.images.jpg.large_image_url,
+      backdropPath: null,
+      popularity: it.scored_by ?? 0,
+      voteAverage: it.score,
+      voteCount: it.scored_by,
+      originCountry: "JP",
+      onboardingRank: nextRank++,
+    }));
+    await prisma.title.createMany({ data: titleRows });
+
+    const persistedTitles = await prisma.title.findMany({
+      where: { tmdbId: { in: newItems.map((it) => ANIME_ID_OFFSET + it.mal_id) } },
+      select: { id: true, tmdbId: true },
+    });
+    const titleIdByTmdbId = new Map(persistedTitles.map((t) => [t.tmdbId, t.id]));
+
+    const genrePairs: { titleId: string; genreId: number }[] = [];
+    const allStudios = new Map<number, { mal_id: number; name: string }>();
+    for (const it of newItems) {
+      const titleId = titleIdByTmdbId.get(ANIME_ID_OFFSET + it.mal_id);
+      if (!titleId) continue;
+      genrePairs.push({ titleId, genreId: genreIdByName.get("Anime")! });
+      for (const g of it.genres) {
+        const genreId = genreIdByName.get(translateAnimeGenre(g.name));
+        if (genreId) genrePairs.push({ titleId, genreId });
+      }
+      for (const s of it.studios) allStudios.set(s.mal_id, s);
+    }
+    if (genrePairs.length > 0) await prisma.titleGenre.createMany({ data: genrePairs });
+
+    if (allStudios.size > 0) {
+      const studioTmdbIds = [...allStudios.keys()].map((malId) => ANIME_ID_OFFSET + malId);
+      const existingStudioIds = new Set(
+        (
+          await prisma.person.findMany({ where: { tmdbId: { in: studioTmdbIds } }, select: { tmdbId: true } })
+        ).map((p) => p.tmdbId),
+      );
+      const newStudioRows = [...allStudios.values()]
+        .filter((s) => !existingStudioIds.has(ANIME_ID_OFFSET + s.mal_id))
+        .map((s) => ({ tmdbId: ANIME_ID_OFFSET + s.mal_id, name: s.name, knownForDepartment: "Estudio" }));
+      if (newStudioRows.length > 0) await prisma.person.createMany({ data: newStudioRows });
+      studioCount = allStudios.size;
+
+      const studioPeople = await prisma.person.findMany({
+        where: { tmdbId: { in: studioTmdbIds } },
+        select: { id: true, tmdbId: true },
+      });
+      const studioPersonIdByTmdbId = new Map(studioPeople.map((p) => [p.tmdbId, p.id]));
+
+      const crewRows: { titleId: string; personId: string; job: string }[] = [];
+      for (const it of newItems) {
+        const titleId = titleIdByTmdbId.get(ANIME_ID_OFFSET + it.mal_id);
+        if (!titleId) continue;
+        for (const s of it.studios) {
+          const personId = studioPersonIdByTmdbId.get(ANIME_ID_OFFSET + s.mal_id);
+          if (personId) crewRows.push({ titleId, personId, job: "Estudio" });
+        }
+      }
+      if (crewRows.length > 0) await prisma.titleCrew.createMany({ data: crewRows });
+    }
+  }
+
+  const animeTotal = await prisma.title.count({ where: { tmdbId: { gte: ANIME_ID_OFFSET } } });
+  return { mode: "anime", skipped: false, titles: newItems.length, people: studioCount, animeTotal, done: exhausted };
 }

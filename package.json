@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:anime": "tsx prisma/seed.ts --anime",
     "db:migrate": "prisma migrate dev"
   },
   "dependencies": {

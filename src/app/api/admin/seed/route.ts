@@ -10,7 +10,8 @@ import { seedCatalog } from "@/lib/seedCatalog";
 // /discover pages (picking up where the last call left off) and enriches a
 // bounded number of titles with cast/crew -- revisit the same URL as many
 // times as you want to keep growing the catalog, each call stays well
-// within Vercel's function time limit.
+// within Vercel's function time limit. Add &source=anime to import anime
+// from Jikan/MyAnimeList instead (also resumable the same way).
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
@@ -28,9 +29,10 @@ export async function GET(request: Request) {
   }
 
   const force = searchParams.get("force") === "1";
+  const source = searchParams.get("source") === "anime" ? "anime" : "auto";
 
   try {
-    const result = await seedCatalog({ force });
+    const result = await seedCatalog({ force, source });
 
     let message: string;
     if (result.skipped) {
@@ -39,6 +41,10 @@ export async function GET(request: Request) {
       message = result.done
         ? `Listo, no quedan más páginas: ${result.moviesTotal} películas y ${result.seriesTotal} series en total.`
         : `Sumamos ${result.titles} títulos más (${result.moviesTotal} películas / ${result.seriesTotal} series en total). Volvé a visitar esta misma URL para seguir cargando más.`;
+    } else if (result.mode === "anime") {
+      message = result.done
+        ? `Listo, no quedan más páginas de anime: ${result.animeTotal} en total.`
+        : `Sumamos ${result.titles} animes más (${result.animeTotal} en total). Volvé a visitar esta misma URL (con &source=anime) para seguir cargando más.`;
     } else {
       message = `Listo: se cargaron ${result.titles} títulos y ${result.people} personas (dataset local).`;
     }

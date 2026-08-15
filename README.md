@@ -22,6 +22,13 @@ calificación nueva, así que van mejorando a medida que usas la app.
 Puedes calificar directamente desde la pantalla de recomendaciones — eso también alimenta el
 modelo, así que mientras más usas la app, mejor se pone.
 
+5. **Explorar** (`/explore`): el catálogo completo con filtros (año, puntaje, género, país,
+   cantidad de votos, presupuesto, actor, director) para buscar algo puntual en vez de esperar
+   una recomendación.
+6. **Grupos** (`/groups`): vinculás tu cuenta con otras (link de invitación) para recibir
+   recomendaciones conjuntas que combinan los gustos de todo el grupo y excluyen lo que
+   cualquier miembro ya vio.
+
 ## Stack
 
 - **Next.js 16 (App Router) + TypeScript + Tailwind CSS 4** — full-stack en un solo proyecto.
@@ -31,10 +38,13 @@ modelo, así que mientras más usas la app, mejor se pone.
   Vercel. Multi-usuario ya está soportado desde el modelo de datos.
 - **NextAuth (Auth.js) v5** con login por email/contraseña (JWT sessions). Pensado para escalar
   a múltiples usuarios, cada uno con su propio historial y recomendaciones.
-- **TMDB (The Movie Database)** como fuente de datos — es el reemplazo estándar y gratuito a
-  la API de IMDb (que no ofrece una API pública). Si no configuras una API key, la app carga un
-  dataset local curado a mano (~100 películas/series muy conocidas, sin pósters) para que
-  puedas probarla sin depender de servicios externos.
+- **TMDB (The Movie Database)** como fuente de datos para películas/series — es el reemplazo
+  estándar y gratuito a la API de IMDb (que no ofrece una API pública). Si no configuras una
+  API key, la app carga un dataset local curado a mano (~100 títulos muy conocidos, sin
+  pósters) para que puedas probarla sin depender de servicios externos.
+- **Jikan** (API gratuita sobre datos de MyAnimeList) para anime — Crunchyroll no ofrece una
+  API pública para integraciones de terceros. El anime queda en el mismo catálogo que
+  películas/series, etiquetado con el género "Anime" (filtrable en `/explore`).
 
 ## Puesta en marcha
 
@@ -108,6 +118,16 @@ agregues `&force=1` al final para forzar una recarga, por ejemplo después de ag
 `TMDB_API_KEY` que no tenías antes).
 
 Con eso ya está: entrá a la URL de tu app y registrate.
+
+**Para sumar anime**, agregá `&source=anime` a la misma URL (no hace falta ninguna API key,
+Jikan es gratis y abierta):
+
+```
+https://moviematch-tu-usuario.vercel.app/api/admin/seed?secret=EL_SEED_SECRET_QUE_PUSISTE&source=anime
+```
+
+Igual que con TMDB, cada visita trae un lote nuevo — repetí hasta que el mensaje diga que no
+quedan más páginas.
 
 ### Alternativa con terminal (si tenés compu)
 
