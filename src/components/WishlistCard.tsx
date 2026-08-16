@@ -28,23 +28,38 @@ export function WishlistCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(false);
 
   async function markSeen(score: number) {
     if (submitting) return;
     setSubmitting(true);
-    await fetch("/api/titles/rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titleId: item.id, seen: true, score }),
-    });
-    onRemoved(item.id);
+    setError(false);
+    try {
+      const res = await fetch("/api/titles/rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleId: item.id, seen: true, score }),
+      });
+      if (!res.ok) throw new Error("rate failed");
+      onRemoved(item.id);
+    } catch {
+      setError(true);
+      setSubmitting(false);
+    }
   }
 
   async function removeFromWishlist() {
     if (submitting) return;
     setSubmitting(true);
-    await fetch(`/api/wishlist/${item.id}`, { method: "DELETE" });
-    onRemoved(item.id);
+    setError(false);
+    try {
+      const res = await fetch(`/api/wishlist/${item.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("wishlist remove failed");
+      onRemoved(item.id);
+    } catch {
+      setError(true);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -69,6 +84,7 @@ export function WishlistCard({
           <p className="mt-1 text-xs text-muted">{item.genres.join(" · ")}</p>
           <ProviderBadges providers={item.providers} />
           {item.overview && <p className="mt-2 line-clamp-2 text-xs text-muted">{item.overview}</p>}
+          {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
         </div>
       </div>
 

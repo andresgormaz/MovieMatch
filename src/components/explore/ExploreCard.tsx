@@ -31,18 +31,26 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
   const [rating, setRating] = useState(title.myRating);
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(false);
 
   async function rate(seen: boolean, score: number | null) {
     if (submitting) return;
     setSubmitting(true);
-    await fetch("/api/titles/rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titleId: title.id, seen, score }),
-    });
-    setRating({ seen, score });
-    setSubmitting(false);
-    setEditing(false);
+    setError(false);
+    try {
+      const res = await fetch("/api/titles/rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleId: title.id, seen, score }),
+      });
+      if (!res.ok) throw new Error("rate failed");
+      setRating({ seen, score });
+      setEditing(false);
+    } catch {
+      setError(true);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -60,6 +68,7 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
         {title.genres.length > 0 && <p className="truncate text-[11px] text-muted">{title.genres.join(" · ")}</p>}
         {title.budget ? <p className="text-[11px] text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}
         <ProviderBadges providers={title.providers} />
+        {error && <p className="text-[11px] text-red-400">No se pudo guardar. Probá de nuevo.</p>}
       </div>
 
       {rating && !editing ? (

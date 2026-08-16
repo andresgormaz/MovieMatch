@@ -25,16 +25,24 @@ export function TitleCard({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [showScores, setShowScores] = useState(false);
+  const [error, setError] = useState(false);
 
   async function rate(seen: boolean, score: number | null) {
     if (submitting) return;
     setSubmitting(true);
-    await fetch("/api/titles/rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titleId: title.id, seen, score }),
-    });
-    onRated(title.id);
+    setError(false);
+    try {
+      const res = await fetch("/api/titles/rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleId: title.id, seen, score }),
+      });
+      if (!res.ok) throw new Error("rate failed");
+      onRated(title.id);
+    } catch {
+      setError(true);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -52,6 +60,7 @@ export function TitleCard({
             {title.directors.length ? ` · ${title.directors.join(", ")}` : ""}
           </p>
           <p className="mt-1 text-xs text-muted">{title.genres.join(" · ")}</p>
+          {error && <p className="mt-1 text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
         </div>
       </div>
 

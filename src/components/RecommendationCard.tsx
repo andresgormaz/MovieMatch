@@ -30,27 +30,42 @@ export function RecommendationCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(false);
 
   async function rate(seen: boolean, score: number | null) {
     if (submitting) return;
     setSubmitting(true);
-    await fetch("/api/titles/rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titleId: rec.id, seen, score }),
-    });
-    onRated(rec.id);
+    setError(false);
+    try {
+      const res = await fetch("/api/titles/rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleId: rec.id, seen, score }),
+      });
+      if (!res.ok) throw new Error("rate failed");
+      onRated(rec.id);
+    } catch {
+      setError(true);
+      setSubmitting(false);
+    }
   }
 
   async function addToWishlist() {
     if (submitting) return;
     setSubmitting(true);
-    await fetch("/api/wishlist", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titleId: rec.id }),
-    });
-    onRated(rec.id);
+    setError(false);
+    try {
+      const res = await fetch("/api/wishlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleId: rec.id }),
+      });
+      if (!res.ok) throw new Error("wishlist add failed");
+      onRated(rec.id);
+    } catch {
+      setError(true);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -91,6 +106,7 @@ export function RecommendationCard({
           {rec.overview && (
             <p className="mt-2 line-clamp-2 text-xs text-muted">{rec.overview}</p>
           )}
+          {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
         </div>
       </div>
 
