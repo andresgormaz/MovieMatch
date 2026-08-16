@@ -9,13 +9,21 @@ export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { country: true, originalTitles: true },
+  });
   const userCountry = user?.country ?? null;
 
   const { searchParams } = new URL(request.url);
   const filters = buildTitleWhere(parseTitleFilterParams(searchParams), userCountry);
 
-  const recommendations = await getRecommendations(session.user.id, { filters, limit: 24, userCountry });
+  const recommendations = await getRecommendations(session.user.id, {
+    filters,
+    limit: 24,
+    userCountry,
+    useOriginalTitles: user?.originalTitles ?? false,
+  });
 
   return NextResponse.json({
     userCountry,

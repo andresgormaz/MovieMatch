@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl, tmdbBackdropUrl, tmdbProfileUrl, tmdbLogoUrl } from "@/lib/tmdb";
 import { countryName } from "@/lib/countries";
+import { displayTitleName } from "@/lib/titleDisplay";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -11,8 +12,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const { id } = await params;
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { country: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { country: true, originalTitles: true },
+  });
   const userCountry = user?.country ?? null;
+  const useOriginalTitles = user?.originalTitles ?? false;
 
   const [title, myRating, wishlistEntry] = await Promise.all([
     prisma.title.findUnique({
@@ -37,7 +42,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     title.similar.length > 0
       ? await prisma.title.findMany({
           where: { OR: title.similar.map((s) => ({ tmdbId: s.relatedTmdbId, type: s.relatedType })) },
-          select: { id: true, name: true, type: true, releaseYear: true, posterPath: true, tmdbId: true },
+          select: {
+            id: true,
+            name: true,
+            originalName: true,
+            type: true,
+            releaseYear: true,
+            posterPath: true,
+            tmdbId: true,
+          },
         })
       : [];
   const similarByKey = new Map(similarTitles.map((t) => [`${t.tmdbId}:${t.type}`, t]));
@@ -48,7 +61,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     id: title.id,
-    name: title.name,
+    name: displayTitleName(title, useOriginalTitles),
     originalName: title.originalName,
     type: title.type,
     releaseYear: title.releaseYear,
@@ -70,7 +83,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     })),
     similar: orderedSimilar.map((t) => ({
       id: t.id,
-      name: t.name,
+      name: displayTitleName(t, useOriginalTitles),
       type: t.type,
       releaseYear: t.releaseYear,
       posterUrl: tmdbPosterUrl(t.posterPath),

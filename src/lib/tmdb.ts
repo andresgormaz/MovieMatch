@@ -36,7 +36,10 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
   }
 
   const url = new URL(`${TMDB_API_BASE}${path}`);
-  url.searchParams.set("language", "es-ES");
+  // es-MX instead of es-ES: TMDB's Spain-Spanish translations read oddly to
+  // most Latin American users (different title conventions, vocabulary).
+  // es-MX is TMDB's best-covered Latin American Spanish locale.
+  url.searchParams.set("language", "es-MX");
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, String(value));
   }

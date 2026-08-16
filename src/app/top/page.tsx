@@ -2,9 +2,10 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
+import { displayTitleName } from "@/lib/titleDisplay";
 import { Poster } from "@/components/Poster";
 
-async function topByType(userId: string, type: "MOVIE" | "SERIES") {
+async function topByType(userId: string, type: "MOVIE" | "SERIES", useOriginalTitles: boolean) {
   const ratings = await prisma.userTitleRating.findMany({
     where: { userId, seen: true, score: { not: null }, title: { type } },
     orderBy: { score: "desc" },
@@ -19,7 +20,7 @@ async function topByType(userId: string, type: "MOVIE" | "SERIES") {
   });
   return ratings.map((r) => ({
     id: r.title.id,
-    name: r.title.name,
+    name: displayTitleName(r.title, useOriginalTitles),
     releaseYear: r.title.releaseYear,
     posterUrl: tmdbPosterUrl(r.title.posterPath),
     genres: r.title.genres.map((g) => g.genre.name),
@@ -31,9 +32,12 @@ export default async function TopPage() {
   const session = await auth();
   const userId = session!.user.id;
 
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { originalTitles: true } });
+  const useOriginalTitles = user?.originalTitles ?? false;
+
   const [topMovies, topSeries] = await Promise.all([
-    topByType(userId, "MOVIE"),
-    topByType(userId, "SERIES"),
+    topByType(userId, "MOVIE", useOriginalTitles),
+    topByType(userId, "SERIES", useOriginalTitles),
   ]);
 
   return (

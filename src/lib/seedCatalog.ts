@@ -362,6 +362,8 @@ async function enrichTitles(
 ): Promise<number> {
   const countryByTitleId = new Map<string, string>();
   const budgetByTitleId = new Map<string, number>();
+  const nameByTitleId = new Map<string, string>();
+  const overviewByTitleId = new Map<string, string>();
   const castByTitleId = new Map<string, FetchedCredit[]>();
   const crewByTitleId = new Map<string, { credit: FetchedCredit; job: "Director" | "Creator" }[]>();
   const allPeople = new Map<number, FetchedCredit>();
@@ -384,6 +386,15 @@ async function enrichTitles(
       const budget = (details as { budget: number }).budget;
       if (budget > 0) budgetByTitleId.set(t.id, budget);
     }
+
+    // Refreshes the locale-translated name/overview on every re-enrichment
+    // (e.g. after switching the import language) -- TMDB returns an empty
+    // overview, not a fallback, when a title has no translation for the
+    // requested locale, so only overwrite when there's actually something
+    // better to show.
+    const localizedName = t.type === "MOVIE" ? details.title : details.name;
+    if (localizedName) nameByTitleId.set(t.id, localizedName);
+    if (details.overview) overviewByTitleId.set(t.id, details.overview);
 
     const cast = details.credits.cast.slice(0, 8).map(
       (c): FetchedCredit => ({ tmdbId: c.id, name: c.name, profilePath: c.profile_path, department: "Actuación" }),
@@ -561,13 +572,20 @@ async function enrichTitles(
     await prisma.titleSimilar.createMany({ data: similarRows });
   }
 
-  const titleIdsNeedingUpdate = new Set([...countryByTitleId.keys(), ...budgetByTitleId.keys()]);
+  const titleIdsNeedingUpdate = new Set([
+    ...countryByTitleId.keys(),
+    ...budgetByTitleId.keys(),
+    ...nameByTitleId.keys(),
+    ...overviewByTitleId.keys(),
+  ]);
   for (const titleId of titleIdsNeedingUpdate) {
     await prisma.title.update({
       where: { id: titleId },
       data: {
         originCountry: countryByTitleId.get(titleId),
         budget: budgetByTitleId.get(titleId),
+        name: nameByTitleId.get(titleId),
+        overview: overviewByTitleId.get(titleId),
       },
     });
   }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { TitleType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
+import { displayTitleName } from "@/lib/titleDisplay";
 
 const WEIGHTS = {
   genre: 2,
@@ -82,7 +83,10 @@ interface SimilarityBoost {
 // recommended by several of the user's liked titles compound -- summing
 // `likedRatings` per source instead of deduping also gives group scoring
 // "more than one member liked this" weight for free.
-async function buildSimilarityBoost(likedRatings: { titleId: string; score: number }[]): Promise<SimilarityBoost> {
+async function buildSimilarityBoost(
+  likedRatings: { titleId: string; score: number }[],
+  useOriginalTitles: boolean,
+): Promise<SimilarityBoost> {
   const boostByKey = new Map<string, number>();
   const reasonByKey = new Map<string, { name: string; contribution: number }>();
 
@@ -97,9 +101,12 @@ async function buildSimilarityBoost(likedRatings: { titleId: string; score: numb
   const sourceIds = [...weightBySource.keys()];
   const [similarRows, sourceTitles] = await Promise.all([
     prisma.titleSimilar.findMany({ where: { titleId: { in: sourceIds } } }),
-    prisma.title.findMany({ where: { id: { in: sourceIds } }, select: { id: true, name: true } }),
+    prisma.title.findMany({
+      where: { id: { in: sourceIds } },
+      select: { id: true, name: true, originalName: true },
+    }),
   ]);
-  const nameBySource = new Map(sourceTitles.map((t) => [t.id, t.name]));
+  const nameBySource = new Map(sourceTitles.map((t) => [t.id, displayTitleName(t, useOriginalTitles)]));
 
   for (const row of similarRows) {
     const ratingWeight = weightBySource.get(row.titleId);
@@ -126,6 +133,7 @@ function scoreCandidates(
   personScore: Map<string, number>,
   similarity: SimilarityBoost,
   reasonSuffix: string,
+  useOriginalTitles: boolean,
 ): RecommendationResult[] {
   const results: RecommendationResult[] = candidates.map((title) => {
     let score = 0;
@@ -174,7 +182,7 @@ function scoreCandidates(
 
     return {
       id: title.id,
-      name: title.name,
+      name: displayTitleName(title, useOriginalTitles),
       type: title.type,
       releaseYear: title.releaseYear,
       posterPath: title.posterPath,
@@ -200,9 +208,15 @@ function scoreCandidates(
 
 export async function getRecommendations(
   userId: string,
-  opts: { filters?: Prisma.TitleWhereInput; limit?: number; userCountry?: string | null } = {},
+  opts: {
+    filters?: Prisma.TitleWhereInput;
+    limit?: number;
+    userCountry?: string | null;
+    useOriginalTitles?: boolean;
+  } = {},
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
+  const useOriginalTitles = opts.useOriginalTitles ?? false;
 
   const [genrePrefs, countryPrefs, personRatings, titleRatings] = await Promise.all([
     prisma.userGenrePreference.findMany({ where: { userId } }),
@@ -219,6 +233,7 @@ export async function getRecommendations(
   const personScore = new Map(personRatings.map((p) => [p.personId, p.score]));
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
+    useOriginalTitles,
   );
 
   const candidates = await fetchCandidates(
@@ -230,7 +245,7 @@ export async function getRecommendations(
     opts.userCountry,
   );
 
-  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, similarity, "");
+  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, similarity, "", useOriginalTitles);
   return results.slice(0, limit);
 }
 
@@ -240,9 +255,15 @@ export async function getRecommendations(
 // -- the point is finding something new for the group to watch together.
 export async function getGroupRecommendations(
   groupId: string,
-  opts: { filters?: Prisma.TitleWhereInput; limit?: number; userCountry?: string | null } = {},
+  opts: {
+    filters?: Prisma.TitleWhereInput;
+    limit?: number;
+    userCountry?: string | null;
+    useOriginalTitles?: boolean;
+  } = {},
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
+  const useOriginalTitles = opts.useOriginalTitles ?? false;
 
   const members = await prisma.groupMember.findMany({ where: { groupId }, select: { userId: true } });
   const memberIds = members.map((m) => m.userId);
@@ -263,6 +284,7 @@ export async function getGroupRecommendations(
   const personScore = sumBy(personRatings, (p) => p.personId, (p) => p.score);
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
+    useOriginalTitles,
   );
 
   const candidates = await fetchCandidates(
@@ -274,7 +296,15 @@ export async function getGroupRecommendations(
     opts.userCountry,
   );
 
-  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, similarity, " del grupo");
+  const results = scoreCandidates(
+    candidates,
+    genreWeight,
+    countryWeight,
+    personScore,
+    similarity,
+    " del grupo",
+    useOriginalTitles,
+  );
   return results.slice(0, limit);
 }
 

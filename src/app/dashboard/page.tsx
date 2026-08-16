@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CountrySelector } from "@/components/CountrySelector";
+import { TitleLanguageToggle } from "@/components/TitleLanguageToggle";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -64,7 +65,10 @@ export default async function DashboardPage() {
         Ver mi top 5 películas y series →
       </Link>
 
-      <CountrySelector initialCountry={user?.country ?? null} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <CountrySelector initialCountry={user?.country ?? null} />
+        <TitleLanguageToggle initialOriginal={user?.originalTitles ?? false} />
+      </div>
 
       {onboardingDone ? (
         <Link

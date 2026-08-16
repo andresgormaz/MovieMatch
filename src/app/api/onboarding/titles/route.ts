@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
+import { displayTitleName } from "@/lib/titleDisplay";
 
 const BATCH_SIZE = 12;
 
@@ -11,7 +12,7 @@ export async function GET() {
 
   const userId = session.user.id;
 
-  const [titles, ratedCount, totalCount] = await Promise.all([
+  const [titles, ratedCount, totalCount, user] = await Promise.all([
     prisma.title.findMany({
       where: { ratings: { none: { userId } } },
       orderBy: { onboardingRank: "asc" },
@@ -23,12 +24,13 @@ export async function GET() {
     }),
     prisma.userTitleRating.count({ where: { userId } }),
     prisma.title.count(),
+    prisma.user.findUnique({ where: { id: userId }, select: { originalTitles: true } }),
   ]);
 
   return NextResponse.json({
     titles: titles.map((t) => ({
       id: t.id,
-      name: t.name,
+      name: displayTitleName(t, user?.originalTitles ?? false),
       type: t.type,
       releaseYear: t.releaseYear,
       overview: t.overview,

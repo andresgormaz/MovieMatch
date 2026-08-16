@@ -15,15 +15,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   });
   if (!membership) return NextResponse.json({ error: "No sos miembro de este grupo" }, { status: 403 });
 
-  // Providers shown reflect the requesting member's own country -- a group
-  // has no single shared catalog since streaming availability is per-user.
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
+  // Providers/title language shown reflect the requesting member's own
+  // preferences -- a group has no single shared catalog since those are
+  // per-user.
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { country: true, originalTitles: true },
+  });
   const userCountry = user?.country ?? null;
 
   const { searchParams } = new URL(request.url);
   const filters = buildTitleWhere(parseTitleFilterParams(searchParams), userCountry);
 
-  const recommendations = await getGroupRecommendations(id, { filters, limit: 24, userCountry });
+  const recommendations = await getGroupRecommendations(id, {
+    filters,
+    limit: 24,
+    userCountry,
+    useOriginalTitles: user?.originalTitles ?? false,
+  });
 
   return NextResponse.json({
     userCountry,

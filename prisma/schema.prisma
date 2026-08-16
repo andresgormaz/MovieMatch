@@ -23,6 +23,7 @@ model User {
   passwordHash          String
   name                  String?
   country               String? // ISO 3166-1 code -- which country's streaming catalog to show
+  originalTitles        Boolean   @default(false) // show each title's original-language name instead of the Spanish one
   createdAt             DateTime  @default(now())
   onboardingCompletedAt DateTime?
 

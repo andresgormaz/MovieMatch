@@ -3,13 +3,17 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl, tmdbLogoUrl } from "@/lib/tmdb";
 import { wishlistSchema } from "@/lib/validation";
+import { displayTitleName } from "@/lib/titleDisplay";
 
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const userId = session.user.id;
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { country: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { country: true, originalTitles: true },
+  });
   const userCountry = user?.country ?? null;
 
   const entries = await prisma.wishlist.findMany({
@@ -29,7 +33,7 @@ export async function GET() {
   return NextResponse.json({
     items: entries.map((e) => ({
       id: e.title.id,
-      name: e.title.name,
+      name: displayTitleName(e.title, user?.originalTitles ?? false),
       type: e.title.type,
       releaseYear: e.title.releaseYear,
       overview: e.title.overview,

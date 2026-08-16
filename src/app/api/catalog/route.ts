@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl, tmdbLogoUrl } from "@/lib/tmdb";
 import type { Prisma } from "@/generated/prisma/client";
 import { parseTitleFilterParams, buildTitleWhere } from "@/lib/titleFilters";
+import { displayTitleName } from "@/lib/titleDisplay";
 
 const PAGE_SIZE = 24;
 
@@ -11,7 +12,10 @@ export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { country: true, originalTitles: true },
+  });
   const userCountry = user?.country ?? null;
 
   const { searchParams } = new URL(request.url);
@@ -50,7 +54,7 @@ export async function GET(request: Request) {
     userCountry,
     titles: titles.map((t) => ({
       id: t.id,
-      name: t.name,
+      name: displayTitleName(t, user?.originalTitles ?? false),
       type: t.type,
       releaseYear: t.releaseYear,
       overview: t.overview,

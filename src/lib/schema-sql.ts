@@ -12,6 +12,7 @@ export const TABLE_STATEMENTS = [
     "passwordHash" TEXT NOT NULL,
     "name" TEXT,
     "country" TEXT,
+    "originalTitles" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "onboardingCompletedAt" DATETIME
   )`,
@@ -193,6 +194,7 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "voteCount" INTEGER`,
   `ALTER TABLE "Title" ADD COLUMN "budget" INTEGER`,
   `ALTER TABLE "User" ADD COLUMN "country" TEXT`,
+  `ALTER TABLE "User" ADD COLUMN "originalTitles" BOOLEAN NOT NULL DEFAULT false`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no
