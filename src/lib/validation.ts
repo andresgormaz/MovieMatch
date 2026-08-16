@@ -30,3 +30,7 @@ export const countryPreferenceSchema = z.object({
   countryCode: z.string().trim().length(2),
   weight: z.number().int().min(-2).max(2),
 });
+
+export const wishlistSchema = z.object({
+  titleId: z.string().min(1),
+});

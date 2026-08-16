@@ -8,6 +8,10 @@ const WEIGHTS = {
   cast: 3,
   director: 3,
   popularity: 0.5,
+  // TMDB's own "if you liked this, try these" (fetched alongside cast/crew
+  // during import, see TitleSimilar) -- the closest free proxy to real
+  // "users who liked X also liked Y" collaborative-filtering data.
+  similar: 2.5,
 };
 
 // The catalog can be thousands of titles now (TMDB + anime import); scoring
@@ -65,11 +69,61 @@ function fetchCandidates(where: Prisma.TitleWhereInput, userCountry?: string | n
   });
 }
 
+interface SimilarityBoost {
+  boostByKey: Map<string, number>;
+  reasonByKey: Map<string, { name: string; contribution: number }>;
+}
+
+// Combines TMDB's per-title "recommendations" (TitleSimilar, gathered during
+// import) with the user's own ratings: for each title they rated highly,
+// whatever TMDB says is similar to it gets a boost, proportional to how much
+// they liked the source and how relevant TMDB ranked the relation. Titles
+// recommended by several of the user's liked titles compound -- summing
+// `likedRatings` per source instead of deduping also gives group scoring
+// "more than one member liked this" weight for free.
+async function buildSimilarityBoost(likedRatings: { titleId: string; score: number }[]): Promise<SimilarityBoost> {
+  const boostByKey = new Map<string, number>();
+  const reasonByKey = new Map<string, { name: string; contribution: number }>();
+
+  const weightBySource = new Map<string, number>();
+  for (const r of likedRatings) {
+    const w = (r.score - 5) / 5; // 10 -> 1, 5 -> 0, below 5 contributes nothing
+    if (w <= 0) continue;
+    weightBySource.set(r.titleId, (weightBySource.get(r.titleId) ?? 0) + w);
+  }
+  if (weightBySource.size === 0) return { boostByKey, reasonByKey };
+
+  const sourceIds = [...weightBySource.keys()];
+  const [similarRows, sourceTitles] = await Promise.all([
+    prisma.titleSimilar.findMany({ where: { titleId: { in: sourceIds } } }),
+    prisma.title.findMany({ where: { id: { in: sourceIds } }, select: { id: true, name: true } }),
+  ]);
+  const nameBySource = new Map(sourceTitles.map((t) => [t.id, t.name]));
+
+  for (const row of similarRows) {
+    const ratingWeight = weightBySource.get(row.titleId);
+    if (!ratingWeight) continue;
+    const rankWeight = Math.max(0.1, 1 - row.rank / 20); // TMDB's most relevant pick counts most
+    const contribution = WEIGHTS.similar * ratingWeight * rankWeight;
+
+    const key = `${row.relatedTmdbId}:${row.relatedType}`;
+    boostByKey.set(key, (boostByKey.get(key) ?? 0) + contribution);
+
+    const existing = reasonByKey.get(key);
+    if (!existing || contribution > existing.contribution) {
+      reasonByKey.set(key, { name: nameBySource.get(row.titleId) ?? "", contribution });
+    }
+  }
+
+  return { boostByKey, reasonByKey };
+}
+
 function scoreCandidates(
   candidates: CandidateTitle[],
   genreWeight: Map<number, number>,
   countryWeight: Map<string, number>,
   personScore: Map<string, number>,
+  similarity: SimilarityBoost,
   reasonSuffix: string,
 ): RecommendationResult[] {
   const results: RecommendationResult[] = candidates.map((title) => {
@@ -109,6 +163,14 @@ function scoreCandidates(
       score += (title.voteAverage / 10) * WEIGHTS.popularity;
     }
 
+    const simKey = `${title.tmdbId}:${title.type}`;
+    const simBoost = similarity.boostByKey.get(simKey);
+    if (simBoost) {
+      score += simBoost;
+      const reason = similarity.reasonByKey.get(simKey);
+      if (reason?.name) reasons.push(`Se parece a "${reason.name}", que les gustó${reasonSuffix}`);
+    }
+
     return {
       id: title.id,
       name: title.name,
@@ -140,25 +202,33 @@ export async function getRecommendations(
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
 
-  const [genrePrefs, countryPrefs, personRatings] = await Promise.all([
+  const [genrePrefs, countryPrefs, personRatings, titleRatings] = await Promise.all([
     prisma.userGenrePreference.findMany({ where: { userId } }),
     prisma.userCountryPreference.findMany({ where: { userId } }),
     prisma.userPersonRating.findMany({ where: { userId } }),
+    prisma.userTitleRating.findMany({
+      where: { userId, seen: true, score: { not: null } },
+      select: { titleId: true, score: true },
+    }),
   ]);
 
   const genreWeight = new Map(genrePrefs.map((g) => [g.genreId, g.weight]));
   const countryWeight = new Map(countryPrefs.map((c) => [c.countryCode, c.weight]));
   const personScore = new Map(personRatings.map((p) => [p.personId, p.score]));
+  const similarity = await buildSimilarityBoost(
+    titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
+  );
 
   const candidates = await fetchCandidates(
     {
       ratings: { none: { userId } },
+      wishlist: { none: { userId } },
       ...(opts.filters ?? {}),
     },
     opts.userCountry,
   );
 
-  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, "");
+  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, similarity, "");
   return results.slice(0, limit);
 }
 
@@ -176,25 +246,33 @@ export async function getGroupRecommendations(
   const memberIds = members.map((m) => m.userId);
   if (memberIds.length === 0) return [];
 
-  const [genrePrefs, countryPrefs, personRatings] = await Promise.all([
+  const [genrePrefs, countryPrefs, personRatings, titleRatings] = await Promise.all([
     prisma.userGenrePreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userCountryPreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userPersonRating.findMany({ where: { userId: { in: memberIds } } }),
+    prisma.userTitleRating.findMany({
+      where: { userId: { in: memberIds }, seen: true, score: { not: null } },
+      select: { titleId: true, score: true },
+    }),
   ]);
 
   const genreWeight = sumBy(genrePrefs, (g) => g.genreId, (g) => g.weight);
   const countryWeight = sumBy(countryPrefs, (c) => c.countryCode, (c) => c.weight);
   const personScore = sumBy(personRatings, (p) => p.personId, (p) => p.score);
+  const similarity = await buildSimilarityBoost(
+    titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
+  );
 
   const candidates = await fetchCandidates(
     {
       ratings: { none: { userId: { in: memberIds }, seen: true } },
+      wishlist: { none: { userId: { in: memberIds } } },
       ...(opts.filters ?? {}),
     },
     opts.userCountry,
   );
 
-  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, " del grupo");
+  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, similarity, " del grupo");
   return results.slice(0, limit);
 }
 

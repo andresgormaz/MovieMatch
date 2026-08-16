@@ -16,11 +16,18 @@ export async function POST(request: Request) {
   const { titleId, seen, score } = parsed.data;
   const userId = session.user.id;
 
-  const rating = await prisma.userTitleRating.upsert({
-    where: { userId_titleId: { userId, titleId } },
-    update: { seen, score: seen ? score : null },
-    create: { userId, titleId, seen, score: seen ? score : null },
-  });
+  // Once rated (watched or "not interested"), it no longer belongs in the
+  // wishlist -- covers both the wishlist page's own "already watched"
+  // button and rating something from Explore/Recommendations that happened
+  // to be on the list.
+  const [rating] = await prisma.$transaction([
+    prisma.userTitleRating.upsert({
+      where: { userId_titleId: { userId, titleId } },
+      update: { seen, score: seen ? score : null },
+      create: { userId, titleId, seen, score: seen ? score : null },
+    }),
+    prisma.wishlist.deleteMany({ where: { userId, titleId } }),
+  ]);
 
   return NextResponse.json({ rating });
 }

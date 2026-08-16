@@ -42,6 +42,17 @@ export function RecommendationCard({
     onRated(rec.id);
   }
 
+  async function addToWishlist() {
+    if (submitting) return;
+    setSubmitting(true);
+    await fetch("/api/wishlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titleId: rec.id }),
+    });
+    onRated(rec.id);
+  }
+
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex gap-4 p-4">
@@ -84,13 +95,20 @@ export function RecommendationCard({
       </div>
 
       {!expanded ? (
-        <div className="grid grid-cols-2 divide-x divide-border border-t border-border">
+        <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
           <button
             disabled={submitting}
             onClick={() => rate(false, null)}
             className="py-2.5 text-sm font-medium text-neutral-500 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
             No me interesa
+          </button>
+          <button
+            disabled={submitting}
+            onClick={addToWishlist}
+            className="py-2.5 text-sm font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
+          >
+            La voy a ver
           </button>
           <button
             disabled={submitting}

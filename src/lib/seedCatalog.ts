@@ -367,6 +367,8 @@ async function enrichTitles(
   const allPeople = new Map<number, FetchedCredit>();
   const providersByTitleId = new Map<string, { providerId: number; countryCode: string }[]>();
   const allProviders = new Map<number, FetchedProvider>();
+  const similarByTitleId = new Map<string, { relatedTmdbId: number; relatedType: "MOVIE" | "SERIES"; rank: number }[]>();
+  const SIMILAR_PER_TITLE = 10; // TMDB returns up to 20; a shorter list keeps the strongest signal
 
   for (const t of titles) {
     const details = t.type === "MOVIE" ? await tmdb.movieDetails(t.tmdbId) : await tmdb.tvDetails(t.tmdbId);
@@ -414,38 +416,50 @@ async function enrichTitles(
       }
     }
     providersByTitleId.set(t.id, providerEntries);
+
+    // Same media type as the source: a movie's recommendations are always
+    // movies, a series' are always series.
+    const recommended = details.recommendations?.results ?? [];
+    similarByTitleId.set(
+      t.id,
+      recommended.slice(0, SIMILAR_PER_TITLE).map((r, rank) => ({ relatedTmdbId: r.id, relatedType: t.type, rank })),
+    );
   }
 
-  if (allPeople.size === 0) return 0;
+  // Titles with no credited cast/crew at all are rare but not impossible
+  // (obscure entries) -- skip the person round trips but still fall through
+  // to write providers/similar titles below instead of returning early.
+  let personIdByTmdbId = new Map<number, string>();
+  if (allPeople.size > 0) {
+    // Same story as titles: pre-filter to people we don't have yet
+    // (prolific actors/directors show up across many titles) instead of
+    // relying on skipDuplicates, which SQLite doesn't support.
+    const existingPersonIds = new Set(
+      (
+        await prisma.person.findMany({
+          where: { tmdbId: { in: [...allPeople.keys()] } },
+          select: { tmdbId: true },
+        })
+      ).map((p) => p.tmdbId),
+    );
+    const newPeople = [...allPeople.values()].filter((p) => !existingPersonIds.has(p.tmdbId));
+    if (newPeople.length > 0) {
+      await prisma.person.createMany({
+        data: newPeople.map((p) => ({
+          tmdbId: p.tmdbId,
+          name: p.name,
+          profilePath: p.profilePath,
+          knownForDepartment: p.department,
+        })),
+      });
+    }
 
-  // Same story as titles: pre-filter to people we don't have yet (prolific
-  // actors/directors show up across many titles) instead of relying on
-  // skipDuplicates, which SQLite doesn't support.
-  const existingPersonIds = new Set(
-    (
-      await prisma.person.findMany({
-        where: { tmdbId: { in: [...allPeople.keys()] } },
-        select: { tmdbId: true },
-      })
-    ).map((p) => p.tmdbId),
-  );
-  const newPeople = [...allPeople.values()].filter((p) => !existingPersonIds.has(p.tmdbId));
-  if (newPeople.length > 0) {
-    await prisma.person.createMany({
-      data: newPeople.map((p) => ({
-        tmdbId: p.tmdbId,
-        name: p.name,
-        profilePath: p.profilePath,
-        knownForDepartment: p.department,
-      })),
+    const persistedPeople = await prisma.person.findMany({
+      where: { tmdbId: { in: [...allPeople.keys()] } },
+      select: { id: true, tmdbId: true },
     });
+    personIdByTmdbId = new Map(persistedPeople.map((p) => [p.tmdbId, p.id]));
   }
-
-  const persistedPeople = await prisma.person.findMany({
-    where: { tmdbId: { in: [...allPeople.keys()] } },
-    select: { id: true, tmdbId: true },
-  });
-  const personIdByTmdbId = new Map(persistedPeople.map((p) => [p.tmdbId, p.id]));
 
   // `toEnrich` selects titles with zero cast rows, which *should* mean
   // they've never been enriched -- but a run that got killed mid-batch
@@ -524,6 +538,27 @@ async function enrichTitles(
     if (titleProviderRows.length > 0) {
       await prisma.titleProvider.createMany({ data: titleProviderRows });
     }
+  }
+
+  const existingSimilar = await prisma.titleSimilar.findMany({
+    where: { titleId: { in: titleIdsInBatch } },
+    select: { titleId: true, relatedTmdbId: true, relatedType: true },
+  });
+  const existingSimilarKeys = new Set(
+    existingSimilar.map((r) => `${r.titleId}:${r.relatedTmdbId}:${r.relatedType}`),
+  );
+  const similarRows: { titleId: string; relatedTmdbId: number; relatedType: "MOVIE" | "SERIES"; rank: number }[] = [];
+  for (const [titleId, related] of similarByTitleId) {
+    for (const r of related) {
+      const key = `${titleId}:${r.relatedTmdbId}:${r.relatedType}`;
+      if (!existingSimilarKeys.has(key)) {
+        similarRows.push({ titleId, ...r });
+        existingSimilarKeys.add(key);
+      }
+    }
+  }
+  if (similarRows.length > 0) {
+    await prisma.titleSimilar.createMany({ data: similarRows });
   }
 
   const titleIdsNeedingUpdate = new Set([...countryByTitleId.keys(), ...budgetByTitleId.keys()]);

@@ -57,6 +57,9 @@ export default async function DashboardPage() {
         <Link href="/groups" className="text-muted hover:text-white transition-colors">
           → Vincular cuentas y ver recomendaciones en grupo
         </Link>
+        <Link href="/wishlist" className="text-muted hover:text-white transition-colors">
+          → Revisar tu lista de &quot;las voy a ver&quot;
+        </Link>
         <Link href="/onboarding/titles" className="text-muted hover:text-white transition-colors">
           → Seguir calificando películas y series
         </Link>

@@ -131,6 +131,22 @@ export const TABLE_STATEMENTS = [
     CONSTRAINT "TitleProvider_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "TitleProvider_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "Provider" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "TitleSimilar" (
+    "titleId" TEXT NOT NULL,
+    "relatedTmdbId" INTEGER NOT NULL,
+    "relatedType" TEXT NOT NULL,
+    "rank" INTEGER NOT NULL,
+    PRIMARY KEY ("titleId", "relatedTmdbId", "relatedType"),
+    CONSTRAINT "TitleSimilar_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "Wishlist" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "titleId" TEXT NOT NULL,
+    "addedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Wishlist_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "Wishlist_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -163,6 +179,9 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "GroupMember_userId_idx" ON "GroupMember"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "GroupMember_groupId_userId_key" ON "GroupMember"("groupId", "userId")`,
   `CREATE INDEX IF NOT EXISTS "TitleProvider_countryCode_idx" ON "TitleProvider"("countryCode")`,
+  `CREATE INDEX IF NOT EXISTS "TitleSimilar_relatedTmdbId_relatedType_idx" ON "TitleSimilar"("relatedTmdbId", "relatedType")`,
+  `CREATE INDEX IF NOT EXISTS "Wishlist_userId_idx" ON "Wishlist"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Wishlist_userId_titleId_key" ON "Wishlist"("userId", "titleId")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through

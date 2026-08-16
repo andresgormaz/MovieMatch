@@ -103,12 +103,20 @@ export interface TmdbWatchProviders {
   results: Record<string, { flatrate?: TmdbWatchProvider[] }>;
 }
 
+// TMDB's own "if you liked this, try these" for the title -- combines their
+// aggregate user behavior with content signals. Same media type as the
+// source (a movie's recommendations are always movies).
+export interface TmdbRecommendations {
+  results: TmdbListItem[];
+}
+
 export interface TmdbMovieDetails extends TmdbListItem {
   genres: TmdbGenre[];
   production_countries: TmdbCountry[];
   budget: number; // USD, 0 when unknown -- TV has no equivalent field
   credits: TmdbCredits;
   "watch/providers": TmdbWatchProviders;
+  recommendations: TmdbRecommendations;
 }
 
 export interface TmdbCreatedBy {
@@ -123,6 +131,7 @@ export interface TmdbTvDetails extends TmdbListItem {
   created_by: TmdbCreatedBy[];
   credits: TmdbCredits;
   "watch/providers": TmdbWatchProviders;
+  recommendations: TmdbRecommendations;
 }
 
 export interface TmdbDiscoverResponse {
@@ -154,9 +163,9 @@ export const tmdb = {
       sort_by: "popularity.desc",
     }),
   movieDetails: (id: number) =>
-    tmdbFetch<TmdbMovieDetails>(`/movie/${id}`, { append_to_response: "credits,watch/providers" }),
+    tmdbFetch<TmdbMovieDetails>(`/movie/${id}`, { append_to_response: "credits,watch/providers,recommendations" }),
   tvDetails: (id: number) =>
-    tmdbFetch<TmdbTvDetails>(`/tv/${id}`, { append_to_response: "credits,watch/providers" }),
+    tmdbFetch<TmdbTvDetails>(`/tv/${id}`, { append_to_response: "credits,watch/providers,recommendations" }),
 };
 
 export function sleep(ms: number) {

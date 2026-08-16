@@ -23,6 +23,9 @@ export async function Navbar() {
               <Link href="/groups" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
                 Grupos
               </Link>
+              <Link href="/wishlist" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
+                Mi lista
+              </Link>
               <Link href="/recommendations" className="text-neutral-300 hover:text-white transition-colors">
                 Recomendaciones
               </Link>

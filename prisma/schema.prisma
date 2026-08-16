@@ -30,6 +30,7 @@ model User {
   personRatings      UserPersonRating[]
   genrePreferences   UserGenrePreference[]
   countryPreferences UserCountryPreference[]
+  wishlist           Wishlist[]
   ownedGroups        Group[]       @relation("GroupOwner")
   groupMemberships   GroupMember[]
 }
@@ -87,6 +88,8 @@ model Title {
   crew      TitleCrew[]
   ratings   UserTitleRating[]
   providers TitleProvider[]
+  similar   TitleSimilar[]
+  wishlist  Wishlist[]
 
   @@unique([tmdbId, type])
   @@index([tmdbId])
@@ -117,6 +120,37 @@ model TitleProvider {
 
   @@id([titleId, providerId, countryCode])
   @@index([countryCode])
+}
+
+// "People who liked this also liked that" -- TMDB's own recommendations for
+// a title (fetched alongside credits/watch-providers, no extra API cost),
+// used to boost candidates related to titles the user rated highly. Not a
+// relation to another Title row: the related title might not be in our
+// catalog (yet), so it's resolved by tmdbId+type lookup at scoring time.
+model TitleSimilar {
+  titleId       String
+  relatedTmdbId Int
+  relatedType   TitleType
+  rank          Int // position in TMDB's response, 0 = most relevant
+  title         Title     @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, relatedTmdbId, relatedType])
+  @@index([relatedTmdbId, relatedType])
+}
+
+// "La voy a ver": titles a user wants to watch, saved from a recommendation
+// or the catalog for later. Excluded from future recommendations same as a
+// rating; converts into one (and disappears from here) once marked as seen.
+model Wishlist {
+  id      String   @id @default(cuid())
+  userId  String
+  titleId String
+  addedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId])
 }
 
 model Genre {
