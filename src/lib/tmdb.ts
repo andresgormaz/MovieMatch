@@ -19,6 +19,12 @@ export function tmdbLogoUrl(path: string | null | undefined, size: "w45" | "w92"
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 
+export function tmdbBackdropUrl(path: string | null | undefined, size: "w780" | "w1280" = "w1280") {
+  if (!path) return null;
+  if (path.startsWith("http")) return path;
+  return `${TMDB_IMAGE_BASE}/${size}${path}`;
+}
+
 export function hasTmdbKey() {
   return Boolean(process.env.TMDB_API_KEY);
 }

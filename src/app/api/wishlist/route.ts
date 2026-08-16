@@ -35,6 +35,7 @@ export async function GET() {
       overview: e.title.overview,
       posterUrl: tmdbPosterUrl(e.title.posterPath),
       voteAverage: e.title.voteAverage,
+      voteCount: e.title.voteCount,
       genres: e.title.genres.map((g) => g.genre.name),
       directors: e.title.crew.map((c) => c.person.name),
       providers: e.title.providers.map((p) => ({

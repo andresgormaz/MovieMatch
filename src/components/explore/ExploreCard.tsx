@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 
@@ -55,15 +56,20 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="aspect-[2/3] w-full">
+      <Link href={`/title/${title.id}`} className="block aspect-[2/3] w-full">
         <Poster name={title.name} type={title.type} posterUrl={title.posterUrl} />
-      </div>
+      </Link>
       <div className="flex flex-1 flex-col gap-1 p-2.5">
         <h3 className="truncate text-sm font-semibold text-white" title={title.name}>
-          {title.name}
+          <Link href={`/title/${title.id}`} className="hover:underline">
+            {title.name}
+          </Link>
         </h3>
         <p className="text-[11px] text-muted">
-          {title.releaseYear ?? "—"} {title.voteAverage ? `· ⭐ ${title.voteAverage.toFixed(1)} (TMDB)` : ""}
+          {title.releaseYear ?? "—"}{" "}
+          {title.voteAverage
+            ? `· ⭐ ${title.voteAverage.toFixed(1)} (TMDB${title.voteCount != null ? `, ${title.voteCount.toLocaleString("es")} votos` : ""})`
+            : ""}
         </p>
         {title.genres.length > 0 && <p className="truncate text-[11px] text-muted">{title.genres.join(" · ")}</p>}
         {title.budget ? <p className="text-[11px] text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}

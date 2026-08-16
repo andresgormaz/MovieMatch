@@ -7,13 +7,28 @@ export default async function DashboardPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const [titleCount, personCount, genreCount, countryCount, totalTitles, user] = await Promise.all([
+  const [
+    titleCount,
+    personCount,
+    genreCount,
+    countryCount,
+    totalTitles,
+    user,
+    moviesWatched,
+    moviesWishlist,
+    seriesWatched,
+    seriesWishlist,
+  ] = await Promise.all([
     prisma.userTitleRating.count({ where: { userId } }),
     prisma.userPersonRating.count({ where: { userId } }),
     prisma.userGenrePreference.count({ where: { userId } }),
     prisma.userCountryPreference.count({ where: { userId } }),
     prisma.title.count(),
     prisma.user.findUnique({ where: { id: userId } }),
+    prisma.userTitleRating.count({ where: { userId, seen: true, title: { type: "MOVIE" } } }),
+    prisma.wishlist.count({ where: { userId, title: { type: "MOVIE" } } }),
+    prisma.userTitleRating.count({ where: { userId, seen: true, title: { type: "SERIES" } } }),
+    prisma.wishlist.count({ where: { userId, title: { type: "SERIES" } } }),
   ]);
 
   const onboardingDone = Boolean(user?.onboardingCompletedAt);
@@ -31,6 +46,23 @@ export default async function DashboardPage() {
         <Stat label="Géneros con preferencia" value={genreCount} />
         <Stat label="Países con preferencia" value={countryCount} />
       </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-white">Mi actividad</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Películas vistas" value={moviesWatched} />
+          <Stat label="Películas por ver" value={moviesWishlist} />
+          <Stat label="Series vistas" value={seriesWatched} />
+          <Stat label="Series por ver" value={seriesWishlist} />
+        </div>
+      </div>
+
+      <Link
+        href="/top"
+        className="rounded-xl border border-white/15 bg-surface px-6 py-4 text-center font-bold text-white hover:border-white/30 transition-colors"
+      >
+        Ver mi top 5 películas y series →
+      </Link>
 
       <CountrySelector initialCountry={user?.country ?? null} />
 
@@ -50,27 +82,32 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      <div className="flex flex-col gap-2 text-sm">
-        <Link href="/explore" className="text-muted hover:text-white transition-colors">
-          → Explorar el catálogo con filtros
-        </Link>
-        <Link href="/groups" className="text-muted hover:text-white transition-colors">
-          → Vincular cuentas y ver recomendaciones en grupo
-        </Link>
-        <Link href="/wishlist" className="text-muted hover:text-white transition-colors">
-          → Revisar tu lista de &quot;las voy a ver&quot;
-        </Link>
-        <Link href="/onboarding/titles" className="text-muted hover:text-white transition-colors">
-          → Seguir calificando películas y series
-        </Link>
-        <Link href="/onboarding/actors" className="text-muted hover:text-white transition-colors">
-          → Seguir calificando actores y directores
-        </Link>
-        <Link href="/onboarding/preferences" className="text-muted hover:text-white transition-colors">
-          → Ajustar géneros y países favoritos
-        </Link>
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-white">Más opciones</h2>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <QuickLink href="/explore" label="Explorar el catálogo con filtros" />
+          <QuickLink href="/groups" label="Vincular cuentas y ver recomendaciones en grupo" />
+          <QuickLink href="/wishlist" label='Revisar tu lista de "las voy a ver"' />
+          <QuickLink href="/onboarding/titles" label="Seguir calificando películas y series" />
+          <QuickLink href="/onboarding/actors" label="Seguir calificando actores y directores" />
+          <QuickLink href="/onboarding/preferences" label="Ajustar géneros y países favoritos" />
+        </div>
       </div>
     </div>
+  );
+}
+
+function QuickLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-neutral-200 transition-colors hover:border-white/30 hover:bg-surface-hover hover:text-white"
+    >
+      {label}
+      <span aria-hidden className="text-muted">
+        →
+      </span>
+    </Link>
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 
@@ -12,6 +13,7 @@ export interface WishlistItem {
   overview: string | null;
   posterUrl: string | null;
   voteAverage: number | null;
+  voteCount: number | null;
   genres: string[];
   directors: string[];
   providers: ProviderBadge[];
@@ -65,17 +67,26 @@ export function WishlistCard({
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex gap-4 p-4">
-        <div className="h-40 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-lg shadow-black/40">
+        <Link
+          href={`/title/${item.id}`}
+          className="h-40 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-lg shadow-black/40"
+        >
           <Poster name={item.name} type={item.type} posterUrl={item.posterUrl} />
-        </div>
+        </Link>
         <div className="min-w-0 flex-1">
           {item.voteAverage != null && (
             <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-medium text-neutral-300">
-              ★ {item.voteAverage.toFixed(1)} <span className="text-neutral-500">(TMDB)</span>
+              ★ {item.voteAverage.toFixed(1)}{" "}
+              <span className="text-neutral-500">
+                (TMDB{item.voteCount != null ? `, ${item.voteCount.toLocaleString("es")} votos` : ""})
+              </span>
             </span>
           )}
           <h3 className="mt-1 font-semibold text-white">
-            {item.name} {item.releaseYear ? <span className="text-neutral-500">({item.releaseYear})</span> : null}
+            <Link href={`/title/${item.id}`} className="hover:underline">
+              {item.name}
+            </Link>{" "}
+            {item.releaseYear ? <span className="text-neutral-500">({item.releaseYear})</span> : null}
           </h3>
           <p className="mt-0.5 text-xs text-muted">
             {item.type === "MOVIE" ? "Película" : "Serie"}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 
@@ -14,6 +15,7 @@ export interface Recommendation {
   genres: string[];
   directors: string[];
   voteAverage: number | null;
+  voteCount: number | null;
   providers: ProviderBadge[];
   matchPercent: number;
   reasons: string[];
@@ -71,9 +73,12 @@ export function RecommendationCard({
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-surface">
       <div className="flex gap-4 p-4">
-        <div className="h-40 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-lg shadow-black/40">
+        <Link
+          href={`/title/${rec.id}`}
+          className="h-40 w-28 flex-shrink-0 overflow-hidden rounded-lg shadow-lg shadow-black/40"
+        >
           <Poster name={rec.name} type={rec.type} posterUrl={rec.posterUrl} />
-        </div>
+        </Link>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2">
             <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-bold text-green-400">
@@ -81,12 +86,18 @@ export function RecommendationCard({
             </span>
             {rec.voteAverage != null && (
               <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-medium text-neutral-300">
-                ★ {rec.voteAverage.toFixed(1)} <span className="text-neutral-500">(TMDB)</span>
+                ★ {rec.voteAverage.toFixed(1)}{" "}
+                <span className="text-neutral-500">
+                  (TMDB{rec.voteCount != null ? `, ${rec.voteCount.toLocaleString("es")} votos` : ""})
+                </span>
               </span>
             )}
           </div>
           <h3 className="font-semibold text-white">
-            {rec.name} {rec.releaseYear ? <span className="text-neutral-500">({rec.releaseYear})</span> : null}
+            <Link href={`/title/${rec.id}`} className="hover:underline">
+              {rec.name}
+            </Link>{" "}
+            {rec.releaseYear ? <span className="text-neutral-500">({rec.releaseYear})</span> : null}
           </h3>
           <p className="mt-0.5 text-xs text-muted">
             {rec.type === "MOVIE" ? "Película" : "Serie"}

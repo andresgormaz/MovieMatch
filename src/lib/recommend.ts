@@ -37,6 +37,7 @@ export interface RecommendationResult {
   genres: string[];
   directors: string[];
   voteAverage: number | null;
+  voteCount: number | null;
   providers: RecommendationProvider[];
   score: number;
   matchPercent: number;
@@ -181,6 +182,7 @@ function scoreCandidates(
       genres: title.genres.map((g) => g.genre.name),
       directors: title.crew.map((c) => c.person.name),
       voteAverage: title.voteAverage,
+      voteCount: title.voteCount,
       providers: title.providers.map((p) => ({
         id: p.provider.id,
         name: p.provider.name,
