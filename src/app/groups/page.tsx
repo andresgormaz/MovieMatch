@@ -71,7 +71,7 @@ export default function GroupsPage() {
       <div>
         <h1 className="text-2xl font-bold">Grupos</h1>
         <p className="mt-1 text-sm text-muted">
-          Vinculá tu cuenta con otras personas para recibir recomendaciones que combinan los
+          Vincula tu cuenta con otras personas para recibir recomendaciones que combinan los
           gustos de todo el grupo y evitan lo que ya vio cualquiera de ustedes.
         </p>
       </div>
@@ -127,7 +127,7 @@ export default function GroupsPage() {
         ))}
         {!loading && groups.length === 0 && (
           <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-            Todavía no tenés grupos. Creá uno y compartí el link de invitación con quien quieras
+            Todavía no tienes grupos. Crea uno y comparte el link de invitación con quien quieras
             vincular.
           </p>
         )}

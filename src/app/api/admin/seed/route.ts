@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   const secret = process.env.SEED_SECRET;
   if (!secret) {
     return NextResponse.json(
-      { error: "SEED_SECRET no está configurada en el servidor. Agregala en las variables de entorno." },
+      { error: "SEED_SECRET no está configurada en el servidor. Agrégala en las variables de entorno." },
       { status: 500 },
     );
   }
@@ -38,19 +38,19 @@ export async function GET(request: Request) {
 
     let message: string;
     if (result.skipped) {
-      message = `Ya había ${result.titles} títulos cargados, no se tocó nada. Agregá &force=1 a la URL para forzar una recarga.`;
+      message = `Ya había ${result.titles} títulos cargados, no se tocó nada. Agrega &force=1 a la URL para forzar una recarga.`;
     } else if (result.mode === "tmdb") {
       message = result.done
         ? `Listo, no quedan más páginas: ${result.moviesTotal} películas y ${result.seriesTotal} series en total.`
-        : `Sumamos ${result.titles} títulos más (${result.moviesTotal} películas / ${result.seriesTotal} series en total). Volvé a visitar esta misma URL para seguir cargando más.`;
+        : `Sumamos ${result.titles} títulos más (${result.moviesTotal} películas / ${result.seriesTotal} series en total). Vuelve a visitar esta misma URL para seguir cargando más.`;
     } else if (result.mode === "anime") {
       message = result.done
         ? `Listo, no quedan más páginas de anime: ${result.animeTotal} en total.`
-        : `Sumamos ${result.titles} animes más (${result.animeTotal} en total). Volvé a visitar esta misma URL (con &source=anime) para seguir cargando más.`;
+        : `Sumamos ${result.titles} animes más (${result.animeTotal} en total). Vuelve a visitar esta misma URL (con &source=anime) para seguir cargando más.`;
     } else if (result.mode === "votes") {
       message = result.done
         ? `Listo, ya no queda ningún título sin cantidad de votos.`
-        : `Completamos la cantidad de votos de ${result.titles} títulos más (quedan ${result.votesRemaining} pendientes). Volvé a visitar esta misma URL (con &source=votes) para seguir completando.`;
+        : `Completamos la cantidad de votos de ${result.titles} títulos más (quedan ${result.votesRemaining} pendientes). Vuelve a visitar esta misma URL (con &source=votes) para seguir completando.`;
     } else {
       message = `Listo: se cargaron ${result.titles} títulos y ${result.people} personas (dataset local).`;
     }

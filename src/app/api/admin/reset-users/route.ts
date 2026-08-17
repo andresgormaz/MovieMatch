@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const secret = process.env.SEED_SECRET;
   if (!secret) {
     return NextResponse.json(
-      { error: "SEED_SECRET no está configurada en el servidor. Agregala en las variables de entorno." },
+      { error: "SEED_SECRET no está configurada en el servidor. Agrégala en las variables de entorno." },
       { status: 500 },
     );
   }
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   }
   if (searchParams.get("confirm") !== "BORRAR") {
     return NextResponse.json(
-      { error: "Esto borra TODAS las cuentas de usuario. Agregá &confirm=BORRAR a la URL para confirmar." },
+      { error: "Esto borra TODAS las cuentas de usuario. Agrega &confirm=BORRAR a la URL para confirmar." },
       { status: 400 },
     );
   }

@@ -13,7 +13,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const membership = await prisma.groupMember.findUnique({
     where: { groupId_userId: { groupId: id, userId: session.user.id } },
   });
-  if (!membership) return NextResponse.json({ error: "No sos miembro de este grupo" }, { status: 403 });
+  if (!membership) return NextResponse.json({ error: "No eres miembro de este grupo" }, { status: 403 });
 
   // Providers/title language shown reflect the requesting member's own
   // preferences -- a group has no single shared catalog since those are

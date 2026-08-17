@@ -19,7 +19,7 @@ export default function WishlistPage() {
         const data = await res.json();
         setItems(data.items);
       } catch {
-        setError("No se pudo cargar tu lista. Probá de nuevo en un momento.");
+        setError("No se pudo cargar tu lista. Inténtalo de nuevo en un momento.");
       } finally {
         setLoading(false);
       }
@@ -36,8 +36,8 @@ export default function WishlistPage() {
       <div>
         <h1 className="text-2xl font-bold">Mi lista</h1>
         <p className="mt-1 text-sm text-muted">
-          Títulos que marcaste como &quot;la voy a ver&quot;. Cuando la veas, marcala como vista para que deje de
-          aparecer acá y afine tus próximas recomendaciones.
+          Títulos que marcaste como &quot;la voy a ver&quot;. Cuando la veas, márcala como vista para que deje de
+          aparecer aquí y afine tus próximas recomendaciones.
         </p>
       </div>
 
@@ -48,7 +48,7 @@ export default function WishlistPage() {
         )}
         {!loading && !error && items.length === 0 && (
           <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-            Todavía no agregaste nada. Desde tus recomendaciones, tocá &quot;La voy a ver&quot; para guardar algo acá.
+            Todavía no agregaste nada. Desde tus recomendaciones, toca &quot;La voy a ver&quot; para guardar algo aquí.
           </p>
         )}
         {items.map((item) => (

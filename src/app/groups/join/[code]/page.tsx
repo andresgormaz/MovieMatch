@@ -50,7 +50,7 @@ export default function JoinGroupPage({ params }: { params: Promise<{ code: stri
               Miembros actuales: {preview.group.members.join(", ") || "nadie todavía"}
             </p>
             {preview.alreadyMember ? (
-              <p className="text-sm text-white">Ya sos miembro de este grupo.</p>
+              <p className="text-sm text-white">Ya eres miembro de este grupo.</p>
             ) : (
               <button
                 onClick={accept}

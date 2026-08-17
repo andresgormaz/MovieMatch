@@ -176,7 +176,7 @@ export function FilterPanel({
           <label className="text-xs text-muted">Plataformas de streaming</label>
           {providers.length === 0 ? (
             <p className="text-xs text-muted">
-              Configurá tu país en tu perfil para filtrar por plataforma.
+              Configura tu país en tu perfil para filtrar por plataforma.
             </p>
           ) : (
             <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pr-1">

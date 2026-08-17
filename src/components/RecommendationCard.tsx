@@ -114,7 +114,7 @@ export function RecommendationCard({
                 : ""}
           </p>
           <ProviderBadges providers={rec.providers} />
-          {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
+          {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
         </div>
       </div>
 
@@ -123,7 +123,7 @@ export function RecommendationCard({
           <button
             disabled={submitting}
             onClick={() => rate(false, null)}
-            className="py-2.5 text-sm font-medium text-neutral-500 hover:bg-surface-hover transition-colors disabled:opacity-50"
+            className="py-2.5 text-sm font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
             No me interesa
           </button>
@@ -137,9 +137,9 @@ export function RecommendationCard({
           <button
             disabled={submitting}
             onClick={() => setExpanded(true)}
-            className="py-2.5 text-sm font-bold text-white hover:bg-accent transition-colors disabled:opacity-50"
+            className="py-2.5 text-sm font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
-            Ya la vi ✓
+            Ya la vi
           </button>
         </div>
       ) : (

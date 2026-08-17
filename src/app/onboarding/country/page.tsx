@@ -24,7 +24,7 @@ export default function OnboardingCountryPage() {
       body: JSON.stringify({ country }),
     });
     if (!res.ok) {
-      setError("No se pudo guardar. Probá de nuevo.");
+      setError("No se pudo guardar. Inténtalo de nuevo.");
       setLoading(false);
       return;
     }

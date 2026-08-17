@@ -43,7 +43,7 @@ export default async function DiaryPage() {
 
       {ratings.length === 0 && (
         <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-          Todavía no calificaste nada. A medida que marques títulos como vistos, van a aparecer acá.
+          Todavía no calificaste nada. A medida que marques títulos como vistos, van a aparecer aquí.
         </p>
       )}
 

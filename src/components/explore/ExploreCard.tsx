@@ -74,7 +74,7 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
         {title.genres.length > 0 && <p className="truncate text-[11px] text-muted">{title.genres.join(" · ")}</p>}
         {title.budget ? <p className="text-[11px] text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}
         <ProviderBadges providers={title.providers} />
-        {error && <p className="text-[11px] text-red-400">No se pudo guardar. Probá de nuevo.</p>}
+        {error && <p className="text-[11px] text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
       </div>
 
       {rating && !editing ? (

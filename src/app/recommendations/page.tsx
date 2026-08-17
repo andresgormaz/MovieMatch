@@ -47,7 +47,7 @@ export default function RecommendationsPage() {
       const data = await res.json();
       setRecs(data.recommendations);
     } catch {
-      setError("No se pudieron cargar las recomendaciones. Probá de nuevo en un momento.");
+      setError("No se pudieron cargar las recomendaciones. Inténtalo de nuevo en un momento.");
     } finally {
       setLoading(false);
     }

@@ -27,7 +27,7 @@ export function TitleLanguageToggle({ initialOriginal }: { initialOriginal: bool
     <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-4">
       <label className="text-sm font-medium text-white">Idioma de los títulos</label>
       <p className="text-xs text-muted">
-        Elegí si preferís ver el nombre en español o el título original de cada película/serie.
+        Elige si prefieres ver el nombre en español o el título original de cada película/serie.
       </p>
       <div className="mt-1 flex gap-2">
         <button

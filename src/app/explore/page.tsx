@@ -92,7 +92,7 @@ export default function ExplorePage() {
 
           {titles.length === 0 && !loading && (
             <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-              No encontramos títulos con esos filtros. Probá ampliarlos.
+              No encontramos títulos con esos filtros. Prueba ampliarlos.
             </p>
           )}
 

@@ -95,7 +95,7 @@ export function WishlistCard({
           <p className="mt-1 text-xs text-muted">{item.genres.join(" · ")}</p>
           <ProviderBadges providers={item.providers} />
           {item.overview && <p className="mt-2 line-clamp-2 text-xs text-muted">{item.overview}</p>}
-          {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
+          {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
         </div>
       </div>
 

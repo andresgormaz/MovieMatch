@@ -90,7 +90,7 @@ export function HomeHero() {
     return (
       <div className="rounded-2xl border border-border bg-surface p-8 text-center">
         <p className="text-sm text-muted">
-          No encontramos más recomendaciones nuevas por ahora. Calificá algo más o explorá el catálogo.
+          No encontramos más recomendaciones nuevas por ahora. Califica algo más o explora el catálogo.
         </p>
         <Link
           href="/explore"
@@ -130,7 +130,7 @@ export function HomeHero() {
 
       <div className="relative -mt-14 flex flex-col gap-3 px-5 pb-5 sm:-mt-16">
         <span className="w-fit rounded bg-green-500/15 px-2 py-0.5 text-xs font-bold text-green-400">
-          {pick.matchPercent}% match para vos
+          {pick.matchPercent}% match para ti
         </span>
 
         <div>
@@ -149,35 +149,34 @@ export function HomeHero() {
 
         <ProviderBadges providers={pick.providers} />
 
-        {error && <p className="text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
+        {error && <p className="text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
 
         {!showScores ? (
-          <div className="mt-1 flex flex-wrap gap-2">
-            <button
-              disabled={submitting}
-              onClick={() => rate(false, null)}
-              className="rounded-md border border-white/15 px-4 py-2 text-sm font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
-            >
-              No me interesa
-            </button>
-            <button
-              disabled={submitting}
-              onClick={addToWishlist}
-              className="rounded-md border border-white/15 px-4 py-2 text-sm font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
-            >
-              La voy a ver
-            </button>
-            <button
-              disabled={submitting}
-              onClick={() => setShowScores(true)}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
-            >
-              Ya la vi ✓
-            </button>
-            <Link
-              href="/recommendations"
-              className="ml-auto flex items-center text-sm text-muted hover:text-white transition-colors"
-            >
+          <div className="mt-1 flex items-center gap-2">
+            <div className="flex flex-1 gap-1.5">
+              <button
+                disabled={submitting}
+                onClick={() => rate(false, null)}
+                className="flex-1 rounded-md border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
+              >
+                No me interesa
+              </button>
+              <button
+                disabled={submitting}
+                onClick={addToWishlist}
+                className="flex-1 rounded-md border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
+              >
+                La voy a ver
+              </button>
+              <button
+                disabled={submitting}
+                onClick={() => setShowScores(true)}
+                className="flex-1 rounded-md border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
+              >
+                Ya la vi
+              </button>
+            </div>
+            <Link href="/recommendations" className="flex-shrink-0 text-sm text-muted hover:text-white transition-colors">
               Ver más →
             </Link>
           </div>

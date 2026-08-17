@@ -101,7 +101,7 @@ export default function OnboardingTitlesPage() {
       setPair(null);
       await loadPair([]);
     } catch {
-      setError("No se pudo guardar tu elección. Probá de nuevo.");
+      setError("No se pudo guardar tu elección. Inténtalo de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -123,7 +123,7 @@ export default function OnboardingTitlesPage() {
       // pair -- it won't come back up in a later round.
       await loadPair([]);
     } catch {
-      setError("No se pudo guardar. Probá de nuevo.");
+      setError("No se pudo guardar. Inténtalo de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -143,9 +143,9 @@ export default function OnboardingTitlesPage() {
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
             <div className="h-full bg-accent transition-all" style={{ width: `${100 / totalSteps(roundsTarget)}%` }} />
           </div>
-          <h1 className="mt-4 text-2xl font-bold">Contanos qué te gusta</h1>
+          <h1 className="mt-4 text-2xl font-bold">Cuéntanos qué te gusta</h1>
           <p className="mt-1 text-sm text-muted">
-            Elegí una película y una serie que te encanten. Con eso ya empezamos a entender tu gusto — el resto
+            Elige una película y una serie que te encanten. Con eso ya empezamos a entender tu gusto — el resto
             es opcional.
           </p>
         </div>
@@ -186,7 +186,7 @@ export default function OnboardingTitlesPage() {
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-10">
       <div>
         <h1 className="text-2xl font-bold">¿Cuál te gusta más?</h1>
-        <p className="mt-1 text-sm text-muted">Elegí la que más te guste. Ronda {round} de {roundsTarget}.</p>
+        <p className="mt-1 text-sm text-muted">Elige la que más te guste. Ronda {round} de {roundsTarget}.</p>
         <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
           <div
             className="h-full bg-accent transition-all"

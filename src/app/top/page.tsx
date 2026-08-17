@@ -68,11 +68,11 @@ function TopSection({ title, items }: { title: string; items: TopItem[] }) {
       <h2 className="mb-3 text-lg font-bold text-white">{title}</h2>
       {items.length === 0 ? (
         <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-          Todavía no calificaste ninguna. Andá a{" "}
+          Todavía no calificaste ninguna. Ve a{" "}
           <Link href="/onboarding/titles" className="text-white underline">
             calificar títulos
           </Link>{" "}
-          para que aparezcan acá.
+          para que aparezcan aquí.
         </p>
       ) : (
         <ol className="grid grid-cols-2 gap-3 sm:grid-cols-5">

@@ -76,7 +76,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
         if (!res.ok) throw new Error("not found");
         setTitle(await res.json());
       } catch {
-        setError("No pudimos cargar esta ficha. Probá de nuevo en un momento.");
+        setError("No pudimos cargar esta ficha. Inténtalo de nuevo en un momento.");
       } finally {
         setLoading(false);
       }
@@ -239,9 +239,13 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 <button
                   disabled={submitting}
                   onClick={() => setShowScores(true)}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+                  className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                    title.myRating?.seen
+                      ? "border-accent bg-accent/20 text-white"
+                      : "border-white/15 text-neutral-300 hover:border-white/30"
+                  }`}
                 >
-                  {title.myRating?.seen ? `Tu nota: ${title.myRating.score} · cambiar` : "Ya la vi ✓"}
+                  {title.myRating?.seen ? `Tu nota: ${title.myRating.score} · cambiar` : "Ya la vi"}
                 </button>
               </>
             ) : (
@@ -259,7 +263,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             )}
           </div>
-          {actionError && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
+          {actionError && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
         </div>
       </div>
 
