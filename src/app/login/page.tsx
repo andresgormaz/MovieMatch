@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 function LoginForm() {
   const router = useRouter();
@@ -85,6 +86,12 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-950/30 via-background to-background" />
       <div className="relative flex w-full max-w-sm flex-col items-center gap-6 rounded-2xl border border-border bg-surface/90 p-8 backdrop-blur">
         <h1 className="text-2xl font-bold">Iniciar sesión</h1>
+        <GoogleSignInButton label="Continuar con Google" />
+        <div className="flex w-full max-w-sm items-center gap-3 text-xs text-neutral-500">
+          <div className="h-px flex-1 bg-white/10" />
+          o con tu correo
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
         <Suspense>
           <LoginForm />
         </Suspense>

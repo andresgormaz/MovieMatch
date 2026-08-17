@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { STREAMING_REGIONS, countryName } from "@/lib/countries";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -48,6 +49,12 @@ export default function RegisterPage() {
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-950/30 via-background to-background" />
       <div className="relative flex w-full max-w-sm flex-col items-center gap-6 rounded-2xl border border-border bg-surface/90 p-8 backdrop-blur">
         <h1 className="text-2xl font-bold">Crea tu cuenta</h1>
+        <GoogleSignInButton label="Registrarme con Google" />
+        <div className="flex w-full items-center gap-3 text-xs text-neutral-500">
+          <div className="h-px flex-1 bg-white/10" />
+          o con tu correo
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
         <form onSubmit={handleSubmit} className="flex w-full flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="name" className="text-sm text-neutral-400">
