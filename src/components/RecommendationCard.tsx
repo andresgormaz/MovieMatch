@@ -80,20 +80,10 @@ export function RecommendationCard({
           <Poster name={rec.name} type={rec.type} posterUrl={rec.posterUrl} />
         </Link>
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-bold text-green-400">
-              {rec.matchPercent}% match
-            </span>
-            {rec.voteAverage != null && (
-              <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-medium text-neutral-300">
-                ★ {rec.voteAverage.toFixed(1)}{" "}
-                <span className="text-neutral-500">
-                  (TMDB{rec.voteCount != null ? `, ${rec.voteCount.toLocaleString("es")} votos` : ""})
-                </span>
-              </span>
-            )}
-          </div>
-          <h3 className="font-semibold text-white">
+          <span className="inline-block rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-bold text-green-400">
+            {rec.matchPercent}% match
+          </span>
+          <h3 className="mt-1 font-semibold text-white">
             <Link href={`/title/${rec.id}`} className="hover:underline">
               {rec.name}
             </Link>{" "}
@@ -101,22 +91,13 @@ export function RecommendationCard({
           </h3>
           <p className="mt-0.5 text-xs text-muted">
             {rec.type === "MOVIE" ? "Película" : "Serie"}
-            {rec.directors.length ? ` · ${rec.directors.join(", ")}` : ""}
+            {rec.reasons[0]
+              ? ` · ${rec.reasons[0]}`
+              : rec.directors.length
+                ? ` · ${rec.directors.join(", ")}`
+                : ""}
           </p>
-          <p className="mt-1 text-xs text-muted">{rec.genres.join(" · ")}</p>
           <ProviderBadges providers={rec.providers} />
-          {rec.reasons.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {rec.reasons.map((r, i) => (
-                <span key={i} className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-neutral-300">
-                  {r}
-                </span>
-              ))}
-            </div>
-          )}
-          {rec.overview && (
-            <p className="mt-2 line-clamp-2 text-xs text-muted">{rec.overview}</p>
-          )}
           {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Probá de nuevo.</p>}
         </div>
       </div>
