@@ -9,7 +9,9 @@ export const ONBOARDING_ROUNDS = 7;
 // "Probably actually seen this" cutoff -- keeps onboarding comparisons to
 // titles popular enough that picking one over the other is a meaningful
 // preference signal, not a guess between two things nobody's heard of.
-const POPULAR_VOTE_COUNT = 300;
+// Genuinely well-known titles clear this by a wide margin (tens of
+// thousands of votes); this is a floor, not a target.
+const POPULAR_VOTE_COUNT = 1000;
 
 const MAX_GENRE_WEIGHT = 2;
 const MIN_GENRE_WEIGHT = -2;
@@ -92,20 +94,52 @@ export async function recordPairWinner(userId: string, titleAId: string, titleBI
   await Promise.all([bumpGenrePreferences(userId, winnerId, 1), bumpPersonPreferences(userId, winnerId)]);
 }
 
-// Picks one popular, not-yet-shown title for a given genre -- voteCount
-// first (real TMDB data), falling back to popularity (the local fallback
-// dataset never sets voteCount).
+// "No vi ninguna de las dos": still logged (skipped: true) so both titles
+// go into `shownIds` below and never come back up in a later round -- but
+// no preference bump, and it doesn't count toward ONBOARDING_ROUNDS (see
+// the `skipped: false` filters wherever rounds get counted).
+export async function recordPairSkip(userId: string, titleAId: string, titleBId: string) {
+  await prisma.onboardingChoice.create({
+    data: { userId, titleAId, titleBId, winnerId: titleAId, skipped: true },
+  });
+}
+
+// Picks the most-voted not-yet-shown title for a given genre, requiring
+// POPULAR_VOTE_COUNT+ votes -- no fallback to a weaker candidate here on
+// purpose. A genre with nothing left that clears the bar should be skipped
+// entirely (see pickNextPair's loop), not padded out with something
+// obscure just to fill the round.
 async function pickCandidateForGenre(genreId: number, excludeIds: string[]) {
-  const base = {
-    genres: { some: { genreId } },
-    id: { notIn: excludeIds.length > 0 ? excludeIds : undefined },
-  };
-  const byVotes = await prisma.title.findFirst({
-    where: { ...base, voteCount: { gte: POPULAR_VOTE_COUNT } },
+  return prisma.title.findFirst({
+    where: {
+      genres: { some: { genreId } },
+      id: { notIn: excludeIds.length > 0 ? excludeIds : undefined },
+      voteCount: { gte: POPULAR_VOTE_COUNT },
+    },
     orderBy: { voteCount: "desc" },
   });
-  if (byVotes) return byVotes;
-  return prisma.title.findFirst({ where: base, orderBy: { popularity: "desc" } });
+}
+
+// Last-resort fallback when genre coverage can't fill both slots (e.g. a
+// thin catalog, or every popular title in the remaining genres already
+// shown) -- still prefers real vote counts over TMDB's day-to-day
+// "popularity" score, which can spike for something obscure that's merely
+// trending. Only drops to popularity when nothing has vote data at all
+// (the local fallback dataset used without a TMDB key).
+async function pickPopularFallback(excludeIds: string[], take: number) {
+  const where = { id: { notIn: excludeIds.length > 0 ? excludeIds : undefined } };
+  const byVotes = await prisma.title.findMany({
+    where: { ...where, voteCount: { gte: POPULAR_VOTE_COUNT } },
+    orderBy: { voteCount: "desc" },
+    take,
+  });
+  if (byVotes.length >= take) return byVotes;
+  const more = await prisma.title.findMany({
+    where: { ...where, id: { notIn: [...excludeIds, ...byVotes.map((t) => t.id)] } },
+    orderBy: { popularity: "desc" },
+    take: take - byVotes.length,
+  });
+  return [...byVotes, ...more];
 }
 
 // The adaptive step: picks the next pair to compare, favoring genres the
@@ -160,14 +194,14 @@ export async function pickNextPair(
     if (candidate) picked.push({ title: candidate, genreId: g.genreId });
   }
 
-  // Fallback for a thin catalog (e.g. local dev without a TMDB key): just
-  // grab the two most popular titles not shown yet, genre coverage or not.
+  // Fallback for a thin catalog, or when the remaining eligible genres ran
+  // out of popular unshown titles: grab the most popular titles left,
+  // genre coverage or not.
   if (picked.length < 2) {
-    const fallback = await prisma.title.findMany({
-      where: { id: { notIn: [...excludeIds, ...picked.map((p) => p.title?.id).filter((id): id is string => Boolean(id))] } },
-      orderBy: { popularity: "desc" },
-      take: 2 - picked.length,
-    });
+    const fallback = await pickPopularFallback(
+      [...excludeIds, ...picked.map((p) => p.title?.id).filter((id): id is string => Boolean(id))],
+      2 - picked.length,
+    );
     for (const t of fallback) picked.push({ title: t, genreId: -1 });
   }
 

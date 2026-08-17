@@ -48,6 +48,7 @@ model OnboardingChoice {
   titleAId  String
   titleBId  String
   winnerId  String
+  skipped   Boolean  @default(false) // true = "no vi ninguna de las dos" -- winnerId is meaningless, no preference bump
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

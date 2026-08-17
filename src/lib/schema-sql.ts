@@ -154,6 +154,7 @@ export const TABLE_STATEMENTS = [
     "titleAId" TEXT NOT NULL,
     "titleBId" TEXT NOT NULL,
     "winnerId" TEXT NOT NULL,
+    "skipped" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "OnboardingChoice_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
@@ -205,6 +206,7 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "budget" INTEGER`,
   `ALTER TABLE "User" ADD COLUMN "country" TEXT`,
   `ALTER TABLE "User" ADD COLUMN "originalTitles" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "OnboardingChoice" ADD COLUMN "skipped" BOOLEAN NOT NULL DEFAULT false`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

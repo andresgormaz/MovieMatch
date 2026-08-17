@@ -21,7 +21,6 @@ export default function OnboardingTitlesPage() {
   const [round, setRound] = useState(1);
   const [roundsTarget, setRoundsTarget] = useState(7);
   const [pair, setPair] = useState<{ titleA: PairTitle; titleB: PairTitle } | null>(null);
-  const [excluded, setExcluded] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,13 +30,12 @@ export default function OnboardingTitlesPage() {
       const data = await res.json();
       setRoundsTarget(data.roundsTarget);
       setRound(Math.min(data.roundsCompleted + 1, data.roundsTarget));
-      // roundsCompleted > 0 means at least one pairwise round already
-      // happened, which only occurs after the seed phase was left (picked
-      // or explicitly skipped) -- resume straight into compare instead of
-      // bouncing back to seed just because favorites were skipped.
+      // hasStartedComparing (counts skipped rounds too) means the seed
+      // phase was already left, picked or explicitly skipped -- resume
+      // straight into compare instead of bouncing back to seed.
       if (data.roundsCompleted >= data.roundsTarget) {
         finishOnboarding();
-      } else if (data.roundsCompleted > 0 || (data.favoriteMovieDone && data.favoriteSeriesDone)) {
+      } else if (data.hasStartedComparing || (data.favoriteMovieDone && data.favoriteSeriesDone)) {
         setPhase("compare");
         loadPair([]);
       } else {
@@ -82,7 +80,6 @@ export default function OnboardingTitlesPage() {
         return;
       }
       setRound(nextRound);
-      setExcluded([]);
       setPair(null);
       await loadPair([]);
     } catch {
@@ -92,12 +89,26 @@ export default function OnboardingTitlesPage() {
     }
   }
 
-  function skipPair() {
+  async function skipPair() {
     if (!pair || submitting) return;
-    const nextExcluded = [...excluded, pair.titleA.id, pair.titleB.id];
-    setExcluded(nextExcluded);
-    setPair(null);
-    loadPair(nextExcluded);
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/onboarding/pair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleAId: pair.titleA.id, titleBId: pair.titleB.id }),
+      });
+      if (!res.ok) throw new Error("failed");
+      setPair(null);
+      // Persisted server-side, so the next fetch already excludes this
+      // pair -- it won't come back up in a later round.
+      await loadPair([]);
+    } catch {
+      setError("No se pudo guardar. Probá de nuevo.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (phase === "loading" || phase === "finishing") {

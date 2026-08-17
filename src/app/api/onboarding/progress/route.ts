@@ -8,7 +8,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const userId = session.user.id;
 
-  const [favoriteMovie, favoriteSeries, roundsCompleted] = await Promise.all([
+  const [favoriteMovie, favoriteSeries, roundsCompleted, anyChoiceAtAll] = await Promise.all([
     prisma.userTitleRating.findFirst({
       where: { userId, score: 10, title: { type: "MOVIE" } },
       select: { titleId: true },
@@ -17,6 +17,10 @@ export async function GET() {
       where: { userId, score: 10, title: { type: "SERIES" } },
       select: { titleId: true },
     }),
+    prisma.onboardingChoice.count({ where: { userId, skipped: false } }),
+    // Includes skipped rounds -- used only to decide whether a page reload
+    // should resume into the compare phase (skip-only progress still means
+    // "already past the seed screen").
     prisma.onboardingChoice.count({ where: { userId } }),
   ]);
 
@@ -25,5 +29,6 @@ export async function GET() {
     favoriteSeriesDone: Boolean(favoriteSeries),
     roundsCompleted,
     roundsTarget: ONBOARDING_ROUNDS,
+    hasStartedComparing: anyChoiceAtAll > 0,
   });
 }
