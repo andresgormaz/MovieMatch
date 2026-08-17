@@ -10,14 +10,15 @@ import {
 } from "../../prisma/seed-data/fallback";
 
 export interface SeedResult {
-  mode: "tmdb" | "fallback" | "anime";
+  mode: "tmdb" | "fallback" | "anime" | "votes";
   skipped: boolean;
   titles: number;
   people: number;
   moviesTotal?: number;
   seriesTotal?: number;
   animeTotal?: number;
-  done?: boolean; // tmdb/anime mode only: true once there are no more pages left
+  votesRemaining?: number; // votes mode only: titles still missing voteCount after this batch
+  done?: boolean; // tmdb/anime/votes mode only: true once there's nothing left to do
 }
 
 // Creates the schema if it doesn't exist yet, and applies any column
@@ -50,9 +51,17 @@ export async function ensureSchema() {
 }
 
 export async function seedCatalog(
-  opts: { force?: boolean; source?: "auto" | "anime" } = {},
+  opts: { force?: boolean; source?: "auto" | "anime" | "votes" } = {},
 ): Promise<SeedResult> {
   await ensureSchema();
+
+  if (opts.source === "votes") {
+    // One-time bulk backfill: fills in voteCount (and voteAverage) for every
+    // already-imported title that's missing it, without waiting on the slow
+    // regular re-enrichment loop (which only touches 40 titles per call and
+    // is biased toward titles still missing cast/providers too).
+    return backfillVoteCounts();
+  }
 
   if (opts.source === "anime") {
     return seedAnimeFromJikan();
@@ -615,6 +624,45 @@ async function enrichTitles(
   }
 
   return allPeople.size;
+}
+
+const VOTES_BACKFILL_PER_CALL = 150; // no credits/providers/recommendations parsing, so more fit per call
+
+// One-time bulk fill for titles whose voteCount is still null (imported
+// before that column existed). Deliberately skips credits/watch-providers/
+// recommendations -- those titles already have that data -- so each call
+// covers several times more titles than the regular re-enrichment batch.
+// Resumable the same way as the rest of seeding: revisit with &source=votes
+// until `done` comes back true.
+async function backfillVoteCounts(): Promise<SeedResult> {
+  const titles = await prisma.title.findMany({
+    where: { tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, voteCount: null },
+    orderBy: { popularity: "desc" },
+    take: VOTES_BACKFILL_PER_CALL,
+    select: { id: true, tmdbId: true, type: true },
+  });
+
+  for (const t of titles) {
+    const votes = t.type === "MOVIE" ? await tmdb.movieVotes(t.tmdbId) : await tmdb.tvVotes(t.tmdbId);
+    await sleep(80);
+    await prisma.title.update({
+      where: { id: t.id },
+      data: { voteAverage: votes.vote_average, voteCount: votes.vote_count },
+    });
+  }
+
+  const votesRemaining = await prisma.title.count({
+    where: { tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, voteCount: null },
+  });
+
+  return {
+    mode: "votes",
+    skipped: false,
+    titles: titles.length,
+    people: 0,
+    votesRemaining,
+    done: votesRemaining === 0,
+  };
 }
 
 const ANIME_PAGES_PER_CALL = 6; // ~150 anime per call -- no per-title enrichment call needed

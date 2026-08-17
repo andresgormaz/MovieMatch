@@ -175,6 +175,11 @@ export const tmdb = {
     tmdbFetch<TmdbMovieDetails>(`/movie/${id}`, { append_to_response: "credits,watch/providers,recommendations" }),
   tvDetails: (id: number) =>
     tmdbFetch<TmdbTvDetails>(`/tv/${id}`, { append_to_response: "credits,watch/providers,recommendations" }),
+  // Bare details call (no append_to_response) for the one-time voteCount
+  // backfill -- skips fetching/parsing credits/providers/recommendations
+  // that titles already have, so more titles fit in one batch.
+  movieVotes: (id: number) => tmdbFetch<Pick<TmdbListItem, "vote_average" | "vote_count">>(`/movie/${id}`),
+  tvVotes: (id: number) => tmdbFetch<Pick<TmdbListItem, "vote_average" | "vote_count">>(`/tv/${id}`),
 };
 
 export function sleep(ms: number) {
