@@ -24,6 +24,7 @@ export const TABLE_STATEMENTS = [
     "originalName" TEXT,
     "overview" TEXT,
     "releaseYear" INTEGER,
+    "releaseDate" DATETIME,
     "posterPath" TEXT,
     "backdropPath" TEXT,
     "popularity" REAL,
@@ -207,6 +208,7 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "User" ADD COLUMN "country" TEXT`,
   `ALTER TABLE "User" ADD COLUMN "originalTitles" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "OnboardingChoice" ADD COLUMN "skipped" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "Title" ADD COLUMN "releaseDate" DATETIME`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

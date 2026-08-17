@@ -92,6 +92,7 @@ model Title {
   originalName   String?
   overview       String?
   releaseYear    Int?
+  releaseDate    DateTime? // full date (movies) -- used to flag "still in theaters"
   posterPath     String?
   backdropPath   String?
   popularity     Float?

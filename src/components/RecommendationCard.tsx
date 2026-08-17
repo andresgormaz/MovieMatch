@@ -16,6 +16,7 @@ export interface Recommendation {
   directors: string[];
   voteAverage: number | null;
   voteCount: number | null;
+  inTheaters: boolean;
   providers: ProviderBadge[];
   matchPercent: number;
   reasons: string[];
@@ -80,9 +81,24 @@ export function RecommendationCard({
           <Poster name={rec.name} type={rec.type} posterUrl={rec.posterUrl} />
         </Link>
         <div className="min-w-0 flex-1">
-          <span className="inline-block rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-bold text-green-400">
-            {rec.matchPercent}% match
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-bold text-green-400">
+              {rec.matchPercent}% match
+            </span>
+            {rec.voteAverage != null && (
+              <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-medium text-neutral-300">
+                ★ {rec.voteAverage.toFixed(1)}{" "}
+                <span className="text-neutral-500">
+                  (TMDB{rec.voteCount != null ? `, ${rec.voteCount.toLocaleString("es")} votos` : ""})
+                </span>
+              </span>
+            )}
+            {rec.inTheaters && (
+              <span className="rounded bg-accent/20 px-1.5 py-0.5 text-xs font-bold text-accent">
+                🎬 En cines
+              </span>
+            )}
+          </div>
           <h3 className="mt-1 font-semibold text-white">
             <Link href={`/title/${rec.id}`} className="hover:underline">
               {rec.name}

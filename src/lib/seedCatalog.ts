@@ -270,21 +270,25 @@ async function seedFromTmdb(): Promise<SeedResult> {
     const newCombined = [...newCombinedByKey.values()];
 
     if (newCombined.length > 0) {
-      const titleRows = newCombined.map(({ item, type }) => ({
-        tmdbId: item.id,
-        type,
-        name: type === "MOVIE" ? item.title! : item.name!,
-        originalName: type === "MOVIE" ? item.original_title : item.original_name,
-        overview: item.overview,
-        releaseYear: Number((type === "MOVIE" ? item.release_date : item.first_air_date)?.slice(0, 4)) || null,
-        posterPath: item.poster_path,
-        backdropPath: item.backdrop_path,
-        popularity: item.popularity,
-        voteAverage: item.vote_average,
-        voteCount: item.vote_count,
-        originCountry: type === "SERIES" ? (item.origin_country?.[0] ?? null) : null,
-        onboardingRank: nextRank++,
-      }));
+      const titleRows = newCombined.map(({ item, type }) => {
+        const dateStr = type === "MOVIE" ? item.release_date : item.first_air_date;
+        return {
+          tmdbId: item.id,
+          type,
+          name: type === "MOVIE" ? item.title! : item.name!,
+          originalName: type === "MOVIE" ? item.original_title : item.original_name,
+          overview: item.overview,
+          releaseYear: Number(dateStr?.slice(0, 4)) || null,
+          releaseDate: dateStr ? new Date(dateStr) : null,
+          posterPath: item.poster_path,
+          backdropPath: item.backdrop_path,
+          popularity: item.popularity,
+          voteAverage: item.vote_average,
+          voteCount: item.vote_count,
+          originCountry: type === "SERIES" ? (item.origin_country?.[0] ?? null) : null,
+          onboardingRank: nextRank++,
+        };
+      });
       await prisma.title.createMany({ data: titleRows });
 
       const persisted = await prisma.title.findMany({
@@ -364,6 +368,7 @@ async function enrichTitles(
   const budgetByTitleId = new Map<string, number>();
   const nameByTitleId = new Map<string, string>();
   const overviewByTitleId = new Map<string, string>();
+  const releaseDateByTitleId = new Map<string, Date>();
   const castByTitleId = new Map<string, FetchedCredit[]>();
   const crewByTitleId = new Map<string, { credit: FetchedCredit; job: "Director" | "Creator" }[]>();
   const allPeople = new Map<number, FetchedCredit>();
@@ -395,6 +400,11 @@ async function enrichTitles(
     const localizedName = t.type === "MOVIE" ? details.title : details.name;
     if (localizedName) nameByTitleId.set(t.id, localizedName);
     if (details.overview) overviewByTitleId.set(t.id, details.overview);
+
+    // Backfills the exact release date for titles imported before this
+    // column existed -- used to flag "still in theaters".
+    const dateStr = t.type === "MOVIE" ? details.release_date : details.first_air_date;
+    if (dateStr) releaseDateByTitleId.set(t.id, new Date(dateStr));
 
     const cast = details.credits.cast.slice(0, 8).map(
       (c): FetchedCredit => ({ tmdbId: c.id, name: c.name, profilePath: c.profile_path, department: "Actuación" }),
@@ -577,6 +587,7 @@ async function enrichTitles(
     ...budgetByTitleId.keys(),
     ...nameByTitleId.keys(),
     ...overviewByTitleId.keys(),
+    ...releaseDateByTitleId.keys(),
   ]);
   for (const titleId of titleIdsNeedingUpdate) {
     await prisma.title.update({
@@ -586,6 +597,7 @@ async function enrichTitles(
         budget: budgetByTitleId.get(titleId),
         name: nameByTitleId.get(titleId),
         overview: overviewByTitleId.get(titleId),
+        releaseDate: releaseDateByTitleId.get(titleId),
       },
     });
   }

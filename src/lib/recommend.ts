@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { TitleType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { displayTitleName } from "@/lib/titleDisplay";
+import { isInTheaters } from "@/lib/inTheaters";
 
 const WEIGHTS = {
   genre: 2,
@@ -39,6 +40,7 @@ export interface RecommendationResult {
   directors: string[];
   voteAverage: number | null;
   voteCount: number | null;
+  inTheaters: boolean;
   providers: RecommendationProvider[];
   score: number;
   matchPercent: number;
@@ -191,6 +193,7 @@ function scoreCandidates(
       directors: title.crew.map((c) => c.person.name),
       voteAverage: title.voteAverage,
       voteCount: title.voteCount,
+      inTheaters: isInTheaters(title.type, title.releaseDate),
       providers: title.providers.map((p) => ({
         id: p.provider.id,
         name: p.provider.name,
