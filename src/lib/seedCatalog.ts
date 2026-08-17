@@ -315,12 +315,13 @@ async function seedFromTmdb(): Promise<SeedResult> {
   // Enrich the most popular titles that don't have cast/crew yet -- catches
   // up on previous rounds too, not just this round's new titles. Also
   // catches titles enriched before streaming-providers support existed
-  // (cast present, providers missing), so that data backfills over
+  // (cast present, providers missing) or before the voteCount column existed
+  // (cast/providers present, voteCount missing), so that data backfills over
   // subsequent calls instead of staying permanently empty.
   const toEnrich = await prisma.title.findMany({
     where: {
       tmdbId: { gt: 0, lt: ANIME_ID_OFFSET },
-      OR: [{ cast: { none: {} } }, { providers: { none: {} } }],
+      OR: [{ cast: { none: {} } }, { providers: { none: {} } }, { voteCount: null }],
     },
     orderBy: { popularity: "desc" },
     take: ENRICH_PER_CALL,
@@ -369,6 +370,8 @@ async function enrichTitles(
   const nameByTitleId = new Map<string, string>();
   const overviewByTitleId = new Map<string, string>();
   const releaseDateByTitleId = new Map<string, Date>();
+  const voteAverageByTitleId = new Map<string, number>();
+  const voteCountByTitleId = new Map<string, number>();
   const castByTitleId = new Map<string, FetchedCredit[]>();
   const crewByTitleId = new Map<string, { credit: FetchedCredit; job: "Director" | "Creator" }[]>();
   const allPeople = new Map<number, FetchedCredit>();
@@ -405,6 +408,11 @@ async function enrichTitles(
     // column existed -- used to flag "still in theaters".
     const dateStr = t.type === "MOVIE" ? details.release_date : details.first_air_date;
     if (dateStr) releaseDateByTitleId.set(t.id, new Date(dateStr));
+
+    // Backfills the TMDB score/vote count for titles imported before these
+    // were being saved, and refreshes them for everyone else on re-enrichment.
+    if (details.vote_average != null) voteAverageByTitleId.set(t.id, details.vote_average);
+    if (details.vote_count != null) voteCountByTitleId.set(t.id, details.vote_count);
 
     const cast = details.credits.cast.slice(0, 8).map(
       (c): FetchedCredit => ({ tmdbId: c.id, name: c.name, profilePath: c.profile_path, department: "Actuación" }),
@@ -588,6 +596,8 @@ async function enrichTitles(
     ...nameByTitleId.keys(),
     ...overviewByTitleId.keys(),
     ...releaseDateByTitleId.keys(),
+    ...voteAverageByTitleId.keys(),
+    ...voteCountByTitleId.keys(),
   ]);
   for (const titleId of titleIdsNeedingUpdate) {
     await prisma.title.update({
@@ -598,6 +608,8 @@ async function enrichTitles(
         name: nameByTitleId.get(titleId),
         overview: overviewByTitleId.get(titleId),
         releaseDate: releaseDateByTitleId.get(titleId),
+        voteAverage: voteAverageByTitleId.get(titleId),
+        voteCount: voteCountByTitleId.get(titleId),
       },
     });
   }
