@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 interface GroupMemberInfo {
   id: string;
@@ -66,6 +67,7 @@ export default function GroupsPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-8">
+      <BackToHomeLink />
       <div>
         <h1 className="text-2xl font-bold">Grupos</h1>
         <p className="mt-1 text-sm text-muted">

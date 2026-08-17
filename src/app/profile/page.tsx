@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { CountrySelector } from "@/components/CountrySelector";
 import { TitleLanguageToggle } from "@/components/TitleLanguageToggle";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -34,6 +35,7 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-8">
+      <BackToHomeLink />
       <div>
         <h1 className="text-2xl font-bold">Perfil y estadísticas</h1>
         <p className="mt-1 text-sm text-muted">

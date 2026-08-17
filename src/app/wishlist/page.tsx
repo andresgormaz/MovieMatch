@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { WishlistCard, type WishlistItem } from "@/components/WishlistCard";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 export default function WishlistPage() {
   const [items, setItems] = useState<WishlistItem[]>([]);
@@ -31,6 +32,7 @@ export default function WishlistPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+      <BackToHomeLink />
       <div>
         <h1 className="text-2xl font-bold">Mi lista</h1>
         <p className="mt-1 text-sm text-muted">

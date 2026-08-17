@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
 import { Poster } from "@/components/Poster";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("es", { month: "long", year: "numeric" });
 const DAY_LABEL = new Intl.DateTimeFormat("es", { day: "numeric", month: "short" });
@@ -34,6 +35,7 @@ export default async function DiaryPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+      <BackToHomeLink />
       <div>
         <h1 className="text-2xl font-bold">Mi diario</h1>
         <p className="mt-1 text-sm text-muted">Todo lo que calificaste, en orden.</p>

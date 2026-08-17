@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RecommendationCard, type Recommendation } from "@/components/RecommendationCard";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
 import {
   FilterPanel,
   EMPTY_CATALOG_FILTERS,
@@ -71,46 +72,49 @@ export default function RecommendationsPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 lg:flex-row">
-      <aside className="flex-shrink-0 lg:w-72">
-        <div className="lg:sticky lg:top-20">
-          <FilterPanel
-            filters={filters}
-            onChange={setFilters}
-            genres={genres}
-            countries={countries}
-            providers={providers}
-            onApply={applyFilters}
-            onClear={clearFilters}
-          />
-        </div>
-      </aside>
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8">
+      <BackToHomeLink />
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <aside className="flex-shrink-0 lg:w-72">
+          <div className="lg:sticky lg:top-20">
+            <FilterPanel
+              filters={filters}
+              onChange={setFilters}
+              genres={genres}
+              countries={countries}
+              providers={providers}
+              onApply={applyFilters}
+              onClear={clearFilters}
+            />
+          </div>
+        </aside>
 
-      <div className="flex-1">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">Tus recomendaciones</h1>
-          <p className="mt-1 text-sm text-muted">
-            Se actualizan cada vez que calificas algo nuevo. Marca lo que ya viste para afinarlas
-            todavía más.
-          </p>
-        </div>
+        <div className="flex-1">
+          <div className="mb-4">
+            <h1 className="text-2xl font-bold">Tus recomendaciones</h1>
+            <p className="mt-1 text-sm text-muted">
+              Se actualizan cada vez que calificas algo nuevo. Marca lo que ya viste para afinarlas
+              todavía más.
+            </p>
+          </div>
 
-        <div className="flex flex-col gap-3">
-          {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
-          {error && (
-            <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-              {error}
-            </p>
-          )}
-          {!loading && !error && recs.length === 0 && (
-            <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-              No encontramos más recomendaciones nuevas por ahora. Califica más títulos, actores o
-              géneros para descubrir más.
-            </p>
-          )}
-          {recs.map((r) => (
-            <RecommendationCard key={r.id} rec={r} onRated={handleRated} />
-          ))}
+          <div className="flex flex-col gap-3">
+            {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
+            {error && (
+              <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
+                {error}
+              </p>
+            )}
+            {!loading && !error && recs.length === 0 && (
+              <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
+                No encontramos más recomendaciones nuevas por ahora. Califica más títulos, actores o
+                géneros para descubrir más.
+              </p>
+            )}
+            {recs.map((r) => (
+              <RecommendationCard key={r.id} rec={r} onRated={handleRated} />
+            ))}
+          </div>
         </div>
       </div>
     </div>
