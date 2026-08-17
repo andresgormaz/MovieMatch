@@ -32,8 +32,26 @@ model User {
   genrePreferences   UserGenrePreference[]
   countryPreferences UserCountryPreference[]
   wishlist           Wishlist[]
+  onboardingChoices  OnboardingChoice[]
   ownedGroups        Group[]       @relation("GroupOwner")
   groupMemberships   GroupMember[]
+}
+
+// One "which do you like more" round from onboarding -- titleAId/titleBId
+// are shown, winnerId is which one was picked. Not a rating (we don't know
+// they actually watched either one), just a preference-inference signal and
+// a log of what's already been shown, so onboarding doesn't repeat itself
+// and can pick genres it hasn't covered yet.
+model OnboardingChoice {
+  id        String   @id @default(cuid())
+  userId    String
+  titleAId  String
+  titleBId  String
+  winnerId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // "Linked accounts": a group of users who get joint recommendations that

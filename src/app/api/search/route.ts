@@ -13,6 +13,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") ?? "").trim();
   if (q.length < 2) return NextResponse.json({ results: [] });
+  const typeParam = searchParams.get("type");
+  const type = typeParam === "MOVIE" || typeParam === "SERIES" ? typeParam : undefined;
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -21,6 +23,7 @@ export async function GET(request: Request) {
 
   const titles = await prisma.title.findMany({
     where: {
+      ...(type ? { type } : {}),
       OR: [{ name: { contains: q } }, { originalName: { contains: q } }],
     },
     orderBy: { popularity: "desc" },
