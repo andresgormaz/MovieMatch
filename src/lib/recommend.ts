@@ -35,6 +35,7 @@ export interface RecommendationResult {
   type: TitleType;
   releaseYear: number | null;
   posterPath: string | null;
+  backdropPath: string | null;
   overview: string | null;
   genres: string[];
   directors: string[];
@@ -188,6 +189,7 @@ function scoreCandidates(
       type: title.type,
       releaseYear: title.releaseYear,
       posterPath: title.posterPath,
+      backdropPath: title.backdropPath,
       overview: title.overview,
       genres: title.genres.map((g) => g.genre.name),
       directors: title.crew.map((c) => c.person.name),

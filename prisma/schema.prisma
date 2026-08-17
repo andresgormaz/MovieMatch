@@ -26,6 +26,7 @@ model User {
   originalTitles        Boolean   @default(false) // show each title's original-language name instead of the Spanish one
   createdAt             DateTime  @default(now())
   onboardingCompletedAt DateTime?
+  homeVisitedAt         DateTime? // last time the home screen was opened -- used for the "new since your last visit" count
 
   titleRatings       UserTitleRating[]
   personRatings      UserPersonRating[]

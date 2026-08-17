@@ -17,7 +17,7 @@ export async function Navbar() {
           {session?.user ? (
             <>
               <Link href="/dashboard" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Mi panel
+                Inicio
               </Link>
               <Link href="/explore" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
                 Explorar
@@ -28,8 +28,14 @@ export async function Navbar() {
               <Link href="/wishlist" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
                 Mi lista
               </Link>
+              <Link href="/diary" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
+                Diario
+              </Link>
               <Link href="/recommendations" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
                 Recomendaciones
+              </Link>
+              <Link href="/profile" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
+                Perfil
               </Link>
               <LogoutButton />
             </>
