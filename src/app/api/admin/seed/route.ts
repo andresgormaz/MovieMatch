@@ -55,7 +55,7 @@ export async function GET(request: Request) {
       message = `Listo: se cargaron ${result.titles} títulos y ${result.people} personas (dataset local).`;
     }
 
-    return NextResponse.json({ ok: true, ...result, message });
+    return NextResponse.json({ ok: true, ...result, message, debugSourceParam: sourceParam });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Error desconocido" },
