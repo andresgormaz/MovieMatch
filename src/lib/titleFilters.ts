@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 
 export interface TitleFilterParams {
+  q?: string;
   type?: "MOVIE" | "SERIES";
   yearFrom?: number;
   yearTo?: number;
@@ -32,7 +33,9 @@ function parseList(value: string | null): string[] {
 
 export function parseTitleFilterParams(searchParams: URLSearchParams): TitleFilterParams {
   const typeParam = searchParams.get("type");
+  const qParam = (searchParams.get("q") ?? "").trim();
   return {
+    q: qParam.length > 0 ? qParam : undefined,
     type: typeParam === "MOVIE" || typeParam === "SERIES" ? typeParam : undefined,
     yearFrom: parseNum(searchParams.get("yearFrom")),
     yearTo: parseNum(searchParams.get("yearTo")),
@@ -54,6 +57,7 @@ export function parseTitleFilterParams(searchParams: URLSearchParams): TitleFilt
 // these services IN THIS USER'S country" rather than any country.
 export function buildTitleWhere(params: TitleFilterParams, userCountry?: string | null): Prisma.TitleWhereInput {
   return {
+    ...(params.q ? { OR: [{ name: { contains: params.q } }, { originalName: { contains: params.q } }] } : {}),
     ...(params.type ? { type: params.type } : {}),
     ...(params.yearFrom !== undefined || params.yearTo !== undefined
       ? { releaseYear: { gte: params.yearFrom, lte: params.yearTo } }

@@ -57,16 +57,32 @@ export function TitleSearch() {
     router.push(`/title/${id}`);
   }
 
+  // Only picking a specific result from the dropdown goes straight to a
+  // title page -- submitting the search itself (Enter / the keyboard's "Ir")
+  // goes to the full catalog search instead, since a free-text query can
+  // match more than one title.
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (q.length < 2) return;
+    setOpen(false);
+    setResults([]);
+    router.push(`/explore?q=${encodeURIComponent(q)}`);
+  }
+
   return (
     <div ref={containerRef} className="relative w-full max-w-xs">
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => results.length > 0 && setOpen(true)}
-        placeholder="Buscar título…"
-        aria-label="Buscar película o serie"
-        className="w-full rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-accent transition-colors"
-      />
+      <form onSubmit={handleSubmit}>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Buscar título…"
+          aria-label="Buscar película o serie"
+          className="w-full rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-accent transition-colors"
+        />
+      </form>
       {open && (query.trim().length >= 2) && (
         <ul className="absolute top-full left-0 z-30 mt-1.5 w-full min-w-[16rem] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
           {loading && results.length === 0 && (
@@ -78,6 +94,7 @@ export function TitleSearch() {
           {results.map((r) => (
             <li key={r.id}>
               <button
+                type="button"
                 onClick={() => goTo(r.id)}
                 className="flex w-full items-center gap-2.5 px-2.5 py-2 text-left hover:bg-surface-hover transition-colors"
               >

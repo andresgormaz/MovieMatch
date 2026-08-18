@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ExploreCard, type ExploreTitle } from "@/components/explore/ExploreCard";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 import {
@@ -14,10 +15,20 @@ import {
 } from "@/components/explore/FilterPanel";
 
 export default function ExplorePage() {
+  return (
+    <Suspense fallback={null}>
+      <ExplorePageInner />
+    </Suspense>
+  );
+}
+
+function ExplorePageInner() {
+  const searchParams = useSearchParams();
+  const initialQ = searchParams.get("q") ?? "";
   const [genres, setGenres] = useState<Genre[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [filters, setFilters] = useState<CatalogFilters>(EMPTY_CATALOG_FILTERS);
+  const [filters, setFilters] = useState<CatalogFilters>({ ...EMPTY_CATALOG_FILTERS, q: initialQ });
   const [titles, setTitles] = useState<ExploreTitle[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -52,8 +63,9 @@ export default function ExplorePage() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial results load on mount
-    runSearch(EMPTY_CATALOG_FILTERS, 1, false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial results load on mount, including ?q= from the navbar search
+    runSearch({ ...EMPTY_CATALOG_FILTERS, q: initialQ }, 1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only ever re-runs from runSearch identity, initialQ is read once on mount
   }, [runSearch]);
 
   function applyFilters() {
@@ -80,6 +92,7 @@ export default function ExplorePage() {
               onApply={applyFilters}
               onClear={clearFilters}
               showSort
+              showSearch
             />
           </div>
         </aside>

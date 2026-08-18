@@ -27,6 +27,7 @@ export interface Provider {
 export type SortOption = "popularity" | "year" | "score" | "votes";
 
 export interface CatalogFilters {
+  q: string;
   type: "" | "MOVIE" | "SERIES";
   yearFrom: number | "";
   yearTo: number | "";
@@ -44,6 +45,7 @@ export interface CatalogFilters {
 }
 
 export const EMPTY_CATALOG_FILTERS: CatalogFilters = {
+  q: "",
   type: "",
   yearFrom: "",
   yearTo: "",
@@ -62,6 +64,7 @@ export const EMPTY_CATALOG_FILTERS: CatalogFilters = {
 
 export function buildCatalogQuery(filters: CatalogFilters): URLSearchParams {
   const params = new URLSearchParams();
+  if (filters.q.trim()) params.set("q", filters.q.trim());
   if (filters.type) params.set("type", filters.type);
   if (filters.yearFrom !== "") params.set("yearFrom", String(filters.yearFrom));
   if (filters.yearTo !== "") params.set("yearTo", String(filters.yearTo));
@@ -113,6 +116,7 @@ export function FilterPanel({
   onClear,
   showSort = false,
   showType = true,
+  showSearch = false,
 }: {
   filters: CatalogFilters;
   onChange: (updater: (prev: CatalogFilters) => CatalogFilters) => void;
@@ -123,6 +127,7 @@ export function FilterPanel({
   onClear: () => void;
   showSort?: boolean;
   showType?: boolean;
+  showSearch?: boolean;
 }) {
   function toggleGenre(id: number) {
     onChange((f) => ({
@@ -147,6 +152,20 @@ export function FilterPanel({
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4">
+      {showSearch && (
+        <input
+          type="search"
+          value={filters.q}
+          onChange={(e) => onChange((f) => ({ ...f, q: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onApply();
+          }}
+          placeholder="Buscar por nombre…"
+          aria-label="Buscar por nombre"
+          className="rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent"
+        />
+      )}
+
       <h2 className="text-lg font-bold text-white">Filtros</h2>
 
       {showType && (
