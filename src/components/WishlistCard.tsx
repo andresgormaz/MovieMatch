@@ -104,16 +104,16 @@ export function WishlistCard({
           <button
             disabled={submitting}
             onClick={removeFromWishlist}
-            className="py-2.5 text-sm font-medium text-neutral-500 hover:bg-surface-hover transition-colors disabled:opacity-50"
+            className="py-2.5 text-sm font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
             Quitar de la lista
           </button>
           <button
             disabled={submitting}
             onClick={() => setExpanded(true)}
-            className="py-2.5 text-sm font-bold text-white hover:bg-accent transition-colors disabled:opacity-50"
+            className="py-2.5 text-sm font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
-            Ya la vi ✓
+            Ya la vi
           </button>
         </div>
       ) : (

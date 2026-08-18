@@ -89,16 +89,16 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
           <button
             disabled={submitting}
             onClick={() => rate(false, null)}
-            className="py-2 text-xs font-medium text-neutral-400 hover:bg-surface-hover transition-colors disabled:opacity-50"
+            className="py-2 text-xs font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
             No la vi
           </button>
           <button
             disabled={submitting}
             onClick={() => setEditing(true)}
-            className="py-2 text-xs font-bold text-white hover:bg-accent transition-colors disabled:opacity-50"
+            className="py-2 text-xs font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
-            La vi ✓
+            La vi
           </button>
         </div>
       ) : (
