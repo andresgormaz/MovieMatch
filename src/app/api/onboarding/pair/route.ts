@@ -18,7 +18,8 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const excludeIds = (searchParams.get("exclude") ?? "").split(",").filter(Boolean);
 
-  const pair = await pickNextPair(session.user.id, excludeIds);
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
+  const pair = await pickNextPair(session.user.id, excludeIds, user?.country ?? null);
   return NextResponse.json({ pair, done: pair === null });
 }
 

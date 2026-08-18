@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
+import type { Prisma } from "@/generated/prisma/client";
 
 // Short on purpose: the point of the new onboarding is a couple of minutes,
 // not a marathon. Two favorites (seed) + this many "which do you like more"
@@ -15,6 +16,12 @@ const POPULAR_VOTE_COUNT = 1000;
 
 const MAX_GENRE_WEIGHT = 2;
 const MIN_GENRE_WEIGHT = -2;
+
+// Safety net: if the catalog's streaming data for this country is too thin
+// to fill 7 rounds (e.g. a country TMDB barely covers), requiring streaming
+// availability would just break onboarding instead of steering it. Drop the
+// requirement rather than dead-end.
+const MIN_STREAMING_COVERAGE = 30;
 
 export interface PairTitle {
   id: string;
@@ -104,17 +111,28 @@ export async function recordPairSkip(userId: string, titleAId: string, titleBId:
   });
 }
 
+// A title with no current streaming availability is either brand new (still
+// in theaters / not out on streaming yet) or otherwise hard to actually go
+// watch right now -- either way, unlikely to be something the person has
+// already seen, which is the whole point of these comparisons. Requiring it
+// keeps onboarding comparisons to titles someone could plausibly have caught
+// already.
+function streamingWhere(userCountry: string | null): Prisma.TitleWhereInput {
+  return userCountry ? { providers: { some: { countryCode: userCountry } } } : {};
+}
+
 // Picks the most-voted not-yet-shown title for a given genre, requiring
 // POPULAR_VOTE_COUNT+ votes -- no fallback to a weaker candidate here on
 // purpose. A genre with nothing left that clears the bar should be skipped
 // entirely (see pickNextPair's loop), not padded out with something
 // obscure just to fill the round.
-async function pickCandidateForGenre(genreId: number, excludeIds: string[]) {
+async function pickCandidateForGenre(genreId: number, excludeIds: string[], userCountry: string | null) {
   return prisma.title.findFirst({
     where: {
       genres: { some: { genreId } },
       id: { notIn: excludeIds.length > 0 ? excludeIds : undefined },
       voteCount: { gte: POPULAR_VOTE_COUNT },
+      ...streamingWhere(userCountry),
     },
     orderBy: { voteCount: "desc" },
   });
@@ -126,8 +144,8 @@ async function pickCandidateForGenre(genreId: number, excludeIds: string[]) {
 // "popularity" score, which can spike for something obscure that's merely
 // trending. Only drops to popularity when nothing has vote data at all
 // (the local fallback dataset used without a TMDB key).
-async function pickPopularFallback(excludeIds: string[], take: number) {
-  const where = { id: { notIn: excludeIds.length > 0 ? excludeIds : undefined } };
+async function pickPopularFallback(excludeIds: string[], take: number, userCountry: string | null) {
+  const where = { id: { notIn: excludeIds.length > 0 ? excludeIds : undefined }, ...streamingWhere(userCountry) };
   const byVotes = await prisma.title.findMany({
     where: { ...where, voteCount: { gte: POPULAR_VOTE_COUNT } },
     orderBy: { voteCount: "desc" },
@@ -149,12 +167,17 @@ async function pickPopularFallback(excludeIds: string[], take: number) {
 export async function pickNextPair(
   userId: string,
   extraExcludeIds: string[] = [],
+  userCountry: string | null = null,
 ): Promise<{ titleA: PairTitle; titleB: PairTitle } | null> {
-  const [genrePrefs, previousChoices, favoriteRatings] = await Promise.all([
+  const [genrePrefs, previousChoices, favoriteRatings, streamingCoverage] = await Promise.all([
     prisma.userGenrePreference.findMany({ where: { userId } }),
     prisma.onboardingChoice.findMany({ where: { userId }, select: { titleAId: true, titleBId: true } }),
     prisma.userTitleRating.findMany({ where: { userId, score: 10 }, select: { titleId: true } }),
+    userCountry
+      ? prisma.title.count({ where: { voteCount: { gte: POPULAR_VOTE_COUNT }, ...streamingWhere(userCountry) } })
+      : Promise.resolve(0),
   ]);
+  const effectiveCountry = streamingCoverage >= MIN_STREAMING_COVERAGE ? userCountry : null;
 
   const shownIds = new Set<string>(extraExcludeIds);
   for (const c of previousChoices) {
@@ -171,7 +194,7 @@ export async function pickNextPair(
   const genreCounts = await prisma.titleGenre.groupBy({
     by: ["genreId"],
     _count: { titleId: true },
-    where: { title: { voteCount: { gte: POPULAR_VOTE_COUNT } } },
+    where: { title: { voteCount: { gte: POPULAR_VOTE_COUNT }, ...streamingWhere(effectiveCountry) } },
   });
   const eligibleGenres = genreCounts
     .filter((g) => g._count.titleId >= 2)
@@ -190,6 +213,7 @@ export async function pickNextPair(
     const candidate = await pickCandidateForGenre(
       g.genreId,
       [...excludeIds, ...picked.map((p) => p.title?.id).filter((id): id is string => Boolean(id))],
+      effectiveCountry,
     );
     if (candidate) picked.push({ title: candidate, genreId: g.genreId });
   }
@@ -201,6 +225,7 @@ export async function pickNextPair(
     const fallback = await pickPopularFallback(
       [...excludeIds, ...picked.map((p) => p.title?.id).filter((id): id is string => Boolean(id))],
       2 - picked.length,
+      effectiveCountry,
     );
     for (const t of fallback) picked.push({ title: t, genreId: -1 });
   }

@@ -14,6 +14,11 @@ const WEIGHTS = {
   // during import, see TitleSimilar) -- the closest free proxy to real
   // "users who liked X also liked Y" collaborative-filtering data.
   similar: 2.5,
+  // Titles with no current streaming availability in the user's country are
+  // usually either too new (still in theaters / not out yet) or otherwise
+  // not actually watchable right now -- still worth surfacing if nothing
+  // else scores well, but pushed down rather than recommended at face value.
+  noStreaming: 4,
 };
 
 // The catalog can be thousands of titles now (TMDB + anime import); scoring
@@ -137,6 +142,7 @@ function scoreCandidates(
   similarity: SimilarityBoost,
   reasonSuffix: string,
   useOriginalTitles: boolean,
+  hasUserCountry: boolean,
 ): RecommendationResult[] {
   const results: RecommendationResult[] = candidates.map((title) => {
     let score = 0;
@@ -181,6 +187,10 @@ function scoreCandidates(
       score += simBoost;
       const reason = similarity.reasonByKey.get(simKey);
       if (reason?.name) reasons.push(`Se parece a "${reason.name}", que les gustó${reasonSuffix}`);
+    }
+
+    if (hasUserCountry && title.providers.length === 0) {
+      score -= WEIGHTS.noStreaming;
     }
 
     return {
@@ -250,7 +260,16 @@ export async function getRecommendations(
     opts.userCountry,
   );
 
-  const results = scoreCandidates(candidates, genreWeight, countryWeight, personScore, similarity, "", useOriginalTitles);
+  const results = scoreCandidates(
+    candidates,
+    genreWeight,
+    countryWeight,
+    personScore,
+    similarity,
+    "",
+    useOriginalTitles,
+    Boolean(opts.userCountry),
+  );
   return results.slice(0, limit);
 }
 
@@ -309,6 +328,7 @@ export async function getGroupRecommendations(
     similarity,
     " del grupo",
     useOriginalTitles,
+    Boolean(opts.userCountry),
   );
   return results.slice(0, limit);
 }
