@@ -33,8 +33,18 @@ export async function GET(request: Request) {
   const keepId = searchParams.get("keep") || undefined;
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
+  if (!user) {
+    // The session cookie is still "valid" (NextAuth doesn't re-check the DB
+    // on every request), but the underlying User row is gone -- happens
+    // after visiting /api/admin/reset-users without logging out first. Any
+    // write below would otherwise fail with a cryptic FK constraint error.
+    return NextResponse.json(
+      { error: "Tu sesión ya no es válida (la cuenta fue reiniciada). Cierra sesión y vuelve a iniciar sesión." },
+      { status: 401 },
+    );
+  }
   try {
-    const pair = await pickNextPair(session.user.id, excludeIds, user?.country ?? null, keepId);
+    const pair = await pickNextPair(session.user.id, excludeIds, user.country, keepId);
     return NextResponse.json({ pair, done: pair === null });
   } catch (err) {
     // Without this, an exception here becomes Next.js's default HTML error
@@ -69,6 +79,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
   const { titleAId, titleBId, winnerId, notSeenId, bothNotSeen } = parsed.data;
+
+  const userExists = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true } });
+  if (!userExists) {
+    // Same stale-session-after-reset scenario as the GET handler above --
+    // without this check, OnboardingChoice.create's foreign key on userId
+    // fails with a raw SQLITE_CONSTRAINT error instead of a clear message.
+    return NextResponse.json(
+      { error: "Tu sesión ya no es válida (la cuenta fue reiniciada). Cierra sesión y vuelve a iniciar sesión." },
+      { status: 401 },
+    );
+  }
 
   try {
     if (bothNotSeen) {
