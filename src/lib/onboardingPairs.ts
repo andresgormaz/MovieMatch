@@ -337,7 +337,9 @@ async function fillSlots(
       [...excludeIds, ...picked.map((p) => p.id)],
       userCountry,
     );
-    if (candidate) picked.push(candidate);
+    if (candidate !== null) {
+      picked.push(candidate);
+    }
   }
 
   if (picked.length < slotsNeeded) {
