@@ -85,7 +85,7 @@ function TopSection({ title, items }: { title: string; items: TopItem[] }) {
                     {i + 1}
                   </span>
                   <span className="absolute top-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-green-400">
-                    {item.score}/10
+                    {item.score}/5
                   </span>
                 </div>
                 <p className="truncate text-xs font-medium text-white group-hover:underline" title={item.name}>

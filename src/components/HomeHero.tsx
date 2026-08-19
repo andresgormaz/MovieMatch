@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
+import { StarRating } from "@/components/StarRating";
 
 interface TodayPick {
   id: string;
@@ -16,8 +17,6 @@ interface TodayPick {
   reasons: string[];
   providers: ProviderBadge[];
 }
-
-const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 // The single-protagonist home hero: one big pick instead of a wall of cards,
 // so there's exactly one thing to decide about on open. Fetches its own data
@@ -181,17 +180,8 @@ export function HomeHero() {
             </Link>
           </div>
         ) : (
-          <div className="mt-1 grid grid-cols-5 gap-1.5 sm:w-80">
-            {SCORES.map((s) => (
-              <button
-                key={s}
-                disabled={submitting}
-                onClick={() => rate(true, s)}
-                className="rounded-md border border-white/15 py-2 text-sm font-medium hover:border-accent hover:bg-accent transition-colors disabled:opacity-50"
-              >
-                {s}
-              </button>
-            ))}
+          <div className="mt-1 flex justify-center">
+            <StarRating disabled={submitting} onRate={(s) => rate(true, s)} />
           </div>
         )}
       </div>

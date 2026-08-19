@@ -52,10 +52,10 @@ export default function OnboardingActorsPage() {
 
       {rated >= GOAL && (
         <Link
-          href="/onboarding/preferences"
+          href="/tastes"
           className="rounded-xl border border-white/15 bg-surface px-4 py-3 text-center text-sm font-medium text-white hover:border-white/30 transition-colors"
         >
-          Ya califiqué suficientes → Últimas preguntas
+          Ya califiqué suficientes → Ver mis gustos
         </Link>
       )}
 
@@ -66,7 +66,7 @@ export default function OnboardingActorsPage() {
         {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
       </div>
 
-      <Link href="/onboarding/preferences" className="text-center text-sm text-muted underline">
+      <Link href="/tastes" className="text-center text-sm text-muted underline">
         Saltar este paso
       </Link>
     </div>

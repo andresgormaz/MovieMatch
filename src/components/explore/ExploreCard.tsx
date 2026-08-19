@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
+import { StarRating, StarDisplay } from "@/components/StarRating";
 
 export interface ExploreTitle {
   id: string;
@@ -19,8 +20,6 @@ export interface ExploreTitle {
   providers: ProviderBadge[];
   myRating: { seen: boolean; score: number | null } | null;
 }
-
-const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 function formatBudget(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(0)}M`;
@@ -80,9 +79,17 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
       {rating && !editing ? (
         <button
           onClick={() => setEditing(true)}
-          className="border-t border-border py-2 text-center text-xs text-muted hover:bg-surface-hover transition-colors"
+          className="flex items-center justify-center gap-1.5 border-t border-border py-2 text-center text-xs text-muted hover:bg-surface-hover transition-colors"
         >
-          {rating.seen ? `Tu nota: ${rating.score} · cambiar` : "No vista · cambiar"}
+          {!rating.seen ? (
+            "No vista · cambiar"
+          ) : rating.score ? (
+            <>
+              <StarDisplay score={rating.score} className="text-xs" /> · cambiar
+            </>
+          ) : (
+            "Vista, sin calificar · calificar"
+          )}
         </button>
       ) : !editing ? (
         <div className="grid grid-cols-2 divide-x divide-border border-t border-border">
@@ -102,19 +109,8 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
           </button>
         </div>
       ) : (
-        <div className="border-t border-border p-2">
-          <div className="grid grid-cols-5 gap-1">
-            {SCORES.map((s) => (
-              <button
-                key={s}
-                disabled={submitting}
-                onClick={() => rate(true, s)}
-                className="rounded border border-white/15 py-1.5 text-xs font-medium hover:border-accent hover:bg-accent transition-colors disabled:opacity-50"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        <div className="flex justify-center border-t border-border p-2">
+          <StarRating disabled={submitting} onRate={(s) => rate(true, s)} size="sm" />
         </div>
       )}
     </div>

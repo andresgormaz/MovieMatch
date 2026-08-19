@@ -13,7 +13,7 @@ export const registerSchema = z.object({
 export const titleRatingSchema = z.object({
   titleId: z.string().min(1),
   seen: z.boolean(),
-  score: z.number().int().min(1).max(10).nullable(),
+  score: z.number().int().min(1).max(5).nullable(),
 });
 
 export const personRatingSchema = z.object({

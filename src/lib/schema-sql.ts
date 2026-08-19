@@ -160,6 +160,13 @@ export const TABLE_STATEMENTS = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "OnboardingChoice_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "UserTypePreference" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "weight" INTEGER NOT NULL,
+    CONSTRAINT "UserTypePreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -196,6 +203,8 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "Wishlist_userId_idx" ON "Wishlist"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Wishlist_userId_titleId_key" ON "Wishlist"("userId", "titleId")`,
   `CREATE INDEX IF NOT EXISTS "OnboardingChoice_userId_idx" ON "OnboardingChoice"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "UserTypePreference_userId_idx" ON "UserTypePreference"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserTypePreference_userId_type_key" ON "UserTypePreference"("userId", "type")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through

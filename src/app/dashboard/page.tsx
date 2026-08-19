@@ -16,6 +16,10 @@ export default async function DashboardPage() {
   const onboardingDone = Boolean(user?.onboardingCompletedAt);
   const previousVisit = user?.homeVisitedAt ?? null;
 
+  const pendingRatings = onboardingDone
+    ? await prisma.userTitleRating.count({ where: { userId, seen: true, score: null } })
+    : 0;
+
   // "New since your last visit" only means something once there's a previous
   // visit to compare against, and once onboarding is done (before that,
   // everything in the catalog is "new" to them, which isn't a useful signal).
@@ -55,12 +59,36 @@ export default async function DashboardPage() {
         </Link>
       )}
 
+      {onboardingDone && (
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <Link
+            href="/vs"
+            className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
+          >
+            Seguir con &quot;¿cuál te gusta más?&quot;
+            <span aria-hidden className="text-muted">
+              →
+            </span>
+          </Link>
+          <Link
+            href="/rate"
+            className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
+          >
+            Calificar lo que ya viste
+            {pendingRatings > 0 && (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">{pendingRatings}</span>
+            )}
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <QuickLink href="/recommendations" label="Todas mis recomendaciones" />
         <QuickLink href="/diary" label="Mi diario" />
         <QuickLink href="/wishlist" label="Mi lista" />
         <QuickLink href="/explore" label="Explorar catálogo" />
         <QuickLink href="/groups" label="Grupos" />
+        <QuickLink href="/tastes" label="Mis gustos" />
         <QuickLink href="/profile" label="Perfil y estadísticas" />
       </div>
     </div>

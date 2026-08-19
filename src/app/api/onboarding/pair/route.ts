@@ -1,33 +1,44 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { pickNextPair, recordPairWinner, recordPairSkip, ONBOARDING_ROUNDS } from "@/lib/onboardingPairs";
+import { pickNextPair, recordPairWinner, recordNotSeen, ONBOARDING_ROUNDS } from "@/lib/onboardingPairs";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
-  const roundsCompleted = await prisma.onboardingChoice.count({
-    where: { userId: session.user.id, skipped: false },
-  });
-  if (roundsCompleted >= ONBOARDING_ROUNDS) {
-    return NextResponse.json({ pair: null, done: true });
+  const { searchParams } = new URL(request.url);
+  // The initial onboarding flow caps at ONBOARDING_ROUNDS; the ongoing /vs
+  // page (for refining taste after onboarding) keeps going indefinitely.
+  const unlimited = searchParams.get("unlimited") === "1";
+  if (!unlimited) {
+    const roundsCompleted = await prisma.onboardingChoice.count({
+      where: { userId: session.user.id, skipped: false },
+    });
+    if (roundsCompleted >= ONBOARDING_ROUNDS) {
+      return NextResponse.json({ pair: null, done: true });
+    }
   }
 
-  const { searchParams } = new URL(request.url);
   const excludeIds = (searchParams.get("exclude") ?? "").split(",").filter(Boolean);
+  // Present while mid-swap ("no la he visto" on one of the two options):
+  // keeps that side in place and only picks a fresh candidate for the other.
+  const keepId = searchParams.get("keep") || undefined;
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
-  const pair = await pickNextPair(session.user.id, excludeIds, user?.country ?? null);
+  const pair = await pickNextPair(session.user.id, excludeIds, user?.country ?? null, keepId);
   return NextResponse.json({ pair, done: pair === null });
 }
 
 const bodySchema = z.object({
   titleAId: z.string().min(1),
   titleBId: z.string().min(1),
-  // Absent/undefined = "no vi ninguna de las dos".
   winnerId: z.string().min(1).optional(),
+  // The id of whichever side got "No la he visto" -- mutually exclusive
+  // with winnerId. Neither present is invalid now (there's always a
+  // per-side swap instead of a bulk "skip both").
+  notSeenId: z.string().min(1).optional(),
 });
 
 export async function POST(request: Request) {
@@ -39,14 +50,17 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
-  const { titleAId, titleBId, winnerId } = parsed.data;
+  const { titleAId, titleBId, winnerId, notSeenId } = parsed.data;
 
-  if (winnerId === undefined) {
-    await recordPairSkip(session.user.id, titleAId, titleBId);
+  if (notSeenId !== undefined) {
+    if (notSeenId !== titleAId && notSeenId !== titleBId) {
+      return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+    }
+    await recordNotSeen(session.user.id, notSeenId);
     return NextResponse.json({ ok: true });
   }
 
-  if (winnerId !== titleAId && winnerId !== titleBId) {
+  if (winnerId === undefined || (winnerId !== titleAId && winnerId !== titleBId)) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
 

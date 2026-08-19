@@ -11,11 +11,11 @@ export async function GET() {
 
   const [favoriteMovie, favoriteSeries, roundsCompleted, anyChoiceAtAll, samplePick] = await Promise.all([
     prisma.userTitleRating.findFirst({
-      where: { userId, score: 10, title: { type: "MOVIE" } },
+      where: { userId, score: 5, title: { type: "MOVIE" } },
       select: { titleId: true },
     }),
     prisma.userTitleRating.findFirst({
-      where: { userId, score: 10, title: { type: "SERIES" } },
+      where: { userId, score: 5, title: { type: "SERIES" } },
       select: { titleId: true },
     }),
     prisma.onboardingChoice.count({ where: { userId, skipped: false } }),

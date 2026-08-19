@@ -7,6 +7,7 @@ import { isInTheaters } from "@/lib/inTheaters";
 const WEIGHTS = {
   genre: 2,
   country: 2,
+  type: 2,
   cast: 3,
   director: 3,
   popularity: 0.5,
@@ -100,7 +101,7 @@ async function buildSimilarityBoost(
 
   const weightBySource = new Map<string, number>();
   for (const r of likedRatings) {
-    const w = (r.score - 5) / 5; // 10 -> 1, 5 -> 0, below 5 contributes nothing
+    const w = (r.score - 3) / 2; // 5 stars -> 1, 3 -> 0, below 3 contributes nothing
     if (w <= 0) continue;
     weightBySource.set(r.titleId, (weightBySource.get(r.titleId) ?? 0) + w);
   }
@@ -138,6 +139,7 @@ function scoreCandidates(
   candidates: CandidateTitle[],
   genreWeight: Map<number, number>,
   countryWeight: Map<string, number>,
+  typeWeight: Map<TitleType, number>,
   personScore: Map<string, number>,
   similarity: SimilarityBoost,
   reasonSuffix: string,
@@ -159,6 +161,12 @@ function scoreCandidates(
     if (title.originCountry) {
       const w = countryWeight.get(title.originCountry) ?? 0;
       score += w * WEIGHTS.country;
+    }
+
+    const typeW = typeWeight.get(title.type) ?? 0;
+    if (typeW !== 0) {
+      score += typeW * WEIGHTS.type;
+      if (typeW > 0) reasons.push(`Les gustan ${title.type === "MOVIE" ? "las películas" : "las series"}${reasonSuffix}`);
     }
 
     for (const c of title.cast) {
@@ -233,9 +241,10 @@ export async function getRecommendations(
   const limit = opts.limit ?? 24;
   const useOriginalTitles = opts.useOriginalTitles ?? false;
 
-  const [genrePrefs, countryPrefs, personRatings, titleRatings] = await Promise.all([
+  const [genrePrefs, countryPrefs, typePrefs, personRatings, titleRatings] = await Promise.all([
     prisma.userGenrePreference.findMany({ where: { userId } }),
     prisma.userCountryPreference.findMany({ where: { userId } }),
+    prisma.userTypePreference.findMany({ where: { userId } }),
     prisma.userPersonRating.findMany({ where: { userId } }),
     prisma.userTitleRating.findMany({
       where: { userId, seen: true, score: { not: null } },
@@ -245,6 +254,7 @@ export async function getRecommendations(
 
   const genreWeight = new Map(genrePrefs.map((g) => [g.genreId, g.weight]));
   const countryWeight = new Map(countryPrefs.map((c) => [c.countryCode, c.weight]));
+  const typeWeight = new Map(typePrefs.map((t) => [t.type, t.weight]));
   const personScore = new Map(personRatings.map((p) => [p.personId, p.score]));
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
@@ -264,6 +274,7 @@ export async function getRecommendations(
     candidates,
     genreWeight,
     countryWeight,
+    typeWeight,
     personScore,
     similarity,
     "",
@@ -293,9 +304,10 @@ export async function getGroupRecommendations(
   const memberIds = members.map((m) => m.userId);
   if (memberIds.length === 0) return [];
 
-  const [genrePrefs, countryPrefs, personRatings, titleRatings] = await Promise.all([
+  const [genrePrefs, countryPrefs, typePrefs, personRatings, titleRatings] = await Promise.all([
     prisma.userGenrePreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userCountryPreference.findMany({ where: { userId: { in: memberIds } } }),
+    prisma.userTypePreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userPersonRating.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userTitleRating.findMany({
       where: { userId: { in: memberIds }, seen: true, score: { not: null } },
@@ -305,6 +317,7 @@ export async function getGroupRecommendations(
 
   const genreWeight = sumBy(genrePrefs, (g) => g.genreId, (g) => g.weight);
   const countryWeight = sumBy(countryPrefs, (c) => c.countryCode, (c) => c.weight);
+  const typeWeight = sumBy(typePrefs, (t) => t.type, (t) => t.weight);
   const personScore = sumBy(personRatings, (p) => p.personId, (p) => p.score);
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
@@ -324,6 +337,7 @@ export async function getGroupRecommendations(
     candidates,
     genreWeight,
     countryWeight,
+    typeWeight,
     personScore,
     similarity,
     " del grupo",

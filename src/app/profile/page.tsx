@@ -71,9 +71,10 @@ export default async function ProfilePage() {
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <QuickLink href="/top" label="Ver mi top 5 películas y series" />
           <QuickLink href="/diary" label="Ver mi diario de calificaciones" />
-          <QuickLink href="/onboarding/titles" label="Seguir calificando películas y series" />
+          <QuickLink href="/rate" label="Calificar lo que ya viste" />
+          <QuickLink href="/vs" label='Seguir con "¿cuál te gusta más?"' />
           <QuickLink href="/onboarding/actors" label="Seguir calificando actores y directores" />
-          <QuickLink href="/onboarding/preferences" label="Ajustar géneros y países favoritos" />
+          <QuickLink href="/tastes" label="Ver y editar mis gustos" />
           <QuickLink href="/groups" label="Vincular cuentas y ver recomendaciones en grupo" />
         </div>
       </div>

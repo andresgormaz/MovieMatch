@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
 import { Poster } from "@/components/Poster";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
+import { StarDisplay } from "@/components/StarRating";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("es", { month: "long", year: "numeric" });
 const DAY_LABEL = new Intl.DateTimeFormat("es", { day: "numeric", month: "short" });
@@ -69,11 +70,11 @@ export default async function DiaryPage() {
                 </div>
                 {r.seen ? (
                   <span className="flex-shrink-0 rounded bg-accent/20 px-2 py-1 text-xs font-bold text-accent">
-                    {r.score != null ? `★ ${r.score}` : "Vista"}
+                    {r.score != null ? <StarDisplay score={r.score} /> : "Vista"}
                   </span>
                 ) : (
                   <span className="flex-shrink-0 rounded bg-white/10 px-2 py-1 text-xs font-medium text-neutral-400">
-                    No me interesa
+                    No vista
                   </span>
                 )}
               </Link>

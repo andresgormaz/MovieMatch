@@ -39,6 +39,7 @@ export async function GET(request: Request) {
       prisma.userPersonRating.deleteMany({}),
       prisma.userGenrePreference.deleteMany({}),
       prisma.userCountryPreference.deleteMany({}),
+      prisma.userTypePreference.deleteMany({}),
       prisma.wishlist.deleteMany({}),
       prisma.onboardingChoice.deleteMany({}),
       prisma.groupMember.deleteMany({}),

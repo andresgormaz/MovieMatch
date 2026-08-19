@@ -32,6 +32,7 @@ model User {
   personRatings      UserPersonRating[]
   genrePreferences   UserGenrePreference[]
   countryPreferences UserCountryPreference[]
+  typePreferences    UserTypePreference[]
   wishlist           Wishlist[]
   onboardingChoices  OnboardingChoice[]
   ownedGroups        Group[]       @relation("GroupOwner")
@@ -235,7 +236,7 @@ model UserTitleRating {
   userId  String
   titleId String
   seen    Boolean  @default(true)
-  score   Int? // 1-10, null when seen=false
+  score   Int? // 1-5 stars, null when seen=false or seen but not yet rated
   ratedAt DateTime @default(now())
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
@@ -277,5 +278,20 @@ model UserCountryPreference {
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, countryCode])
+  @@index([userId])
+}
+
+// Movie-vs-series taste, same -2..2 scale as genre/country -- kept separate
+// from genre because "prefers series" is a real, learnable signal on its
+// own that a genre weight doesn't capture (someone can love Drama in both
+// formats but still reach for a series over a movie most nights).
+model UserTypePreference {
+  id     String    @id @default(cuid())
+  userId String
+  type   TitleType
+  weight Int // -2..2
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
   @@index([userId])
 }

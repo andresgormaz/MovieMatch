@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
+import { StarRating } from "@/components/StarRating";
 
 export interface WishlistItem {
   id: string;
@@ -18,8 +19,6 @@ export interface WishlistItem {
   directors: string[];
   providers: ProviderBadge[];
 }
-
-const SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export function WishlistCard({
   item,
@@ -117,19 +116,8 @@ export function WishlistCard({
           </button>
         </div>
       ) : (
-        <div className="border-t border-border p-3">
-          <div className="grid grid-cols-5 gap-1.5">
-            {SCORES.map((s) => (
-              <button
-                key={s}
-                disabled={submitting}
-                onClick={() => markSeen(s)}
-                className="rounded-md border border-white/15 py-2 text-sm font-medium hover:border-accent hover:bg-accent transition-colors disabled:opacity-50"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        <div className="flex justify-center border-t border-border p-3">
+          <StarRating disabled={submitting} onRate={markSeen} />
         </div>
       )}
     </div>
