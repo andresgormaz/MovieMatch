@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   // -- this trades server bundle size/perf for debuggability.
   experimental: {
     serverMinification: false,
+    turbopackMinify: false,
   },
 };
 
