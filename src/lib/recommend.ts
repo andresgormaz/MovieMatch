@@ -6,18 +6,15 @@ import { isInTheaters } from "@/lib/inTheaters";
 import { classifyAudienceTier, classifyBudgetTier, classifyRuntimeBucket, classifyPopularityRange } from "@/lib/titleAttributes";
 import { computeMergedPreferences, computeGroupMergedPreferences, type DerivedPreferences } from "@/lib/preferenceCounts";
 
-// `type` (movie/series) and `similar`/`noStreaming` are the only weighted
-// terms left -- everything else (genre, actor/director, audience, budget,
-// runtime, country, popularity) is summed directly from preferenceCounts.ts,
-// whose own +1-per-dimension rules already encode their scale. See the chat
-// with the user (2026-08-23) requesting a first pass at this direct-sum
-// score, with normalization to follow once they've seen how it lands.
+// `type` (movie/series) and `noStreaming` are the only weighted terms left
+// -- everything else (genre, actor/director, audience, budget, runtime,
+// country, popularity, and now the TMDB "similar" boost) is summed directly
+// from preferenceCounts.ts, whose own +1-per-dimension rules already encode
+// their scale. See the chat with the user (2026-08-23) requesting a first
+// pass at this direct-sum score, with normalization to follow once they've
+// seen how it lands.
 const WEIGHTS = {
   type: 2,
-  // TMDB's own "if you liked this, try these" (fetched alongside cast/crew
-  // during import, see TitleSimilar) -- the closest free proxy to real
-  // "users who liked X also liked Y" collaborative-filtering data.
-  similar: 2.5,
   // Titles with no current streaming availability in the user's country are
   // usually either too new (still in theaters / not out yet) or otherwise
   // not actually watchable right now -- still worth surfacing if nothing
@@ -83,66 +80,10 @@ function fetchCandidates(where: Prisma.TitleWhereInput, userCountry?: string | n
   });
 }
 
-interface SimilarityBoost {
-  boostByKey: Map<string, number>;
-  reasonByKey: Map<string, { name: string; contribution: number }>;
-}
-
-// Combines TMDB's per-title "recommendations" (TitleSimilar, gathered during
-// import) with the user's own ratings: for each title they rated highly,
-// whatever TMDB says is similar to it gets a boost, proportional to how much
-// they liked the source and how relevant TMDB ranked the relation. Titles
-// recommended by several of the user's liked titles compound -- summing
-// `likedRatings` per source instead of deduping also gives group scoring
-// "more than one member liked this" weight for free.
-async function buildSimilarityBoost(
-  likedRatings: { titleId: string; score: number }[],
-  useOriginalTitles: boolean,
-): Promise<SimilarityBoost> {
-  const boostByKey = new Map<string, number>();
-  const reasonByKey = new Map<string, { name: string; contribution: number }>();
-
-  const weightBySource = new Map<string, number>();
-  for (const r of likedRatings) {
-    const w = (r.score - 3) / 2; // 5 stars -> 1, 3 -> 0, below 3 contributes nothing
-    if (w <= 0) continue;
-    weightBySource.set(r.titleId, (weightBySource.get(r.titleId) ?? 0) + w);
-  }
-  if (weightBySource.size === 0) return { boostByKey, reasonByKey };
-
-  const sourceIds = [...weightBySource.keys()];
-  const [similarRows, sourceTitles] = await Promise.all([
-    prisma.titleSimilar.findMany({ where: { titleId: { in: sourceIds } } }),
-    prisma.title.findMany({
-      where: { id: { in: sourceIds } },
-      select: { id: true, name: true, originalName: true },
-    }),
-  ]);
-  const nameBySource = new Map(sourceTitles.map((t) => [t.id, displayTitleName(t, useOriginalTitles)]));
-
-  for (const row of similarRows) {
-    const ratingWeight = weightBySource.get(row.titleId);
-    if (!ratingWeight) continue;
-    const rankWeight = Math.max(0.1, 1 - row.rank / 20); // TMDB's most relevant pick counts most
-    const contribution = WEIGHTS.similar * ratingWeight * rankWeight;
-
-    const key = `${row.relatedTmdbId}:${row.relatedType}`;
-    boostByKey.set(key, (boostByKey.get(key) ?? 0) + contribution);
-
-    const existing = reasonByKey.get(key);
-    if (!existing || contribution > existing.contribution) {
-      reasonByKey.set(key, { name: nameBySource.get(row.titleId) ?? "", contribution });
-    }
-  }
-
-  return { boostByKey, reasonByKey };
-}
-
 function scoreCandidates(
   candidates: CandidateTitle[],
   prefs: DerivedPreferences,
   typeWeight: Map<TitleType, number>,
-  similarity: SimilarityBoost,
   reasonSuffix: string,
   useOriginalTitles: boolean,
   hasUserCountry: boolean,
@@ -218,10 +159,10 @@ function scoreCandidates(
     }
 
     const simKey = `${title.tmdbId}:${title.type}`;
-    const simBoost = similarity.boostByKey.get(simKey);
+    const simBoost = prefs.similar.get(simKey);
     if (simBoost) {
       score += simBoost;
-      const reason = similarity.reasonByKey.get(simKey);
+      const reason = prefs.similarReasons.get(simKey);
       if (reason?.name) reasons.push(`Se parece a "${reason.name}", que les gustó${reasonSuffix}`);
     }
 
@@ -269,20 +210,12 @@ export async function getRecommendations(
   const limit = opts.limit ?? 24;
   const useOriginalTitles = opts.useOriginalTitles ?? false;
 
-  const [typePrefs, titleRatings, prefs] = await Promise.all([
+  const [typePrefs, prefs] = await Promise.all([
     prisma.userTypePreference.findMany({ where: { userId } }),
-    prisma.userTitleRating.findMany({
-      where: { userId, seen: true, score: { not: null } },
-      select: { titleId: true, score: true },
-    }),
-    computeMergedPreferences(userId),
+    computeMergedPreferences(userId, useOriginalTitles),
   ]);
 
   const typeWeight = new Map(typePrefs.map((t) => [t.type, t.weight]));
-  const similarity = await buildSimilarityBoost(
-    titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
-    useOriginalTitles,
-  );
 
   const candidates = await fetchCandidates(
     {
@@ -293,15 +226,7 @@ export async function getRecommendations(
     opts.userCountry,
   );
 
-  const results = scoreCandidates(
-    candidates,
-    prefs,
-    typeWeight,
-    similarity,
-    "",
-    useOriginalTitles,
-    Boolean(opts.userCountry),
-  );
+  const results = scoreCandidates(candidates, prefs, typeWeight, "", useOriginalTitles, Boolean(opts.userCountry));
   return results.slice(0, limit);
 }
 
@@ -325,20 +250,12 @@ export async function getGroupRecommendations(
   const memberIds = members.map((m) => m.userId);
   if (memberIds.length === 0) return [];
 
-  const [typePrefs, titleRatings, prefs] = await Promise.all([
+  const [typePrefs, prefs] = await Promise.all([
     prisma.userTypePreference.findMany({ where: { userId: { in: memberIds } } }),
-    prisma.userTitleRating.findMany({
-      where: { userId: { in: memberIds }, seen: true, score: { not: null } },
-      select: { titleId: true, score: true },
-    }),
-    computeGroupMergedPreferences(memberIds),
+    computeGroupMergedPreferences(memberIds, useOriginalTitles),
   ]);
 
   const typeWeight = sumBy(typePrefs, (t) => t.type, (t) => t.weight);
-  const similarity = await buildSimilarityBoost(
-    titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
-    useOriginalTitles,
-  );
 
   const candidates = await fetchCandidates(
     {
@@ -349,15 +266,7 @@ export async function getGroupRecommendations(
     opts.userCountry,
   );
 
-  const results = scoreCandidates(
-    candidates,
-    prefs,
-    typeWeight,
-    similarity,
-    " del grupo",
-    useOriginalTitles,
-    Boolean(opts.userCountry),
-  );
+  const results = scoreCandidates(candidates, prefs, typeWeight, " del grupo", useOriginalTitles, Boolean(opts.userCountry));
   return results.slice(0, limit);
 }
 

@@ -20,6 +20,11 @@ interface PersonRating {
   photoUrl: string | null;
   department: string | null;
 }
+interface SummaryEntry {
+  category: string;
+  label: string;
+  score: number;
+}
 
 const PERSON_LEVELS: { value: -1 | 0 | 1; label: string; aria: string }[] = [
   { value: -1, label: "👎", aria: "No me gusta" },
@@ -49,6 +54,7 @@ export default function TastesPage() {
     LONG: 0,
   });
   const [people, setPeople] = useState<PersonRating[]>([]);
+  const [summary, setSummary] = useState<SummaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -83,6 +89,7 @@ export default function TastesPage() {
       LONG: data.runtimePreferences.find((r: { bucket: string }) => r.bucket === "LONG")?.weight ?? 0,
     });
     setPeople(data.personRatings);
+    setSummary(data.summary);
     setLoading(false);
   }
 
@@ -169,6 +176,37 @@ export default function TastesPage() {
           Todo lo que aprendimos de tus calificaciones y de &quot;vs&quot; -- puedes corregir cualquier cosa a mano.
         </p>
       </div>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-muted">Resumen de puntajes</h2>
+        <p className="text-xs text-muted">
+          Cada preferencia con el puntaje que realmente se está usando ahora mismo para tus recomendaciones (lo que
+          escribiste a mano, o si no tocaste nada, lo que se infirió solo). Ordenado de mayor a menor.
+        </p>
+        {summary.length === 0 ? (
+          <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
+            Todavía no hay suficientes &quot;vs&quot; o calificaciones para mostrar nada acá.
+          </p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto rounded-xl border border-border bg-surface">
+            {summary.map((s, i) => (
+              <div
+                key={`${s.category}-${s.label}-${i}`}
+                className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white">{s.label}</p>
+                  <p className="text-xs text-muted">{s.category}</p>
+                </div>
+                <p className={`flex-shrink-0 text-sm font-bold ${s.score > 0 ? "text-accent-hover" : "text-red-400"}`}>
+                  {s.score > 0 ? "+" : ""}
+                  {s.score}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted">Películas o series</h2>

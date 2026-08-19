@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { displayTitleName } from "@/lib/titleDisplay";
 import {
   classifyAudienceTier,
   classifyBudgetTier,
@@ -13,17 +14,19 @@ import {
 
 // Replaces the old "bump a stored running weight on every vs win/favorite"
 // model for genre, actor/director, mainstream/indie, budget, runtime,
-// country, and popularity: every score here is recomputed fresh, directly
-// from the two raw sources of truth -- "vs" wins (OnboardingChoice) and
-// 4-5-star ratings (UserTitleRating) -- instead of an incrementally-updated
-// column. Nothing to drift, nothing to migrate when the formula changes.
-// Manual edits on "Mis gustos" still exist as an override layer on top (see
-// mergeManual below); this module never writes to those tables, only reads
-// them elsewhere and merges. `type` (movie/series) and the TMDB "similar"
-// boost are untouched by this -- they keep working exactly as before.
+// country, popularity, and the TMDB "similar" boost: every score here is
+// recomputed fresh, directly from the two raw sources of truth -- "vs" wins
+// (OnboardingChoice) and 4-5-star ratings (UserTitleRating) -- instead of an
+// incrementally-updated column. Nothing to drift, nothing to migrate when
+// the formula changes. Manual edits on "Mis gustos" still exist as an
+// override layer on top (see mergeManual below); this module never writes
+// to those tables, only reads them elsewhere and merges. `type` (movie/
+// series) is untouched by this -- it keeps working exactly as before.
 
 const EVIDENCE_SELECT = {
   id: true,
+  name: true,
+  originalName: true,
   voteCount: true,
   budget: true,
   runtime: true,
@@ -31,7 +34,15 @@ const EVIDENCE_SELECT = {
   genres: { select: { genreId: true } },
   cast: { orderBy: { order: "asc" as const }, take: 3, select: { personId: true } },
   crew: { where: { job: { in: ["Director", "Creator"] } }, select: { personId: true } },
+  // TMDB's own "if you liked this, try these" for the evidence title, capped
+  // at 10 per title on import (rank 0 = most relevant) -- see below.
+  similar: { select: { relatedTmdbId: true, relatedType: true, rank: true } },
 } satisfies Prisma.TitleSelect;
+
+interface SimilarReason {
+  name: string;
+  contribution: number;
+}
 
 export interface DerivedPreferences {
   genre: Map<number, number>;
@@ -41,6 +52,12 @@ export interface DerivedPreferences {
   runtime: Map<RuntimeBucket, number>;
   country: Map<string, number>;
   popularity: Map<PopularityRange, number>;
+  // Keyed by "tmdbId:type" (matches a candidate at scoring time) -- a title
+  // similar to an evidence title, per TMDB, gets +1 if it was in that
+  // title's top 5 most-relevant recommendations, +0.5 for 6th-10th.
+  // Compounds across multiple evidence titles pointing at the same one.
+  similar: Map<string, number>;
+  similarReasons: Map<string, SimilarReason>;
 }
 
 function emptyPreferences(): DerivedPreferences {
@@ -52,6 +69,8 @@ function emptyPreferences(): DerivedPreferences {
     runtime: new Map(),
     country: new Map(),
     popularity: new Map(),
+    similar: new Map(),
+    similarReasons: new Map(),
   };
 }
 
@@ -104,8 +123,9 @@ function audiencePreferenceFromCounts(counts: Map<AudienceTier, number>): Map<Au
 // each dimension's own rule above. A title that both won a "vs" round and
 // was later rated highly counts toward both events independently -- no
 // deduping across the two sources, and (unlike the old actor/director
-// model) no franchise/collection deduping either.
-export async function computeDerivedPreferences(userId: string): Promise<DerivedPreferences> {
+// model) no franchise/collection deduping either. `useOriginalTitles` only
+// affects the display name attached to a "similar" reason.
+export async function computeDerivedPreferences(userId: string, useOriginalTitles = false): Promise<DerivedPreferences> {
   const [wins, highRatings] = await Promise.all([
     prisma.onboardingChoice.findMany({ where: { userId, skipped: false }, select: { winnerId: true } }),
     prisma.userTitleRating.findMany({ where: { userId, seen: true, score: { gte: 4 } }, select: { titleId: true } }),
@@ -124,6 +144,8 @@ export async function computeDerivedPreferences(userId: string): Promise<Derived
   const runtimeCounts = new Map<RuntimeBucket, number>();
   const countryCounts = new Map<string, number>();
   const popularityCounts = new Map<PopularityRange, number>();
+  const similarCounts = new Map<string, number>();
+  const similarReasons = new Map<string, SimilarReason>();
 
   function tally(titleId: string) {
     const t = titleById.get(titleId);
@@ -148,6 +170,18 @@ export async function computeDerivedPreferences(userId: string): Promise<Derived
 
     const popularity = classifyPopularityRange(t);
     popularityCounts.set(popularity, (popularityCounts.get(popularity) ?? 0) + 1);
+
+    // rank is 0-indexed and only ever 0-9 (SIMILAR_PER_TITLE caps storage at
+    // 10 per title on import) -- 0-4 is "top 5", 5-9 is "6th through 10th".
+    for (const row of t.similar) {
+      const contribution = row.rank < 5 ? 1 : 0.5;
+      const key = `${row.relatedTmdbId}:${row.relatedType}`;
+      similarCounts.set(key, (similarCounts.get(key) ?? 0) + contribution);
+      const existing = similarReasons.get(key);
+      if (!existing || contribution > existing.contribution) {
+        similarReasons.set(key, { name: displayTitleName(t, useOriginalTitles), contribution });
+      }
+    }
   }
 
   for (const w of wins) tally(w.winnerId);
@@ -167,6 +201,8 @@ export async function computeDerivedPreferences(userId: string): Promise<Derived
     runtime: winnerTakesAll(runtimeCounts),
     country: winnerTakesAll(countryCounts),
     popularity: winnerTakesAll(popularityCounts),
+    similar: similarCounts,
+    similarReasons,
   };
 }
 
@@ -219,11 +255,11 @@ function sumInto<K>(target: Map<K, number>, source: Map<K, number>) {
 }
 
 // The derived counts merged with this user's manual "Mis gustos" overrides
-// -- the actual value scoring should use. `popularity` has no manual-edit
-// UI (a new dimension), so it's always the raw derived value.
-export async function computeMergedPreferences(userId: string): Promise<DerivedPreferences> {
+// -- the actual value scoring should use. `popularity` and `similar` have
+// no manual-edit UI, so they're always the raw derived value.
+export async function computeMergedPreferences(userId: string, useOriginalTitles = false): Promise<DerivedPreferences> {
   const [derived, genrePrefs, audiencePrefs, budgetPrefs, runtimePrefs, countryPrefs, personPrefs] = await Promise.all([
-    computeDerivedPreferences(userId),
+    computeDerivedPreferences(userId, useOriginalTitles),
     prisma.userGenrePreference.findMany({ where: { userId } }),
     prisma.userAudiencePreference.findMany({ where: { userId } }),
     prisma.userBudgetPreference.findMany({ where: { userId } }),
@@ -240,14 +276,22 @@ export async function computeMergedPreferences(userId: string): Promise<DerivedP
     runtime: mergeManual(derived.runtime, new Map(runtimePrefs.map((r) => [r.bucket, r.weight]))),
     country: mergeManual(derived.country, new Map(countryPrefs.map((c) => [c.countryCode, c.weight]))),
     popularity: derived.popularity,
+    similar: derived.similar,
+    similarReasons: derived.similarReasons,
   };
 }
 
 // Group version: each member's own manual-merged preferences are summed
 // across the group -- same "several members liking something outranks one"
-// reasoning the rest of group scoring uses.
-export async function computeGroupMergedPreferences(userIds: string[]): Promise<DerivedPreferences> {
-  const perMember = await Promise.all(userIds.map((id) => computeMergedPreferences(id)));
+// reasoning the rest of group scoring uses. For the "similar" reason text
+// (flavor only, doesn't affect score), this just keeps whichever member's
+// reason is found first for a given key rather than comparing contributions
+// across members -- not worth the complexity for a label.
+export async function computeGroupMergedPreferences(
+  userIds: string[],
+  useOriginalTitles = false,
+): Promise<DerivedPreferences> {
+  const perMember = await Promise.all(userIds.map((id) => computeMergedPreferences(id, useOriginalTitles)));
   const summed = emptyPreferences();
   for (const prefs of perMember) {
     sumInto(summed.genre, prefs.genre);
@@ -257,6 +301,10 @@ export async function computeGroupMergedPreferences(userIds: string[]): Promise<
     sumInto(summed.runtime, prefs.runtime);
     sumInto(summed.country, prefs.country);
     sumInto(summed.popularity, prefs.popularity);
+    sumInto(summed.similar, prefs.similar);
+    for (const [key, reason] of prefs.similarReasons) {
+      if (!summed.similarReasons.has(key)) summed.similarReasons.set(key, reason);
+    }
   }
   return summed;
 }

@@ -11,12 +11,22 @@ import {
 } from "@/lib/validation";
 import { countryName } from "@/lib/countries";
 import { tmdbProfileUrl } from "@/lib/tmdb";
-import { computeDerivedPreferences } from "@/lib/preferenceCounts";
+import { computeMergedPreferences } from "@/lib/preferenceCounts";
 
 const typePreferenceSchema = z.object({
   type: z.enum(["MOVIE", "SERIES"]),
   weight: z.number().int().min(-2).max(2),
 });
+
+const AUDIENCE_LABELS: Record<string, string> = { MAINSTREAM: "Masivo", INDIE: "Independiente" };
+const BUDGET_LABELS: Record<string, string> = { MEGA: "Megaproducción", SMALL: "Bajo presupuesto" };
+const RUNTIME_LABELS: Record<string, string> = { SHORT: "Duración corta", MEDIUM: "Duración media", LONG: "Duración larga" };
+const POPULARITY_LABELS: Record<string, string> = {
+  LOW: "Poca popularidad (TMDB)",
+  MID: "Popularidad media (TMDB)",
+  HIGH: "Muy popular (TMDB)",
+};
+const TYPE_LABELS: Record<string, string> = { MOVIE: "Películas", SERIES: "Series" };
 
 // Backs both the legacy post-onboarding preference step and the new "Mis
 // gustos" page -- everything a person's onboarding/VS activity has ever
@@ -26,7 +36,7 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const userId = session.user.id;
 
-  const [genres, countryRows, genrePrefs, countryPrefs, typePrefs, audiencePrefs, budgetPrefs, runtimePrefs, personPrefs, derivedTiers] =
+  const [genres, countryRows, genrePrefs, countryPrefs, typePrefs, audiencePrefs, budgetPrefs, runtimePrefs, personPrefs, merged] =
     await Promise.all([
       prisma.genre.findMany({ orderBy: { name: "asc" } }),
       prisma.title.findMany({
@@ -44,7 +54,7 @@ export async function GET() {
         where: { userId },
         include: { person: { select: { id: true, name: true, profilePath: true, knownForDepartment: true } } },
       }),
-      computeDerivedPreferences(userId).then((p) => p.person),
+      computeMergedPreferences(userId),
     ]);
 
   const countries = countryRows
@@ -52,12 +62,13 @@ export async function GET() {
     .sort()
     .map((code) => ({ code, name: countryName(code) }));
 
-  // Merge explicit (manual, always wins) and derived (from accumulated
-  // 4-5-star ratings) actor/director signal into one list for "Mis gustos" --
-  // people who only have a derived tier show up too (isInferred: true), so
-  // they're visible and editable even before anyone has rated them by hand.
+  // Merge explicit (manual, always wins) and derived (from accumulated "vs"
+  // wins + 4-5-star ratings) actor/director signal into one list for "Mis
+  // gustos" -- people who only have a derived score show up too (isInferred:
+  // true), so they're visible and editable even before anyone has rated
+  // them by hand.
   const manualByPerson = new Map(personPrefs.map((p) => [p.personId, p]));
-  const derivedOnlyPersonIds = [...derivedTiers.keys()].filter((id) => !manualByPerson.has(id));
+  const derivedOnlyPersonIds = [...merged.person.keys()].filter((id) => !manualByPerson.has(id));
   const derivedOnlyPeople =
     derivedOnlyPersonIds.length > 0
       ? await prisma.person.findMany({
@@ -82,7 +93,7 @@ export async function GET() {
       return [
         {
           personId,
-          score: derivedTiers.get(personId) ?? 0,
+          score: merged.person.get(personId) ?? 0,
           isInferred: true,
           name: person.name,
           photoUrl: tmdbProfileUrl(person.profilePath),
@@ -90,6 +101,46 @@ export async function GET() {
         },
       ];
     }),
+  ].sort((a, b) => b.score - a.score);
+
+  // A flat "every preference, plainly, with its current score" view -- the
+  // section the user asked to be able to open and see everything at a
+  // glance, separate from the per-dimension edit controls below. Bounded
+  // dimensions (type/audience/budget/runtime/popularity) always show every
+  // option, even at 0, since there are only a couple each; genre/country/
+  // person are filtered to non-zero, or the list would be mostly noise.
+  const genreNameById = new Map(genres.map((g) => [g.id, g.name]));
+  const summary = [
+    ...typePrefs.map((t) => ({ category: "Tipo", label: TYPE_LABELS[t.type] ?? t.type, score: t.weight })),
+    ...[...merged.genre.entries()]
+      .filter(([, score]) => score !== 0)
+      .map(([genreId, score]) => ({ category: "Género", label: genreNameById.get(genreId) ?? `Género ${genreId}`, score })),
+    ...(["MAINSTREAM", "INDIE"] as const).map((tier) => ({
+      category: "Masivo/independiente",
+      label: AUDIENCE_LABELS[tier],
+      score: merged.audience.get(tier) ?? 0,
+    })),
+    ...(["MEGA", "SMALL"] as const).map((tier) => ({
+      category: "Presupuesto",
+      label: BUDGET_LABELS[tier],
+      score: merged.budget.get(tier) ?? 0,
+    })),
+    ...(["SHORT", "MEDIUM", "LONG"] as const).map((bucket) => ({
+      category: "Duración",
+      label: RUNTIME_LABELS[bucket],
+      score: merged.runtime.get(bucket) ?? 0,
+    })),
+    ...(["LOW", "MID", "HIGH"] as const).map((range) => ({
+      category: "Popularidad",
+      label: POPULARITY_LABELS[range],
+      score: merged.popularity.get(range) ?? 0,
+    })),
+    ...[...merged.country.entries()]
+      .filter(([, score]) => score !== 0)
+      .map(([code, score]) => ({ category: "País", label: countryName(code), score })),
+    ...personRatings
+      .filter((p) => p.score !== 0)
+      .map((p) => ({ category: "Actor/director", label: p.name, score: p.score })),
   ].sort((a, b) => b.score - a.score);
 
   return NextResponse.json({
@@ -102,6 +153,7 @@ export async function GET() {
     budgetPreferences: budgetPrefs,
     runtimePreferences: runtimePrefs,
     personRatings,
+    summary,
   });
 }
 
