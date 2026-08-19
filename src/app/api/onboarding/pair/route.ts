@@ -33,8 +33,19 @@ export async function GET(request: Request) {
   const keepId = searchParams.get("keep") || undefined;
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { country: true } });
-  const pair = await pickNextPair(session.user.id, excludeIds, user?.country ?? null, keepId);
-  return NextResponse.json({ pair, done: pair === null });
+  try {
+    const pair = await pickNextPair(session.user.id, excludeIds, user?.country ?? null, keepId);
+    return NextResponse.json({ pair, done: pair === null });
+  } catch (err) {
+    // Without this, an exception here becomes Next.js's default HTML error
+    // page instead of JSON -- the client's res.json() then throws its own
+    // (unrelated-looking) parse error, hiding the real cause. Surface it.
+    console.error("GET /api/onboarding/pair failed", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Error desconocido" },
+      { status: 500 },
+    );
+  }
 }
 
 const bodySchema = z.object({

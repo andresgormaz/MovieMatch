@@ -43,18 +43,21 @@ export function PairCompare({
       if (unlimited) params.set("unlimited", "1");
       if (keepId) params.set("keep", keepId);
       const res = await fetch(`/api/onboarding/pair?${params.toString()}`);
-      if (!res.ok) throw new Error("failed");
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       if (data.done || !data.pair) {
         setPair(null);
         onExhausted();
         return;
       }
       setPair(data.pair);
-    } catch {
+    } catch (err) {
       // Leave pair as undefined -- the render branch below shows a retry
-      // button instead of getting stuck on "Cargando..." forever.
-      setError("No se pudo cargar la siguiente comparación. Inténtalo de nuevo.");
+      // button instead of getting stuck on "Cargando..." forever. Surface
+      // the real reason (visible in the UI) instead of a generic message,
+      // since this has to be diagnosable from a phone with no devtools.
+      const detail = err instanceof Error ? err.message : String(err);
+      setError(`No se pudo cargar la siguiente comparación (${detail}). Inténtalo de nuevo.`);
     }
   }
 
