@@ -11,7 +11,7 @@ import {
 } from "@/lib/validation";
 import { countryName } from "@/lib/countries";
 import { tmdbProfileUrl } from "@/lib/tmdb";
-import { computeDerivedPersonTiers, effectivePersonScore } from "@/lib/personPreference";
+import { computeDerivedPreferences } from "@/lib/preferenceCounts";
 
 const typePreferenceSchema = z.object({
   type: z.enum(["MOVIE", "SERIES"]),
@@ -44,7 +44,7 @@ export async function GET() {
         where: { userId },
         include: { person: { select: { id: true, name: true, profilePath: true, knownForDepartment: true } } },
       }),
-      computeDerivedPersonTiers(userId),
+      computeDerivedPreferences(userId).then((p) => p.person),
     ]);
 
   const countries = countryRows
@@ -82,7 +82,7 @@ export async function GET() {
       return [
         {
           personId,
-          score: effectivePersonScore(personId, new Map(), derivedTiers),
+          score: derivedTiers.get(personId) ?? 0,
           isInferred: true,
           name: person.name,
           photoUrl: tmdbProfileUrl(person.profilePath),

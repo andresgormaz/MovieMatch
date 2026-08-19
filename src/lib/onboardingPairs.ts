@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
-import { classifyAudienceTier, classifyBudgetTier, classifyRuntimeBucket } from "@/lib/titleAttributes";
+import { computeGenreShownCounts } from "@/lib/preferenceCounts";
 import type { Prisma } from "@/generated/prisma/client";
-import type { TitleType, AudienceTier, BudgetTier, RuntimeBucket } from "@/generated/prisma/enums";
+import type { TitleType } from "@/generated/prisma/enums";
 
 // Short on purpose: the point of the new onboarding is a couple of minutes,
 // not a marathon. Two favorites (seed) + this many "which do you like more"
@@ -51,33 +51,10 @@ type TitleWithCredits = {
   crew: { personId: string }[];
 };
 
-// Bumps genre preference toward a title's genres by `delta`, clamped to the
-// same -2..2 scale the (optional, post-onboarding) manual editing uses -- an
-// inferred signal never jumps past what an explicit one could have set.
-// Only ever increases: this never guesses that someone dislikes something.
-async function bumpGenrePreferences(userId: string, titleId: string, delta: number) {
-  const genres = await prisma.titleGenre.findMany({ where: { titleId }, select: { genreId: true } });
-  if (genres.length === 0) return;
-
-  const existing = await prisma.userGenrePreference.findMany({
-    where: { userId, genreId: { in: genres.map((g) => g.genreId) } },
-  });
-  const existingByGenre = new Map(existing.map((e) => [e.genreId, e.weight]));
-
-  for (const { genreId } of genres) {
-    const current = existingByGenre.get(genreId) ?? 0;
-    const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, current + delta));
-    await prisma.userGenrePreference.upsert({
-      where: { userId_genreId: { userId, genreId } },
-      update: { weight: next },
-      create: { userId, genreId, weight: next },
-    });
-  }
-}
-
-// Same idea as genre, but for movie-vs-series taste. A much smaller signal
-// space (only two possible values), so it fills in fast once a handful of
-// picks lean one way or the other.
+// Movie-vs-series taste is the one dimension still bumped incrementally on
+// write (unchanged by the switch to derived scoring for everything else --
+// see preferenceCounts.ts): a much smaller signal space than genre (only two
+// possible values), so it fills in fast either way.
 async function bumpTypePreference(userId: string, type: TitleType, delta: number) {
   const existing = await prisma.userTypePreference.findUnique({ where: { userId_type: { userId, type } } });
   const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
@@ -88,93 +65,34 @@ async function bumpTypePreference(userId: string, type: TitleType, delta: number
   });
 }
 
-// Same idea as type, for the "objective attribute" dimensions -- audience
-// reach, production budget, runtime. These describe the title itself (not
-// "you like this specific person"), so a single pick is reasonable evidence,
-// same reasoning as genre. Skips the bump entirely when the title doesn't
-// clearly classify into either tier (see titleAttributes.ts) rather than
-// forcing a guess.
-async function bumpAudiencePreference(userId: string, tier: AudienceTier | null, delta: number) {
-  if (!tier) return;
-  const existing = await prisma.userAudiencePreference.findUnique({ where: { userId_tier: { userId, tier } } });
-  const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
-  await prisma.userAudiencePreference.upsert({
-    where: { userId_tier: { userId, tier } },
-    update: { weight: next },
-    create: { userId, tier, weight: next },
-  });
-}
-
-async function bumpBudgetPreference(userId: string, tier: BudgetTier | null, delta: number) {
-  if (!tier) return;
-  const existing = await prisma.userBudgetPreference.findUnique({ where: { userId_tier: { userId, tier } } });
-  const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
-  await prisma.userBudgetPreference.upsert({
-    where: { userId_tier: { userId, tier } },
-    update: { weight: next },
-    create: { userId, tier, weight: next },
-  });
-}
-
-async function bumpRuntimePreference(userId: string, bucket: RuntimeBucket | null, delta: number) {
-  if (!bucket) return;
-  const existing = await prisma.userRuntimePreference.findUnique({ where: { userId_bucket: { userId, bucket } } });
-  const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
-  await prisma.userRuntimePreference.upsert({
-    where: { userId_bucket: { userId, bucket } },
-    update: { weight: next },
-    create: { userId, bucket, weight: next },
-  });
-}
-
-const ATTRIBUTE_SELECT = { type: true, voteCount: true, budget: true, runtime: true } satisfies Prisma.TitleSelect;
-
-// Bumps every "objective attribute" dimension a title classifies into --
-// shared by recordFavorite and recordPairWinner so they can't drift apart.
-async function bumpAttributePreferences(
-  userId: string,
-  title: { type: TitleType; voteCount: number | null; budget: number | null; runtime: number | null },
-  delta: number,
-) {
-  await Promise.all([
-    bumpTypePreference(userId, title.type, delta),
-    bumpAudiencePreference(userId, classifyAudienceTier(title), delta),
-    bumpBudgetPreference(userId, classifyBudgetTier(title), delta),
-    bumpRuntimePreference(userId, classifyRuntimeBucket(title), delta),
-  ]);
-}
-
 // A favorite is the strongest, least ambiguous signal onboarding gets --
-// explicitly named, so it's recorded as a real 5-star rating as well as a
-// strong genre/attribute bump, unlike pairwise picks below. Actor/director
-// preference is deliberately NOT bumped here: liking one title isn't enough
-// evidence to assume you like its cast/director's other work -- see
-// personPreference.ts, which derives that from several corroborating
-// highly-rated titles instead.
+// explicitly named, so it's recorded as a real 5-star rating, unlike
+// pairwise picks below. That rating is all genre/actor/director/audience/
+// budget/runtime/country/popularity preference needs now: those are all
+// derived fresh from "vs" wins and 4-5-star ratings (see
+// preferenceCounts.ts) rather than bumped here on write.
 export async function recordFavorite(userId: string, titleId: string) {
-  const title = await prisma.title.findUnique({ where: { id: titleId }, select: ATTRIBUTE_SELECT });
+  const title = await prisma.title.findUnique({ where: { id: titleId }, select: { type: true } });
   await prisma.userTitleRating.upsert({
     where: { userId_titleId: { userId, titleId } },
     update: { seen: true, score: 5 },
     create: { userId, titleId, seen: true, score: 5 },
   });
-  await bumpGenrePreferences(userId, titleId, PREFERENCE_WEIGHT_MAX);
-  if (title) await bumpAttributePreferences(userId, title, PREFERENCE_WEIGHT_MAX);
+  if (title) await bumpTypePreference(userId, title.type, PREFERENCE_WEIGHT_MAX);
 }
 
 // A pairwise pick is weaker evidence than a favorite (even now that both
 // sides are confirmed seen, we only know they preferred the winner, not by
-// how much) -- logged for coverage tracking, and only the winner nudges
-// preferences, by a smaller amount, never the loser. Both titles are marked
+// how much) -- logged for coverage tracking (OnboardingChoice is also the
+// raw source computeDerivedPreferences reads "vs" wins from), and only the
+// winner nudges type preference, never the loser. Both titles are marked
 // "seen" here: picking between them only makes sense once you've actually
 // watched both (see recordNotSeen for the "swap this one out" escape hatch).
-// Same as recordFavorite: no actor/director bump from a single win, that's
-// derived from ratings instead (see personPreference.ts).
 export async function recordPairWinner(userId: string, titleAId: string, titleBId: string, winnerId: string) {
   if (winnerId !== titleAId && winnerId !== titleBId) {
     throw new Error("winnerId must be titleAId or titleBId");
   }
-  const winner = await prisma.title.findUnique({ where: { id: winnerId }, select: ATTRIBUTE_SELECT });
+  const winner = await prisma.title.findUnique({ where: { id: winnerId }, select: { type: true } });
   await Promise.all([
     prisma.onboardingChoice.create({ data: { userId, titleAId, titleBId, winnerId } }),
     prisma.userTitleRating.upsert({
@@ -188,8 +106,7 @@ export async function recordPairWinner(userId: string, titleAId: string, titleBI
       create: { userId, titleId: titleBId, seen: true, score: null },
     }),
   ]);
-  await bumpGenrePreferences(userId, winnerId, 1);
-  if (winner) await bumpAttributePreferences(userId, winner, 1);
+  if (winner) await bumpTypePreference(userId, winner.type, 1);
 }
 
 // "No la he visto": the swapped-out title is recorded as explicitly unseen
@@ -345,7 +262,7 @@ const MAX_GENRE_ATTEMPTS = 6;
 async function fillSlots(
   userId: string,
   excludeIds: string[],
-  weightByGenre: Map<number, number>,
+  shownCountByGenre: Map<number, number>,
   slotsNeeded: number,
   userCountry: string | null,
 ): Promise<TitleWithCredits[]> {
@@ -354,12 +271,17 @@ async function fillSlots(
     _count: { titleId: true },
     where: { title: { voteCount: { gte: POPULAR_VOTE_COUNT }, ...streamingWhere(userCountry) } },
   });
+  // Least-shown genre first -- the point is giving every genre a fair shot
+  // at accumulating its own "vs" wins, not re-picking whatever the
+  // algorithm currently thinks you like (see preferenceCounts.ts's
+  // computeGenreShownCounts). Ties fall back to whichever genre has more
+  // eligible titles left to draw from.
   const eligibleGenres = genreCounts
     .filter((g) => g._count.titleId >= 2)
     .sort((a, b) => {
-      const wa = weightByGenre.get(a.genreId) ?? 0;
-      const wb = weightByGenre.get(b.genreId) ?? 0;
-      if (wa !== wb) return wa - wb;
+      const sa = shownCountByGenre.get(a.genreId) ?? 0;
+      const sb = shownCountByGenre.get(b.genreId) ?? 0;
+      if (sa !== sb) return sa - sb;
       return b._count.titleId - a._count.titleId;
     })
     .slice(0, MAX_GENRE_ATTEMPTS);
@@ -393,9 +315,9 @@ async function fillSlots(
 
 // The adaptive step: picks the next pair to compare. Three gaps are checked,
 // in order -- format (movie vs series), then genre coverage (favoring genres
-// with the lowest UserGenrePreference weight, i.e. least known), with the
-// person-gap preference from pickCandidateForGenre layered on top of
-// whichever one runs. `fixedTitleId` mid-swaps just one side (see
+// shown least so far, giving every genre a fair shot at earning its own "vs"
+// wins), with the person-gap preference from pickCandidateForGenre layered
+// on top of whichever one runs. `fixedTitleId` mid-swaps just one side (see
 // recordNotSeen's caller): only a single fresh candidate is picked, keeping
 // the other title in place.
 export async function pickNextPair(
@@ -404,8 +326,8 @@ export async function pickNextPair(
   userCountry: string | null = null,
   fixedTitleId?: string,
 ): Promise<{ titleA: PairTitle; titleB: PairTitle } | null> {
-  const [genrePrefs, previousChoices, ratedTitleIds, typeCoverage, streamingCoverage] = await Promise.all([
-    prisma.userGenrePreference.findMany({ where: { userId } }),
+  const [shownCountByGenre, previousChoices, ratedTitleIds, typeCoverage, streamingCoverage] = await Promise.all([
+    computeGenreShownCounts(userId),
     prisma.onboardingChoice.findMany({ where: { userId }, select: { titleAId: true, titleBId: true } }),
     prisma.userTitleRating.findMany({ where: { userId }, select: { titleId: true } }),
     prisma.userTypePreference.count({ where: { userId } }),
@@ -440,10 +362,9 @@ export async function pickNextPair(
     }
   }
 
-  const weightByGenre = new Map(genrePrefs.map((g) => [g.genreId, g.weight]));
   const slotsNeeded = fixedTitleId ? 1 : 2;
 
-  let picked = await fillSlots(userId, excludeIds, weightByGenre, slotsNeeded, effectiveCountry);
+  let picked = await fillSlots(userId, excludeIds, shownCountByGenre, slotsNeeded, effectiveCountry);
 
   // The streaming-scoped pool shrinks by up to 2 titles every round (both
   // sides of a completed comparison are excluded from then on), so it can
@@ -455,7 +376,7 @@ export async function pickNextPair(
     const more = await fillSlots(
       userId,
       [...excludeIds, ...picked.map((p) => p.id)],
-      weightByGenre,
+      shownCountByGenre,
       slotsNeeded - picked.length,
       null,
     );

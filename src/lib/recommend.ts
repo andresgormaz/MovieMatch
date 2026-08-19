@@ -1,18 +1,19 @@
 import { prisma } from "@/lib/prisma";
-import type { TitleType, AudienceTier, BudgetTier, RuntimeBucket } from "@/generated/prisma/enums";
+import type { TitleType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { displayTitleName } from "@/lib/titleDisplay";
 import { isInTheaters } from "@/lib/inTheaters";
-import { classifyAudienceTier, classifyBudgetTier, classifyRuntimeBucket } from "@/lib/titleAttributes";
-import { computeDerivedPersonTiers, computeGroupPersonScores, effectivePersonScore } from "@/lib/personPreference";
+import { classifyAudienceTier, classifyBudgetTier, classifyRuntimeBucket, classifyPopularityRange } from "@/lib/titleAttributes";
+import { computeMergedPreferences, computeGroupMergedPreferences, type DerivedPreferences } from "@/lib/preferenceCounts";
 
+// `type` (movie/series) and `similar`/`noStreaming` are the only weighted
+// terms left -- everything else (genre, actor/director, audience, budget,
+// runtime, country, popularity) is summed directly from preferenceCounts.ts,
+// whose own +1-per-dimension rules already encode their scale. See the chat
+// with the user (2026-08-23) requesting a first pass at this direct-sum
+// score, with normalization to follow once they've seen how it lands.
 const WEIGHTS = {
-  genre: 2,
-  country: 2,
   type: 2,
-  cast: 3,
-  director: 3,
-  popularity: 0.5,
   // TMDB's own "if you liked this, try these" (fetched alongside cast/crew
   // during import, see TitleSimilar) -- the closest free proxy to real
   // "users who liked X also liked Y" collaborative-filtering data.
@@ -22,11 +23,6 @@ const WEIGHTS = {
   // not actually watchable right now -- still worth surfacing if nothing
   // else scores well, but pushed down rather than recommended at face value.
   noStreaming: 4,
-  // Softer than genre/cast: these are secondary attributes of a title, not
-  // its core identity.
-  audience: 1.5,
-  budget: 1,
-  runtime: 1,
 };
 
 // The catalog can be thousands of titles now (TMDB + anime import); scoring
@@ -144,13 +140,8 @@ async function buildSimilarityBoost(
 
 function scoreCandidates(
   candidates: CandidateTitle[],
-  genreWeight: Map<number, number>,
-  countryWeight: Map<string, number>,
+  prefs: DerivedPreferences,
   typeWeight: Map<TitleType, number>,
-  audienceWeight: Map<AudienceTier, number>,
-  budgetWeight: Map<BudgetTier, number>,
-  runtimeWeight: Map<RuntimeBucket, number>,
-  personScore: Map<string, number>,
   similarity: SimilarityBoost,
   reasonSuffix: string,
   useOriginalTitles: boolean,
@@ -161,16 +152,15 @@ function scoreCandidates(
     const reasons: string[] = [];
 
     for (const tg of title.genres) {
-      const w = genreWeight.get(tg.genreId) ?? 0;
+      const w = prefs.genre.get(tg.genreId) ?? 0;
       if (w !== 0) {
-        score += w * WEIGHTS.genre;
+        score += w;
         if (w > 0) reasons.push(`Les gusta ${tg.genre.name}${reasonSuffix}`);
       }
     }
 
     if (title.originCountry) {
-      const w = countryWeight.get(title.originCountry) ?? 0;
-      score += w * WEIGHTS.country;
+      score += prefs.country.get(title.originCountry) ?? 0;
     }
 
     const typeW = typeWeight.get(title.type) ?? 0;
@@ -181,58 +171,50 @@ function scoreCandidates(
 
     const audienceTier = classifyAudienceTier(title);
     if (audienceTier) {
-      const w = audienceWeight.get(audienceTier) ?? 0;
-      if (w !== 0) {
-        score += w * WEIGHTS.audience;
-        if (w > 0) {
-          const label = audienceTier === "MAINSTREAM" ? "masivas" : "independientes";
-          reasons.push(`Les gustan las producciones ${label}${reasonSuffix}`);
-        }
+      const w = prefs.audience.get(audienceTier) ?? 0;
+      if (w > 0) {
+        score += w;
+        const label = audienceTier === "MAINSTREAM" ? "masivas" : "independientes";
+        reasons.push(`Les gustan las producciones ${label}${reasonSuffix}`);
       }
     }
 
     const budgetTier = classifyBudgetTier(title);
     if (budgetTier) {
-      const w = budgetWeight.get(budgetTier) ?? 0;
-      if (w !== 0) {
-        score += w * WEIGHTS.budget;
-        if (w > 0) {
-          const label = budgetTier === "MEGA" ? "megaproducciones" : "producciones de bajo presupuesto";
-          reasons.push(`Les gustan las ${label}${reasonSuffix}`);
-        }
+      const w = prefs.budget.get(budgetTier) ?? 0;
+      if (w > 0) {
+        score += w;
+        const label = budgetTier === "MEGA" ? "megaproducciones" : "producciones de bajo presupuesto";
+        reasons.push(`Les gustan las ${label}${reasonSuffix}`);
       }
     }
 
     const runtimeBucket = classifyRuntimeBucket(title);
     if (runtimeBucket) {
-      const w = runtimeWeight.get(runtimeBucket) ?? 0;
-      if (w !== 0) {
-        score += w * WEIGHTS.runtime;
-        if (w > 0) {
-          const label = runtimeBucket === "SHORT" ? "cortas" : runtimeBucket === "LONG" ? "largas" : "de duración media";
-          reasons.push(`Les gustan las duraciones ${label}${reasonSuffix}`);
-        }
+      const w = prefs.runtime.get(runtimeBucket) ?? 0;
+      if (w > 0) {
+        score += w;
+        const label = runtimeBucket === "SHORT" ? "cortas" : runtimeBucket === "LONG" ? "largas" : "de duración media";
+        reasons.push(`Les gustan las duraciones ${label}${reasonSuffix}`);
       }
     }
 
+    score += prefs.popularity.get(classifyPopularityRange(title)) ?? 0;
+
     for (const c of title.cast) {
-      const s = personScore.get(c.personId);
-      if (s !== undefined && s !== 0) {
-        score += s * WEIGHTS.cast;
+      const s = prefs.person.get(c.personId);
+      if (s) {
+        score += s;
         if (s > 0) reasons.push(`Actúa ${c.person.name}, que les gusta${reasonSuffix}`);
       }
     }
 
     for (const c of title.crew) {
-      const s = personScore.get(c.personId);
-      if (s !== undefined && s !== 0) {
-        score += s * WEIGHTS.director;
+      const s = prefs.person.get(c.personId);
+      if (s) {
+        score += s;
         if (s > 0) reasons.push(`Dirige ${c.person.name}, que les gusta${reasonSuffix}`);
       }
-    }
-
-    if (title.voteAverage) {
-      score += (title.voteAverage / 10) * WEIGHTS.popularity;
     }
 
     const simKey = `${title.tmdbId}:${title.type}`;
@@ -287,35 +269,16 @@ export async function getRecommendations(
   const limit = opts.limit ?? 24;
   const useOriginalTitles = opts.useOriginalTitles ?? false;
 
-  const [genrePrefs, countryPrefs, typePrefs, audiencePrefs, budgetPrefs, runtimePrefs, personRatings, titleRatings, derivedPersonTiers] =
-    await Promise.all([
-      prisma.userGenrePreference.findMany({ where: { userId } }),
-      prisma.userCountryPreference.findMany({ where: { userId } }),
-      prisma.userTypePreference.findMany({ where: { userId } }),
-      prisma.userAudiencePreference.findMany({ where: { userId } }),
-      prisma.userBudgetPreference.findMany({ where: { userId } }),
-      prisma.userRuntimePreference.findMany({ where: { userId } }),
-      prisma.userPersonRating.findMany({ where: { userId } }),
-      prisma.userTitleRating.findMany({
-        where: { userId, seen: true, score: { not: null } },
-        select: { titleId: true, score: true },
-      }),
-      computeDerivedPersonTiers(userId),
-    ]);
+  const [typePrefs, titleRatings, prefs] = await Promise.all([
+    prisma.userTypePreference.findMany({ where: { userId } }),
+    prisma.userTitleRating.findMany({
+      where: { userId, seen: true, score: { not: null } },
+      select: { titleId: true, score: true },
+    }),
+    computeMergedPreferences(userId),
+  ]);
 
-  const genreWeight = new Map(genrePrefs.map((g) => [g.genreId, g.weight]));
-  const countryWeight = new Map(countryPrefs.map((c) => [c.countryCode, c.weight]));
   const typeWeight = new Map(typePrefs.map((t) => [t.type, t.weight]));
-  const audienceWeight = new Map(audiencePrefs.map((a) => [a.tier, a.weight]));
-  const budgetWeight = new Map(budgetPrefs.map((b) => [b.tier, b.weight]));
-  const runtimeWeight = new Map(runtimePrefs.map((r) => [r.bucket, r.weight]));
-  const manualPersonScore = new Map(personRatings.map((p) => [p.personId, p.score]));
-  const personScore = new Map(
-    [...new Set([...manualPersonScore.keys(), ...derivedPersonTiers.keys()])].map((id) => [
-      id,
-      effectivePersonScore(id, manualPersonScore, derivedPersonTiers),
-    ]),
-  );
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
     useOriginalTitles,
@@ -332,13 +295,8 @@ export async function getRecommendations(
 
   const results = scoreCandidates(
     candidates,
-    genreWeight,
-    countryWeight,
+    prefs,
     typeWeight,
-    audienceWeight,
-    budgetWeight,
-    runtimeWeight,
-    personScore,
     similarity,
     "",
     useOriginalTitles,
@@ -367,26 +325,16 @@ export async function getGroupRecommendations(
   const memberIds = members.map((m) => m.userId);
   if (memberIds.length === 0) return [];
 
-  const [genrePrefs, countryPrefs, typePrefs, audiencePrefs, budgetPrefs, runtimePrefs, titleRatings, personScore] = await Promise.all([
-    prisma.userGenrePreference.findMany({ where: { userId: { in: memberIds } } }),
-    prisma.userCountryPreference.findMany({ where: { userId: { in: memberIds } } }),
+  const [typePrefs, titleRatings, prefs] = await Promise.all([
     prisma.userTypePreference.findMany({ where: { userId: { in: memberIds } } }),
-    prisma.userAudiencePreference.findMany({ where: { userId: { in: memberIds } } }),
-    prisma.userBudgetPreference.findMany({ where: { userId: { in: memberIds } } }),
-    prisma.userRuntimePreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userTitleRating.findMany({
       where: { userId: { in: memberIds }, seen: true, score: { not: null } },
       select: { titleId: true, score: true },
     }),
-    computeGroupPersonScores(memberIds),
+    computeGroupMergedPreferences(memberIds),
   ]);
 
-  const genreWeight = sumBy(genrePrefs, (g) => g.genreId, (g) => g.weight);
-  const countryWeight = sumBy(countryPrefs, (c) => c.countryCode, (c) => c.weight);
   const typeWeight = sumBy(typePrefs, (t) => t.type, (t) => t.weight);
-  const audienceWeight = sumBy(audiencePrefs, (a) => a.tier, (a) => a.weight);
-  const budgetWeight = sumBy(budgetPrefs, (b) => b.tier, (b) => b.weight);
-  const runtimeWeight = sumBy(runtimePrefs, (r) => r.bucket, (r) => r.weight);
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
     useOriginalTitles,
@@ -403,13 +351,8 @@ export async function getGroupRecommendations(
 
   const results = scoreCandidates(
     candidates,
-    genreWeight,
-    countryWeight,
+    prefs,
     typeWeight,
-    audienceWeight,
-    budgetWeight,
-    runtimeWeight,
-    personScore,
     similarity,
     " del grupo",
     useOriginalTitles,

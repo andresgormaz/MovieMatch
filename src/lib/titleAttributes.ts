@@ -58,3 +58,18 @@ export function classifyRuntimeBucket(t: AttributeInput): RuntimeBucket | null {
   if (t.runtime > LONG_RUNTIME_MIN) return "LONG";
   return "MEDIUM";
 }
+
+// Raw TMDB vote-count tiers for the "popularidad general" preference --
+// deliberately separate from (much lower than) classifyAudienceTier's
+// thresholds: this is its own signal, not a restatement of mainstream/indie.
+// Always classifies (never null) -- every title falls in exactly one range.
+export type PopularityRange = "LOW" | "MID" | "HIGH";
+const POPULARITY_LOW_MAX = 100;
+const POPULARITY_MID_MAX = 900;
+
+export function classifyPopularityRange(t: { voteCount: number | null }): PopularityRange {
+  const votes = t.voteCount ?? 0;
+  if (votes <= POPULARITY_LOW_MAX) return "LOW";
+  if (votes <= POPULARITY_MID_MAX) return "MID";
+  return "HIGH";
+}

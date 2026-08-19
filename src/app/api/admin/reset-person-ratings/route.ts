@@ -5,8 +5,8 @@ import { prisma } from "@/lib/prisma";
 // bumped from a single onboarding favorite or "vs" win, a behavior removed
 // alongside this endpoint) and any manual ones, since there's no way to tell
 // them apart in the old data. Going forward, a positive actor/director
-// preference is derived from several corroborating 4-5-star ratings instead
-// (see personPreference.ts); manual overrides start clean from here.
+// preference is derived from accumulated "vs" wins and 4-5-star ratings
+// instead (see preferenceCounts.ts); manual overrides start clean from here.
 //
 // Visit this once, right after deploying that change -- protected by
 // SEED_SECRET plus a separate confirm param, same pattern as
