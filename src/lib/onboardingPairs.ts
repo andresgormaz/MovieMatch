@@ -168,14 +168,12 @@ export async function recordNotSeen(userId: string, titleId: string) {
   });
 }
 
-// "No vi ninguna de las dos": legacy bulk skip, kept for old onboarding
-// progress rows that already used it -- the current UI swaps one side at a
-// time via recordNotSeen instead, but this stays so old data keeps meaning
-// what it always meant (both excluded, no preference bump).
-export async function recordPairSkip(userId: string, titleAId: string, titleBId: string) {
-  await prisma.onboardingChoice.create({
-    data: { userId, titleAId, titleBId, winnerId: titleAId, skipped: true },
-  });
+// "No vi ninguna de las dos": both sides get the same treatment as a single
+// recordNotSeen call -- neither comes back, no preference bump, and the
+// caller fetches a wholly fresh pair next (no fixedTitleId to keep either
+// side in place).
+export async function recordBothNotSeen(userId: string, titleAId: string, titleBId: string) {
+  await Promise.all([recordNotSeen(userId, titleAId), recordNotSeen(userId, titleBId)]);
 }
 
 // A title with no current streaming availability is either brand new (still
@@ -297,6 +295,55 @@ async function pickTypeGapPair(
   return { movie, series };
 }
 
+// Runs the genre-gap loop + popularity fallback to fill `slotsNeeded` spots.
+// Split out so pickNextPair can retry it with a wider (non-streaming-scoped)
+// pool once the narrower one runs dry -- see the comment where it's called.
+async function fillSlots(
+  userId: string,
+  excludeIds: string[],
+  weightByGenre: Map<number, number>,
+  slotsNeeded: number,
+  userCountry: string | null,
+): Promise<TitleWithCredits[]> {
+  const genreCounts = await prisma.titleGenre.groupBy({
+    by: ["genreId"],
+    _count: { titleId: true },
+    where: { title: { voteCount: { gte: POPULAR_VOTE_COUNT }, ...streamingWhere(userCountry) } },
+  });
+  const eligibleGenres = genreCounts
+    .filter((g) => g._count.titleId >= 2)
+    .sort((a, b) => {
+      const wa = weightByGenre.get(a.genreId) ?? 0;
+      const wb = weightByGenre.get(b.genreId) ?? 0;
+      if (wa !== wb) return wa - wb;
+      return b._count.titleId - a._count.titleId;
+    });
+
+  const picked: TitleWithCredits[] = [];
+  for (const g of eligibleGenres) {
+    if (picked.length >= slotsNeeded) break;
+    const candidate = await pickCandidateForGenre(
+      userId,
+      g.genreId,
+      [...excludeIds, ...picked.map((p) => p.id)],
+      userCountry,
+    );
+    if (candidate) picked.push(candidate);
+  }
+
+  if (picked.length < slotsNeeded) {
+    const fallback = await pickPopularFallback(
+      userId,
+      [...excludeIds, ...picked.map((p) => p.id)],
+      slotsNeeded - picked.length,
+      userCountry,
+    );
+    picked.push(...fallback);
+  }
+
+  return picked;
+}
+
 // The adaptive step: picks the next pair to compare. Three gaps are checked,
 // in order -- format (movie vs series), then genre coverage (favoring genres
 // with the lowest UserGenrePreference weight, i.e. least known), with the
@@ -332,8 +379,12 @@ export async function pickNextPair(
 
   // Format gap: only as a fresh pair, not while mid-swap (a swap should stay
   // focused on replacing the one card, not change what's being compared).
+  // Retries without the streaming filter if the country-scoped pool has
+  // nothing left in one of the two formats -- same reasoning as below.
   if (!fixedTitleId && typeCoverage < TYPE_COVERAGE_TARGET) {
-    const typeGap = await pickTypeGapPair(excludeIds, effectiveCountry);
+    const typeGap =
+      (await pickTypeGapPair(excludeIds, effectiveCountry)) ??
+      (effectiveCountry ? await pickTypeGapPair(excludeIds, null) : null);
     if (typeGap) {
       return {
         titleA: toPairTitleWithPoster(typeGap.movie),
@@ -343,48 +394,25 @@ export async function pickNextPair(
   }
 
   const weightByGenre = new Map(genrePrefs.map((g) => [g.genreId, g.weight]));
-
-  // Only consider genres that actually have enough popular titles to draw
-  // from -- ranked least-covered first, most-popular-in-catalog as tiebreak
-  // so an obscure genre with a single title doesn't jump the queue.
-  const genreCounts = await prisma.titleGenre.groupBy({
-    by: ["genreId"],
-    _count: { titleId: true },
-    where: { title: { voteCount: { gte: POPULAR_VOTE_COUNT }, ...streamingWhere(effectiveCountry) } },
-  });
-  const eligibleGenres = genreCounts
-    .filter((g) => g._count.titleId >= 2)
-    .sort((a, b) => {
-      const wa = weightByGenre.get(a.genreId) ?? 0;
-      const wb = weightByGenre.get(b.genreId) ?? 0;
-      if (wa !== wb) return wa - wb;
-      return b._count.titleId - a._count.titleId;
-    });
-
   const slotsNeeded = fixedTitleId ? 1 : 2;
-  const picked: TitleWithCredits[] = [];
-  for (const g of eligibleGenres) {
-    if (picked.length >= slotsNeeded) break;
-    const candidate = await pickCandidateForGenre(
-      userId,
-      g.genreId,
-      [...excludeIds, ...picked.map((p) => p.id)],
-      effectiveCountry,
-    );
-    if (candidate) picked.push(candidate);
-  }
 
-  // Fallback for a thin catalog, or when the remaining eligible genres ran
-  // out of popular unshown titles: grab the most popular titles left,
-  // genre coverage or not.
-  if (picked.length < slotsNeeded) {
-    const fallback = await pickPopularFallback(
+  let picked = await fillSlots(userId, excludeIds, weightByGenre, slotsNeeded, effectiveCountry);
+
+  // The streaming-scoped pool shrinks by up to 2 titles every round (both
+  // sides of a completed comparison are excluded from then on), so it can
+  // run dry long before the real catalog does. Once it does, widen to the
+  // whole catalog rather than declaring "no more comparisons" -- being
+  // streamable was a preference among plausibly-seen titles, not a hard
+  // requirement, and there should be plenty of catalog left to draw from.
+  if (picked.length < slotsNeeded && effectiveCountry) {
+    const more = await fillSlots(
       userId,
       [...excludeIds, ...picked.map((p) => p.id)],
+      weightByGenre,
       slotsNeeded - picked.length,
-      effectiveCountry,
+      null,
     );
-    picked.push(...fallback);
+    picked = [...picked, ...more];
   }
 
   if (fixedTitleId) {

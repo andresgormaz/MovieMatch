@@ -13,10 +13,10 @@ interface PairTitle {
 
 // The comparison mechanic itself -- shared by the first-time onboarding
 // flow (fixed round target) and the ongoing /vs page (no target, just keeps
-// going). Each option has its own "No la he visto" escape hatch: picking a
-// winner only makes sense once both sides are actually seen, so swapping
-// out the one you haven't watched keeps the comparison fair without
-// abandoning the round entirely.
+// going). Picking a winner only makes sense once both sides are actually
+// seen, so each option has its own "No la he visto" to swap just that one
+// out, plus a bulk "No vi ninguna de las dos" when neither rings a bell --
+// both keep the round from ending on an unfair guess.
 export function PairCompare({
   unlimited,
   roundsTarget,
@@ -104,6 +104,26 @@ export function PairCompare({
     }
   }
 
+  async function notSeenBoth() {
+    if (!pair || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/onboarding/pair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleAId: pair.titleA.id, titleBId: pair.titleB.id, bothNotSeen: true }),
+      });
+      if (!res.ok) throw new Error("failed");
+      setPair(undefined);
+      await loadPair();
+    } catch {
+      setError("No se pudo guardar. Inténtalo de nuevo.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (pair === undefined) {
     return <p className="text-center text-sm text-muted">Cargando…</p>;
   }
@@ -141,6 +161,14 @@ export function PairCompare({
           onNotSeen={() => notSeen(pair.titleB.id, pair.titleA.id)}
         />
       </div>
+
+      <button
+        onClick={notSeenBoth}
+        disabled={submitting}
+        className="mx-auto text-sm text-muted transition-colors hover:text-white disabled:opacity-50"
+      >
+        No vi ninguna de las dos
+      </button>
 
       {error && <p className="text-center text-xs text-red-400">{error}</p>}
     </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { pickNextPair, recordPairWinner, recordNotSeen, ONBOARDING_ROUNDS } from "@/lib/onboardingPairs";
+import { pickNextPair, recordPairWinner, recordNotSeen, recordBothNotSeen, ONBOARDING_ROUNDS } from "@/lib/onboardingPairs";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -36,9 +36,10 @@ const bodySchema = z.object({
   titleBId: z.string().min(1),
   winnerId: z.string().min(1).optional(),
   // The id of whichever side got "No la he visto" -- mutually exclusive
-  // with winnerId. Neither present is invalid now (there's always a
-  // per-side swap instead of a bulk "skip both").
+  // with winnerId and bothNotSeen.
   notSeenId: z.string().min(1).optional(),
+  // "No vi ninguna de las dos" -- mutually exclusive with the above two.
+  bothNotSeen: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -50,7 +51,12 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   }
-  const { titleAId, titleBId, winnerId, notSeenId } = parsed.data;
+  const { titleAId, titleBId, winnerId, notSeenId, bothNotSeen } = parsed.data;
+
+  if (bothNotSeen) {
+    await recordBothNotSeen(session.user.id, titleAId, titleBId);
+    return NextResponse.json({ ok: true });
+  }
 
   if (notSeenId !== undefined) {
     if (notSeenId !== titleAId && notSeenId !== titleBId) {
