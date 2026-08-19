@@ -19,11 +19,16 @@ export function RateSeenList({ initialItems }: { initialItems: SeenUnratedItem[]
   const [items, setItems] = useState(initialItems);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
+  // Which score was just tapped, kept lit in gold for a beat before the
+  // card disappears -- confirms the right number of stars registered
+  // instead of the card vanishing the instant you tap.
+  const [confirmedScore, setConfirmedScore] = useState<{ id: string; score: number } | null>(null);
 
   async function rate(titleId: string, score: number) {
     if (submittingId) return;
     setSubmittingId(titleId);
     setErrorId(null);
+    setConfirmedScore({ id: titleId, score });
     try {
       const res = await fetch("/api/titles/rate", {
         method: "POST",
@@ -31,9 +36,11 @@ export function RateSeenList({ initialItems }: { initialItems: SeenUnratedItem[]
         body: JSON.stringify({ titleId, seen: true, score }),
       });
       if (!res.ok) throw new Error("rate failed");
+      await new Promise((resolve) => setTimeout(resolve, 550));
       setItems((prev) => prev.filter((i) => i.id !== titleId));
     } catch {
       setErrorId(titleId);
+      setConfirmedScore(null);
     } finally {
       setSubmittingId(null);
     }
@@ -64,7 +71,12 @@ export function RateSeenList({ initialItems }: { initialItems: SeenUnratedItem[]
             </p>
             {errorId === item.id && <p className="mt-1 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
             <div className="mt-2">
-              <StarRating size="sm" disabled={submittingId === item.id} onRate={(s) => rate(item.id, s)} />
+              <StarRating
+                size="sm"
+                disabled={submittingId === item.id}
+                selected={confirmedScore?.id === item.id ? confirmedScore.score : undefined}
+                onRate={(s) => rate(item.id, s)}
+              />
             </div>
           </div>
         </div>
