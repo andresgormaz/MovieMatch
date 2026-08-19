@@ -33,11 +33,16 @@ export function RecommendationCard({
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
+  // Which score was just tapped, kept lit in gold for a beat before the
+  // card disappears -- same confirmation as "Calificar lo que ya viste",
+  // so tapping N stars visibly confirms N stars registered.
+  const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
 
   async function rate(seen: boolean, score: number | null) {
     if (submitting) return;
     setSubmitting(true);
     setError(false);
+    if (score !== null) setConfirmedScore(score);
     try {
       const res = await fetch("/api/titles/rate", {
         method: "POST",
@@ -45,10 +50,12 @@ export function RecommendationCard({
         body: JSON.stringify({ titleId: rec.id, seen, score }),
       });
       if (!res.ok) throw new Error("rate failed");
+      if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
       onRated(rec.id);
     } catch {
       setError(true);
       setSubmitting(false);
+      setConfirmedScore(null);
     }
   }
 
@@ -143,7 +150,7 @@ export function RecommendationCard({
         </div>
       ) : (
         <div className="flex justify-center border-t border-border p-3">
-          <StarRating disabled={submitting} onRate={(s) => rate(true, s)} />
+          <StarRating disabled={submitting} selected={confirmedScore ?? undefined} onRate={(s) => rate(true, s)} />
         </div>
       )}
     </div>
