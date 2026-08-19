@@ -4,6 +4,12 @@ import { auth } from "@/lib/auth";
 import { pickNextPair, recordPairWinner, recordNotSeen, recordBothNotSeen, ONBOARDING_ROUNDS } from "@/lib/onboardingPairs";
 import { prisma } from "@/lib/prisma";
 
+// Candidate selection runs several sequential per-genre queries (bounded,
+// but still real DB round-trips) plus a possible second pass with a widened
+// pool -- give it real headroom above the platform default instead of
+// risking a mid-request timeout.
+export const maxDuration = 30;
+
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });

@@ -37,17 +37,25 @@ export function PairCompare({
 
   async function loadPair(keepId?: string) {
     setError(null);
-    const params = new URLSearchParams();
-    if (unlimited) params.set("unlimited", "1");
-    if (keepId) params.set("keep", keepId);
-    const res = await fetch(`/api/onboarding/pair?${params.toString()}`);
-    const data = await res.json();
-    if (data.done || !data.pair) {
-      setPair(null);
-      onExhausted();
-      return;
+    setPair(undefined);
+    try {
+      const params = new URLSearchParams();
+      if (unlimited) params.set("unlimited", "1");
+      if (keepId) params.set("keep", keepId);
+      const res = await fetch(`/api/onboarding/pair?${params.toString()}`);
+      if (!res.ok) throw new Error("failed");
+      const data = await res.json();
+      if (data.done || !data.pair) {
+        setPair(null);
+        onExhausted();
+        return;
+      }
+      setPair(data.pair);
+    } catch {
+      // Leave pair as undefined -- the render branch below shows a retry
+      // button instead of getting stuck on "Cargando..." forever.
+      setError("No se pudo cargar la siguiente comparación. Inténtalo de nuevo.");
     }
-    setPair(data.pair);
   }
 
   useEffect(() => {
@@ -75,7 +83,6 @@ export function PairCompare({
         return;
       }
       setRound(nextRound);
-      setPair(undefined);
       await loadPair();
     } catch {
       setError("No se pudo guardar tu elección. Inténtalo de nuevo.");
@@ -95,7 +102,6 @@ export function PairCompare({
         body: JSON.stringify({ titleAId: pair.titleA.id, titleBId: pair.titleB.id, notSeenId: titleId }),
       });
       if (!res.ok) throw new Error("failed");
-      setPair(undefined);
       await loadPair(keepId);
     } catch {
       setError("No se pudo guardar. Inténtalo de nuevo.");
@@ -115,7 +121,6 @@ export function PairCompare({
         body: JSON.stringify({ titleAId: pair.titleA.id, titleBId: pair.titleB.id, bothNotSeen: true }),
       });
       if (!res.ok) throw new Error("failed");
-      setPair(undefined);
       await loadPair();
     } catch {
       setError("No se pudo guardar. Inténtalo de nuevo.");
@@ -125,6 +130,19 @@ export function PairCompare({
   }
 
   if (pair === undefined) {
+    if (error) {
+      return (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={() => loadPair()}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
+          >
+            Reintentar
+          </button>
+        </div>
+      );
+    }
     return <p className="text-center text-sm text-muted">Cargando…</p>;
   }
   if (pair === null) {

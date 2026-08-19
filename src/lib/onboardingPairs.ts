@@ -295,6 +295,14 @@ async function pickTypeGapPair(
   return { movie, series };
 }
 
+// Upper bound on sequential per-genre queries inside fillSlots. Without this,
+// a thin/exhausted candidate pool makes the loop walk every eligible genre
+// (potentially 15-19 of them) one query at a time -- slow enough in
+// production to risk the serverless function timing out and leaving the
+// client stuck. Genres beyond this cap just fall through to the cheaper,
+// single-query pickPopularFallback instead.
+const MAX_GENRE_ATTEMPTS = 6;
+
 // Runs the genre-gap loop + popularity fallback to fill `slotsNeeded` spots.
 // Split out so pickNextPair can retry it with a wider (non-streaming-scoped)
 // pool once the narrower one runs dry -- see the comment where it's called.
@@ -317,7 +325,8 @@ async function fillSlots(
       const wb = weightByGenre.get(b.genreId) ?? 0;
       if (wa !== wb) return wa - wb;
       return b._count.titleId - a._count.titleId;
-    });
+    })
+    .slice(0, MAX_GENRE_ATTEMPTS);
 
   const picked: TitleWithCredits[] = [];
   for (const g of eligibleGenres) {
