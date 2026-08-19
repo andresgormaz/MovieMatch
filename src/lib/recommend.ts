@@ -126,13 +126,27 @@ function scoreTitle(
   const reasons: string[] = [];
   const breakdown: ScoreBreakdownEntry[] = [];
 
-  for (const tg of title.genres) {
-    const w = prefs.genre.get(tg.genreId) ?? 0;
-    if (w !== 0) {
-      score += w;
-      breakdown.push({ label: `Género: ${tg.genre.name}`, points: w });
-      if (w > 0) reasons.push(`Les gusta ${tg.genre.name}${reasonSuffix}`);
+  // Summing every genre a title carries used to quietly favor anything
+  // broadly tagged (a title with 6 genres racking up 6x the genre score of
+  // one with 1) over a tightly-genred title the user might like just as
+  // much. Only the title's 2 best-scoring genres count now, averaged --
+  // a title with just 1 genre counts at that genre's own value, unchanged.
+  const genreWeights = title.genres
+    .map((tg) => ({ name: tg.genre.name, w: prefs.genre.get(tg.genreId) ?? 0 }))
+    .sort((a, b) => b.w - a.w);
+  const topGenres = genreWeights.slice(0, 2);
+  if (topGenres.length > 0) {
+    const genreScore = topGenres.reduce((sum, g) => sum + g.w, 0) / topGenres.length;
+    if (genreScore !== 0) {
+      score += genreScore;
+      const names = topGenres.map((g) => g.name).join(", ");
+      breakdown.push({
+        label: topGenres.length > 1 ? `Género (promedio de los 2 mejores): ${names}` : `Género: ${names}`,
+        points: genreScore,
+      });
     }
+    const positiveNames = topGenres.filter((g) => g.w > 0).map((g) => g.name);
+    if (positiveNames.length > 0) reasons.push(`Les gusta ${positiveNames.join(" y ")}${reasonSuffix}`);
   }
 
   if (title.originCountry) {
