@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating, StarDisplay } from "@/components/StarRating";
+import { formatScore, formatSignedScore } from "@/lib/format";
 
 interface CastMember {
   id: string;
@@ -48,6 +49,8 @@ interface TitleDetail {
   similar: SimilarTitle[];
   myRating: { seen: boolean; score: number | null } | null;
   inWishlist: boolean;
+  score: number;
+  scoreBreakdown: { label: string; points: number }[];
 }
 
 function formatBudget(n: number) {
@@ -264,6 +267,32 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
           {actionError && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
         </div>
       </div>
+
+      {/* Temporary (per user request 2026-08-19): raw score + itemized
+          breakdown, so the direct-sum formula can be sanity-checked title by
+          title. Remove this section (and scoreBreakdown from the API route)
+          once the user says they're done checking it. */}
+      {title.scoreBreakdown.length > 0 && (
+        <div className="mx-auto w-full max-w-4xl px-4 pb-10">
+          <h2 className="mb-3 text-lg font-bold text-white">
+            Cómo se calculó tu puntaje{" "}
+            <span className="font-normal text-muted">(temporal, {formatScore(title.score)} en total)</span>
+          </h2>
+          <div className="overflow-hidden rounded-xl border border-border bg-surface">
+            {title.scoreBreakdown.map((entry, i) => (
+              <div
+                key={`${entry.label}-${i}`}
+                className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 text-sm last:border-b-0"
+              >
+                <p className="min-w-0 truncate text-neutral-200">{entry.label}</p>
+                <p className={`flex-shrink-0 font-bold ${entry.points > 0 ? "text-accent-hover" : "text-red-400"}`}>
+                  {formatSignedScore(entry.points)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {title.cast.length > 0 && (
         <div className="mx-auto w-full max-w-4xl px-4 pb-10">

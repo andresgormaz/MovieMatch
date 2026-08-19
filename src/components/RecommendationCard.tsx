@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
+import { formatScore } from "@/lib/format";
 
 export interface Recommendation {
   id: string;
@@ -19,7 +20,7 @@ export interface Recommendation {
   voteCount: number | null;
   inTheaters: boolean;
   providers: ProviderBadge[];
-  matchPercent: number;
+  score: number;
   reasons: string[];
 }
 
@@ -89,7 +90,7 @@ export function RecommendationCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-bold text-green-400">
-              {rec.matchPercent}% match
+              Puntaje: {formatScore(rec.score)}
             </span>
             {rec.voteAverage != null && (
               <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs font-medium text-neutral-300">

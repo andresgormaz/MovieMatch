@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
+import { formatScore } from "@/lib/format";
 
 interface TodayPick {
   id: string;
@@ -13,7 +14,7 @@ interface TodayPick {
   backdropUrl: string | null;
   genres: string[];
   voteAverage: number | null;
-  matchPercent: number;
+  score: number;
   reasons: string[];
   providers: ProviderBadge[];
 }
@@ -129,7 +130,7 @@ export function HomeHero() {
 
       <div className="relative -mt-14 flex flex-col gap-3 px-5 pb-5 sm:-mt-16">
         <span className="w-fit rounded bg-green-500/15 px-2 py-0.5 text-xs font-bold text-green-400">
-          {pick.matchPercent}% match para ti
+          Puntaje: {formatScore(pick.score)}
         </span>
 
         <div>

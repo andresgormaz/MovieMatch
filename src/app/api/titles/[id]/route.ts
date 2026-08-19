@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl, tmdbBackdropUrl, tmdbProfileUrl, tmdbLogoUrl } from "@/lib/tmdb";
 import { countryName } from "@/lib/countries";
 import { displayTitleName } from "@/lib/titleDisplay";
+import { getTitleScoreBreakdown } from "@/lib/recommend";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -19,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const userCountry = user?.country ?? null;
   const useOriginalTitles = user?.originalTitles ?? false;
 
-  const [title, myRating, wishlistEntry] = await Promise.all([
+  const [title, myRating, wishlistEntry, scoreBreakdown] = await Promise.all([
     prisma.title.findUnique({
       where: { id },
       include: {
@@ -32,6 +33,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }),
     prisma.userTitleRating.findUnique({ where: { userId_titleId: { userId, titleId: id } } }),
     prisma.wishlist.findUnique({ where: { userId_titleId: { userId, titleId: id } } }),
+    // Temporary (see recommend.ts) -- itemized "how was this score built"
+    // detail for this title's page. Remove alongside getTitleScoreBreakdown
+    // once the user's done sanity-checking the direct-sum formula.
+    getTitleScoreBreakdown(userId, id, { userCountry, useOriginalTitles }),
   ]);
 
   if (!title) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
@@ -90,5 +95,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     })),
     myRating: myRating ? { seen: myRating.seen, score: myRating.score } : null,
     inWishlist: Boolean(wishlistEntry),
+    score: scoreBreakdown?.score ?? 0,
+    scoreBreakdown: scoreBreakdown?.breakdown ?? [],
   });
 }
