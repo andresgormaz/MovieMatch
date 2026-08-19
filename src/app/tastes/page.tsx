@@ -2,94 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
-import { WeightSelector } from "@/components/onboarding/WeightSelector";
 
-interface Genre {
-  id: number;
-  name: string;
-}
-interface Country {
-  code: string;
-  name: string;
-}
-interface PersonRating {
-  personId: string;
-  score: number;
-  isInferred: boolean;
-  name: string;
-  photoUrl: string | null;
-  department: string | null;
-}
-interface SummaryEntry {
-  category: string;
+interface SummaryItem {
+  key: string;
   label: string;
   score: number;
 }
-
-const PERSON_LEVELS: { value: -1 | 0 | 1; label: string; aria: string }[] = [
-  { value: -1, label: "👎", aria: "No me gusta" },
-  { value: 0, label: "😐", aria: "Neutral" },
-  { value: 1, label: "👍", aria: "Me gusta" },
-];
+interface SummaryGroup {
+  category: string;
+  title: string;
+  items: SummaryItem[];
+}
 
 // Everything onboarding and "vs" have ever inferred about your taste --
-// genres, movies-vs-series, mainstream/indie, presupuesto, duración, actores
-// y directores -- in one place, editable by hand. Nothing here is a black
-// box: if the algorithm got something wrong, fix it directly instead of
-// trying to "outvote" it with more picks.
+// tipo, género, masivo/indie, presupuesto, duración, popularidad, país,
+// directores, actores -- grouped and ordered by score. Nothing here is a
+// black box: every number is exactly what's used to score your
+// recommendations right now, and +1/-1 nudges it directly instead of
+// jumping to some absolute position on a fixed scale.
 export default function TastesPage() {
-  const [genres, setGenres] = useState<Genre[]>([]);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [genreWeights, setGenreWeights] = useState<Record<number, number>>({});
-  const [countryWeights, setCountryWeights] = useState<Record<string, number>>({});
-  const [typeWeights, setTypeWeights] = useState<Record<"MOVIE" | "SERIES", number>>({ MOVIE: 0, SERIES: 0 });
-  const [audienceWeights, setAudienceWeights] = useState<Record<"MAINSTREAM" | "INDIE", number>>({
-    MAINSTREAM: 0,
-    INDIE: 0,
-  });
-  const [budgetWeights, setBudgetWeights] = useState<Record<"MEGA" | "SMALL", number>>({ MEGA: 0, SMALL: 0 });
-  const [runtimeWeights, setRuntimeWeights] = useState<Record<"SHORT" | "MEDIUM" | "LONG", number>>({
-    SHORT: 0,
-    MEDIUM: 0,
-    LONG: 0,
-  });
-  const [people, setPeople] = useState<PersonRating[]>([]);
-  const [summary, setSummary] = useState<SummaryEntry[]>([]);
+  const [groups, setGroups] = useState<SummaryGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/preferences");
     const data = await res.json();
-    setGenres(data.genres);
-    setCountries(data.countries);
-    setGenreWeights(
-      Object.fromEntries(data.genrePreferences.map((g: { genreId: number; weight: number }) => [g.genreId, g.weight])),
-    );
-    setCountryWeights(
-      Object.fromEntries(
-        data.countryPreferences.map((c: { countryCode: string; weight: number }) => [c.countryCode, c.weight]),
-      ),
-    );
-    setTypeWeights({
-      MOVIE: data.typePreferences.find((t: { type: string }) => t.type === "MOVIE")?.weight ?? 0,
-      SERIES: data.typePreferences.find((t: { type: string }) => t.type === "SERIES")?.weight ?? 0,
-    });
-    setAudienceWeights({
-      MAINSTREAM: data.audiencePreferences.find((a: { tier: string }) => a.tier === "MAINSTREAM")?.weight ?? 0,
-      INDIE: data.audiencePreferences.find((a: { tier: string }) => a.tier === "INDIE")?.weight ?? 0,
-    });
-    setBudgetWeights({
-      MEGA: data.budgetPreferences.find((b: { tier: string }) => b.tier === "MEGA")?.weight ?? 0,
-      SMALL: data.budgetPreferences.find((b: { tier: string }) => b.tier === "SMALL")?.weight ?? 0,
-    });
-    setRuntimeWeights({
-      SHORT: data.runtimePreferences.find((r: { bucket: string }) => r.bucket === "SHORT")?.weight ?? 0,
-      MEDIUM: data.runtimePreferences.find((r: { bucket: string }) => r.bucket === "MEDIUM")?.weight ?? 0,
-      LONG: data.runtimePreferences.find((r: { bucket: string }) => r.bucket === "LONG")?.weight ?? 0,
-    });
-    setPeople(data.personRatings);
-    setSummary(data.summary);
+    setGroups(data.groups);
     setLoading(false);
   }
 
@@ -98,69 +37,23 @@ export default function TastesPage() {
     load();
   }, []);
 
-  async function saveGenre(genreId: number, weight: number) {
-    setGenreWeights((prev) => ({ ...prev, [genreId]: weight }));
+  async function adjust(category: string, key: string, delta: 1 | -1) {
+    const pendingId = `${category}:${key}`;
+    if (pendingKey) return;
+    setPendingKey(pendingId);
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.category !== category
+          ? g
+          : { ...g, items: g.items.map((it) => (it.key === key ? { ...it, score: it.score + delta } : it)).sort((a, b) => b.score - a.score) },
+      ),
+    );
     await fetch("/api/preferences", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ genrePreferences: [{ genreId, weight }] }),
+      body: JSON.stringify({ category, key, delta }),
     });
-  }
-
-  async function saveCountry(countryCode: string, weight: number) {
-    setCountryWeights((prev) => ({ ...prev, [countryCode]: weight }));
-    await fetch("/api/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ countryPreferences: [{ countryCode, weight }] }),
-    });
-  }
-
-  async function saveType(type: "MOVIE" | "SERIES", weight: number) {
-    setTypeWeights((prev) => ({ ...prev, [type]: weight }));
-    await fetch("/api/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ typePreferences: [{ type, weight }] }),
-    });
-  }
-
-  async function saveAudience(tier: "MAINSTREAM" | "INDIE", weight: number) {
-    setAudienceWeights((prev) => ({ ...prev, [tier]: weight }));
-    await fetch("/api/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audiencePreferences: [{ tier, weight }] }),
-    });
-  }
-
-  async function saveBudget(tier: "MEGA" | "SMALL", weight: number) {
-    setBudgetWeights((prev) => ({ ...prev, [tier]: weight }));
-    await fetch("/api/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ budgetPreferences: [{ tier, weight }] }),
-    });
-  }
-
-  async function saveRuntime(bucket: "SHORT" | "MEDIUM" | "LONG", weight: number) {
-    setRuntimeWeights((prev) => ({ ...prev, [bucket]: weight }));
-    await fetch("/api/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runtimePreferences: [{ bucket, weight }] }),
-    });
-  }
-
-  async function savePerson(personId: string, score: -1 | 0 | 1) {
-    setSavingId(personId);
-    setPeople((prev) => prev.map((p) => (p.personId === personId ? { ...p, score, isInferred: false } : p)));
-    await fetch("/api/people/rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ personId, score }),
-    });
-    setSavingId(null);
+    setPendingKey(null);
   }
 
   if (loading) {
@@ -173,154 +66,62 @@ export default function TastesPage() {
       <div>
         <h1 className="text-2xl font-bold">Mis gustos</h1>
         <p className="mt-1 text-sm text-muted">
-          Todo lo que aprendimos de tus calificaciones y de &quot;vs&quot; -- puedes corregir cualquier cosa a mano.
+          Todo lo que aprendimos de tus calificaciones y de &quot;vs&quot;, agrupado y ordenado de mayor a menor. Usa
+          los botones para corregir cualquier cosa a mano -- el ajuste se suma al puntaje que ya tenías, no lo
+          reemplaza.
         </p>
       </div>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Resumen de puntajes</h2>
-        <p className="text-xs text-muted">
-          Cada preferencia con el puntaje que realmente se está usando ahora mismo para tus recomendaciones (lo que
-          escribiste a mano, o si no tocaste nada, lo que se infirió solo). Ordenado de mayor a menor.
-        </p>
-        {summary.length === 0 ? (
-          <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
-            Todavía no hay suficientes &quot;vs&quot; o calificaciones para mostrar nada acá.
-          </p>
-        ) : (
-          <div className="max-h-96 overflow-y-auto rounded-xl border border-border bg-surface">
-            {summary.map((s, i) => (
-              <div
-                key={`${s.category}-${s.label}-${i}`}
-                className="flex items-center justify-between gap-3 border-b border-border px-4 py-2 last:border-b-0"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-white">{s.label}</p>
-                  <p className="text-xs text-muted">{s.category}</p>
-                </div>
-                <p className={`flex-shrink-0 text-sm font-bold ${s.score > 0 ? "text-accent-hover" : "text-red-400"}`}>
-                  {s.score > 0 ? "+" : ""}
-                  {s.score}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Películas o series</h2>
-        <WeightSelector label="Películas" value={typeWeights.MOVIE} onChange={(v) => saveType("MOVIE", v)} />
-        <WeightSelector label="Series" value={typeWeights.SERIES} onChange={(v) => saveType("SERIES", v)} />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Géneros</h2>
-        {genres.map((g) => (
-          <WeightSelector
-            key={g.id}
-            label={g.name}
-            value={genreWeights[g.id] ?? 0}
-            onChange={(v) => saveGenre(g.id, v)}
-          />
-        ))}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Nacionalidad de las películas/series</h2>
-        {countries.map((c) => (
-          <WeightSelector
-            key={c.code}
-            label={c.name}
-            value={countryWeights[c.code] ?? 0}
-            onChange={(v) => saveCountry(c.code, v)}
-          />
-        ))}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Masivo o independiente</h2>
-        <WeightSelector
-          label="Producciones masivas"
-          value={audienceWeights.MAINSTREAM}
-          onChange={(v) => saveAudience("MAINSTREAM", v)}
-        />
-        <WeightSelector
-          label="Producciones independientes"
-          value={audienceWeights.INDIE}
-          onChange={(v) => saveAudience("INDIE", v)}
-        />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Presupuesto (solo películas)</h2>
-        <WeightSelector label="Megaproducciones" value={budgetWeights.MEGA} onChange={(v) => saveBudget("MEGA", v)} />
-        <WeightSelector
-          label="Bajo presupuesto"
-          value={budgetWeights.SMALL}
-          onChange={(v) => saveBudget("SMALL", v)}
-        />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Duración</h2>
-        <WeightSelector label="Cortas" value={runtimeWeights.SHORT} onChange={(v) => saveRuntime("SHORT", v)} />
-        <WeightSelector label="Duración media" value={runtimeWeights.MEDIUM} onChange={(v) => saveRuntime("MEDIUM", v)} />
-        <WeightSelector label="Largas" value={runtimeWeights.LONG} onChange={(v) => saveRuntime("LONG", v)} />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-muted">Actores y directores</h2>
-        <p className="text-xs text-muted">
-          Se marcan solos cuando calificas con 4-5★ varios títulos que comparten a la misma persona -- puedes
-          corregir cualquiera a mano.
-        </p>
-        {people.length === 0 && (
-          <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
-            Todavía no tenemos señal sobre actores o directores. Va a ir sumando a medida que califiques títulos con
-            4-5★.
-          </p>
-        )}
-        {people.map((p) => (
-          <div
-            key={p.personId}
-            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-2.5"
-          >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full bg-black/40">
-                {p.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.photoUrl} alt={p.name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-lg">🎭</div>
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm text-white">{p.name}</p>
-                <p className="text-xs text-muted">
-                  {p.department}
-                  {p.isInferred && (p.department ? " · inferido" : "Inferido automáticamente")}
-                </p>
-              </div>
+      {groups.map((g) => (
+        <section key={g.category} className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-muted">{g.title}</h2>
+          {g.items.length === 0 ? (
+            <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
+              Todavía no hay señal acá.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              {g.items.map((item) => {
+                const pendingId = `${g.category}:${item.key}`;
+                const isPending = pendingKey === pendingId;
+                return (
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 last:border-b-0"
+                  >
+                    <p className="min-w-0 truncate text-sm text-white">{item.label}</p>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      <p className={`w-8 text-right text-sm font-bold ${item.score > 0 ? "text-accent-hover" : item.score < 0 ? "text-red-400" : "text-muted"}`}>
+                        {item.score > 0 ? "+" : ""}
+                        {item.score}
+                      </p>
+                      <button
+                        disabled={pendingKey !== null}
+                        onClick={() => adjust(g.category, item.key, -1)}
+                        aria-label={`Bajar ${item.label}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-sm text-muted transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+                      >
+                        −
+                      </button>
+                      <button
+                        disabled={pendingKey !== null}
+                        onClick={() => adjust(g.category, item.key, 1)}
+                        aria-label={`Subir ${item.label}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-sm text-muted transition-colors hover:border-accent hover:text-accent-hover disabled:opacity-40"
+                      >
+                        +
+                      </button>
+                      {isPending && (
+                        <div className="h-3 w-3 flex-shrink-0 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flex flex-shrink-0 gap-1">
-              {PERSON_LEVELS.map((l) => (
-                <button
-                  key={l.value}
-                  disabled={savingId === p.personId}
-                  onClick={() => savePerson(p.personId, l.value)}
-                  aria-label={l.aria}
-                  className={`rounded-full px-2 py-1 text-base transition-colors disabled:opacity-50 ${
-                    p.score === l.value || (l.value === 1 && p.score >= 1) ? "bg-accent" : "hover:bg-surface-hover"
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </section>
+          )}
+        </section>
+      ))}
     </div>
   );
 }

@@ -190,6 +190,13 @@ export const TABLE_STATEMENTS = [
     "weight" INTEGER NOT NULL,
     CONSTRAINT "UserRuntimePreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "UserPopularityPreference" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "range" TEXT NOT NULL,
+    "weight" INTEGER NOT NULL,
+    CONSTRAINT "UserPopularityPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -234,6 +241,8 @@ export const INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserBudgetPreference_userId_tier_key" ON "UserBudgetPreference"("userId", "tier")`,
   `CREATE INDEX IF NOT EXISTS "UserRuntimePreference_userId_idx" ON "UserRuntimePreference"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserRuntimePreference_userId_bucket_key" ON "UserRuntimePreference"("userId", "bucket")`,
+  `CREATE INDEX IF NOT EXISTS "UserPopularityPreference_userId_idx" ON "UserPopularityPreference"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserPopularityPreference_userId_range_key" ON "UserPopularityPreference"("userId", "range")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through

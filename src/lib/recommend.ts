@@ -6,15 +6,14 @@ import { isInTheaters } from "@/lib/inTheaters";
 import { classifyAudienceTier, classifyBudgetTier, classifyRuntimeBucket, classifyPopularityRange } from "@/lib/titleAttributes";
 import { computeMergedPreferences, computeGroupMergedPreferences, type DerivedPreferences } from "@/lib/preferenceCounts";
 
-// `type` (movie/series) and `noStreaming` are the only weighted terms left
-// -- everything else (genre, actor/director, audience, budget, runtime,
-// country, popularity, and now the TMDB "similar" boost) is summed directly
+// `noStreaming` is the only weighted term left -- every preference
+// dimension (type, genre, actor, director, audience, budget, runtime,
+// country, popularity, and the TMDB "similar" boost) is summed directly
 // from preferenceCounts.ts, whose own +1-per-dimension rules already encode
-// their scale. See the chat with the user (2026-08-23) requesting a first
-// pass at this direct-sum score, with normalization to follow once they've
-// seen how it lands.
+// their scale. See the chat with the user (2026-08-23/24) requesting this
+// direct-sum score, with normalization to follow once they've seen how it
+// lands.
 const WEIGHTS = {
-  type: 2,
   // Titles with no current streaming availability in the user's country are
   // usually either too new (still in theaters / not out yet) or otherwise
   // not actually watchable right now -- still worth surfacing if nothing
@@ -83,7 +82,6 @@ function fetchCandidates(where: Prisma.TitleWhereInput, userCountry?: string | n
 function scoreCandidates(
   candidates: CandidateTitle[],
   prefs: DerivedPreferences,
-  typeWeight: Map<TitleType, number>,
   reasonSuffix: string,
   useOriginalTitles: boolean,
   hasUserCountry: boolean,
@@ -104,10 +102,10 @@ function scoreCandidates(
       score += prefs.country.get(title.originCountry) ?? 0;
     }
 
-    const typeW = typeWeight.get(title.type) ?? 0;
-    if (typeW !== 0) {
-      score += typeW * WEIGHTS.type;
-      if (typeW > 0) reasons.push(`Les gustan ${title.type === "MOVIE" ? "las películas" : "las series"}${reasonSuffix}`);
+    const typeW = prefs.type.get(title.type) ?? 0;
+    if (typeW > 0) {
+      score += typeW;
+      reasons.push(`Les gustan ${title.type === "MOVIE" ? "las películas" : "las series"}${reasonSuffix}`);
     }
 
     const audienceTier = classifyAudienceTier(title);
@@ -143,7 +141,7 @@ function scoreCandidates(
     score += prefs.popularity.get(classifyPopularityRange(title)) ?? 0;
 
     for (const c of title.cast) {
-      const s = prefs.person.get(c.personId);
+      const s = prefs.actor.get(c.personId);
       if (s) {
         score += s;
         if (s > 0) reasons.push(`Actúa ${c.person.name}, que les gusta${reasonSuffix}`);
@@ -151,7 +149,7 @@ function scoreCandidates(
     }
 
     for (const c of title.crew) {
-      const s = prefs.person.get(c.personId);
+      const s = prefs.director.get(c.personId);
       if (s) {
         score += s;
         if (s > 0) reasons.push(`Dirige ${c.person.name}, que les gusta${reasonSuffix}`);
@@ -210,12 +208,7 @@ export async function getRecommendations(
   const limit = opts.limit ?? 24;
   const useOriginalTitles = opts.useOriginalTitles ?? false;
 
-  const [typePrefs, prefs] = await Promise.all([
-    prisma.userTypePreference.findMany({ where: { userId } }),
-    computeMergedPreferences(userId, useOriginalTitles),
-  ]);
-
-  const typeWeight = new Map(typePrefs.map((t) => [t.type, t.weight]));
+  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
 
   const candidates = await fetchCandidates(
     {
@@ -226,7 +219,7 @@ export async function getRecommendations(
     opts.userCountry,
   );
 
-  const results = scoreCandidates(candidates, prefs, typeWeight, "", useOriginalTitles, Boolean(opts.userCountry));
+  const results = scoreCandidates(candidates, prefs, "", useOriginalTitles, Boolean(opts.userCountry));
   return results.slice(0, limit);
 }
 
@@ -250,12 +243,7 @@ export async function getGroupRecommendations(
   const memberIds = members.map((m) => m.userId);
   if (memberIds.length === 0) return [];
 
-  const [typePrefs, prefs] = await Promise.all([
-    prisma.userTypePreference.findMany({ where: { userId: { in: memberIds } } }),
-    computeGroupMergedPreferences(memberIds, useOriginalTitles),
-  ]);
-
-  const typeWeight = sumBy(typePrefs, (t) => t.type, (t) => t.weight);
+  const prefs = await computeGroupMergedPreferences(memberIds, useOriginalTitles);
 
   const candidates = await fetchCandidates(
     {
@@ -266,15 +254,6 @@ export async function getGroupRecommendations(
     opts.userCountry,
   );
 
-  const results = scoreCandidates(candidates, prefs, typeWeight, " del grupo", useOriginalTitles, Boolean(opts.userCountry));
+  const results = scoreCandidates(candidates, prefs, " del grupo", useOriginalTitles, Boolean(opts.userCountry));
   return results.slice(0, limit);
-}
-
-function sumBy<T, K>(items: T[], key: (item: T) => K, value: (item: T) => number): Map<K, number> {
-  const map = new Map<K, number>();
-  for (const item of items) {
-    const k = key(item);
-    map.set(k, (map.get(k) ?? 0) + value(item));
-  }
-  return map;
 }

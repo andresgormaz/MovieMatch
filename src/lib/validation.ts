@@ -21,29 +21,16 @@ export const personRatingSchema = z.object({
   score: z.union([z.literal(-1), z.literal(0), z.literal(1)]),
 });
 
-export const genrePreferenceSchema = z.object({
-  genreId: z.number().int(),
-  weight: z.number().int().min(-2).max(2),
-});
-
-export const countryPreferenceSchema = z.object({
-  countryCode: z.string().trim().length(2),
-  weight: z.number().int().min(-2).max(2),
-});
-
-export const audiencePreferenceSchema = z.object({
-  tier: z.enum(["MAINSTREAM", "INDIE"]),
-  weight: z.number().int().min(-2).max(2),
-});
-
-export const budgetPreferenceSchema = z.object({
-  tier: z.enum(["MEGA", "SMALL"]),
-  weight: z.number().int().min(-2).max(2),
-});
-
-export const runtimePreferenceSchema = z.object({
-  bucket: z.enum(["SHORT", "MEDIUM", "LONG"]),
-  weight: z.number().int().min(-2).max(2),
+// "Mis gustos" no longer sets an absolute weight -- every preference is a
+// running total of +1/-1 clicks, added to whatever was derived from actual
+// "vs"/rating activity (see preferenceCounts.ts). `key` means something
+// different per category: a genreId (as a string), a TitleType, an
+// AudienceTier, a BudgetTier, a RuntimeBucket, a PopularityRange, an
+// ISO country code, or a Person id.
+export const preferenceAdjustSchema = z.object({
+  category: z.enum(["type", "genre", "audience", "budget", "runtime", "popularity", "country", "actor", "director"]),
+  key: z.string().min(1),
+  delta: z.union([z.literal(1), z.literal(-1)]),
 });
 
 export const wishlistSchema = z.object({

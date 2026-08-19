@@ -1,22 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
-import {
-  genrePreferenceSchema,
-  countryPreferenceSchema,
-  audiencePreferenceSchema,
-  budgetPreferenceSchema,
-  runtimePreferenceSchema,
-} from "@/lib/validation";
+import { preferenceAdjustSchema } from "@/lib/validation";
 import { countryName } from "@/lib/countries";
-import { tmdbProfileUrl } from "@/lib/tmdb";
 import { computeMergedPreferences } from "@/lib/preferenceCounts";
-
-const typePreferenceSchema = z.object({
-  type: z.enum(["MOVIE", "SERIES"]),
-  weight: z.number().int().min(-2).max(2),
-});
 
 const AUDIENCE_LABELS: Record<string, string> = { MAINSTREAM: "Masivo", INDIE: "Independiente" };
 const BUDGET_LABELS: Record<string, string> = { MEGA: "Megaproducción", SMALL: "Bajo presupuesto" };
@@ -28,143 +15,118 @@ const POPULARITY_LABELS: Record<string, string> = {
 };
 const TYPE_LABELS: Record<string, string> = { MOVIE: "Películas", SERIES: "Series" };
 
-// Backs both the legacy post-onboarding preference step and the new "Mis
-// gustos" page -- everything a person's onboarding/VS activity has ever
-// inferred (or that they've set by hand), in one place.
+interface SummaryItem {
+  key: string;
+  label: string;
+  score: number;
+}
+interface SummaryGroup {
+  category: string;
+  title: string;
+  items: SummaryItem[];
+}
+
+function byScoreDesc(a: SummaryItem, b: SummaryItem) {
+  return b.score - a.score;
+}
+
+// Everything a person's onboarding/"vs" activity has ever inferred (or that
+// they've set by hand), grouped by kind and ordered by the score currently
+// in effect for scoring -- the single view "Mis gustos" needs, replacing
+// the old per-dimension -2..2 selectors.
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const userId = session.user.id;
 
-  const [genres, countryRows, genrePrefs, countryPrefs, typePrefs, audiencePrefs, budgetPrefs, runtimePrefs, personPrefs, merged] =
-    await Promise.all([
-      prisma.genre.findMany({ orderBy: { name: "asc" } }),
-      prisma.title.findMany({
-        where: { originCountry: { not: null } },
-        select: { originCountry: true },
-        distinct: ["originCountry"],
-      }),
-      prisma.userGenrePreference.findMany({ where: { userId } }),
-      prisma.userCountryPreference.findMany({ where: { userId } }),
-      prisma.userTypePreference.findMany({ where: { userId } }),
-      prisma.userAudiencePreference.findMany({ where: { userId } }),
-      prisma.userBudgetPreference.findMany({ where: { userId } }),
-      prisma.userRuntimePreference.findMany({ where: { userId } }),
-      prisma.userPersonRating.findMany({
-        where: { userId },
-        include: { person: { select: { id: true, name: true, profilePath: true, knownForDepartment: true } } },
-      }),
-      computeMergedPreferences(userId),
-    ]);
+  const [genres, countryRows, prefs] = await Promise.all([
+    prisma.genre.findMany({ orderBy: { name: "asc" } }),
+    prisma.title.findMany({
+      where: { originCountry: { not: null } },
+      select: { originCountry: true },
+      distinct: ["originCountry"],
+    }),
+    computeMergedPreferences(userId),
+  ]);
 
   const countries = countryRows
     .map((r) => r.originCountry!)
     .sort()
     .map((code) => ({ code, name: countryName(code) }));
 
-  // Merge explicit (manual, always wins) and derived (from accumulated "vs"
-  // wins + 4-5-star ratings) actor/director signal into one list for "Mis
-  // gustos" -- people who only have a derived score show up too (isInferred:
-  // true), so they're visible and editable even before anyone has rated
-  // them by hand.
-  const manualByPerson = new Map(personPrefs.map((p) => [p.personId, p]));
-  const derivedOnlyPersonIds = [...merged.person.keys()].filter((id) => !manualByPerson.has(id));
-  const derivedOnlyPeople =
-    derivedOnlyPersonIds.length > 0
-      ? await prisma.person.findMany({
-          where: { id: { in: derivedOnlyPersonIds } },
-          select: { id: true, name: true, profilePath: true, knownForDepartment: true },
-        })
+  const actorIds = [...prefs.actor.keys()].filter((id) => (prefs.actor.get(id) ?? 0) !== 0);
+  const directorIds = [...prefs.director.keys()].filter((id) => (prefs.director.get(id) ?? 0) !== 0);
+  const personIds = [...new Set([...actorIds, ...directorIds])];
+  const people =
+    personIds.length > 0
+      ? await prisma.person.findMany({ where: { id: { in: personIds } }, select: { id: true, name: true } })
       : [];
-  const personById = new Map(derivedOnlyPeople.map((p) => [p.id, p]));
+  const nameByPerson = new Map(people.map((p) => [p.id, p.name]));
 
-  const personRatings = [
-    ...personPrefs.map((p) => ({
-      personId: p.personId,
-      score: p.score,
-      isInferred: false,
-      name: p.person.name,
-      photoUrl: tmdbProfileUrl(p.person.profilePath),
-      department: p.person.knownForDepartment,
-    })),
-    ...derivedOnlyPersonIds.flatMap((personId) => {
-      const person = personById.get(personId);
-      if (!person) return [];
-      return [
-        {
-          personId,
-          score: merged.person.get(personId) ?? 0,
-          isInferred: true,
-          name: person.name,
-          photoUrl: tmdbProfileUrl(person.profilePath),
-          department: person.knownForDepartment,
-        },
-      ];
-    }),
-  ].sort((a, b) => b.score - a.score);
+  const groups: SummaryGroup[] = [
+    {
+      category: "type",
+      title: "Tipo",
+      items: (["MOVIE", "SERIES"] as const)
+        .map((type) => ({ key: type, label: TYPE_LABELS[type], score: prefs.type.get(type) ?? 0 }))
+        .sort(byScoreDesc),
+    },
+    {
+      category: "genre",
+      title: "Género",
+      items: genres.map((g) => ({ key: String(g.id), label: g.name, score: prefs.genre.get(g.id) ?? 0 })).sort(byScoreDesc),
+    },
+    {
+      category: "audience",
+      title: "Masivo o independiente",
+      items: (["MAINSTREAM", "INDIE"] as const)
+        .map((tier) => ({ key: tier, label: AUDIENCE_LABELS[tier], score: prefs.audience.get(tier) ?? 0 }))
+        .sort(byScoreDesc),
+    },
+    {
+      category: "budget",
+      title: "Presupuesto (solo películas)",
+      items: (["MEGA", "SMALL"] as const)
+        .map((tier) => ({ key: tier, label: BUDGET_LABELS[tier], score: prefs.budget.get(tier) ?? 0 }))
+        .sort(byScoreDesc),
+    },
+    {
+      category: "runtime",
+      title: "Duración",
+      items: (["SHORT", "MEDIUM", "LONG"] as const)
+        .map((bucket) => ({ key: bucket, label: RUNTIME_LABELS[bucket], score: prefs.runtime.get(bucket) ?? 0 }))
+        .sort(byScoreDesc),
+    },
+    {
+      category: "popularity",
+      title: "Popularidad",
+      items: (["LOW", "MID", "HIGH"] as const)
+        .map((range) => ({ key: range, label: POPULARITY_LABELS[range], score: prefs.popularity.get(range) ?? 0 }))
+        .sort(byScoreDesc),
+    },
+    {
+      category: "country",
+      title: "País de origen",
+      items: countries.map((c) => ({ key: c.code, label: c.name, score: prefs.country.get(c.code) ?? 0 })).sort(byScoreDesc),
+    },
+    {
+      category: "director",
+      title: "Directores",
+      items: directorIds
+        .map((id) => ({ key: id, label: nameByPerson.get(id) ?? id, score: prefs.director.get(id) ?? 0 }))
+        .sort(byScoreDesc),
+    },
+    {
+      category: "actor",
+      title: "Actores",
+      items: actorIds
+        .map((id) => ({ key: id, label: nameByPerson.get(id) ?? id, score: prefs.actor.get(id) ?? 0 }))
+        .sort(byScoreDesc),
+    },
+  ];
 
-  // A flat "every preference, plainly, with its current score" view -- the
-  // section the user asked to be able to open and see everything at a
-  // glance, separate from the per-dimension edit controls below. Bounded
-  // dimensions (type/audience/budget/runtime/popularity) always show every
-  // option, even at 0, since there are only a couple each; genre/country/
-  // person are filtered to non-zero, or the list would be mostly noise.
-  const genreNameById = new Map(genres.map((g) => [g.id, g.name]));
-  const summary = [
-    ...typePrefs.map((t) => ({ category: "Tipo", label: TYPE_LABELS[t.type] ?? t.type, score: t.weight })),
-    ...[...merged.genre.entries()]
-      .filter(([, score]) => score !== 0)
-      .map(([genreId, score]) => ({ category: "Género", label: genreNameById.get(genreId) ?? `Género ${genreId}`, score })),
-    ...(["MAINSTREAM", "INDIE"] as const).map((tier) => ({
-      category: "Masivo/independiente",
-      label: AUDIENCE_LABELS[tier],
-      score: merged.audience.get(tier) ?? 0,
-    })),
-    ...(["MEGA", "SMALL"] as const).map((tier) => ({
-      category: "Presupuesto",
-      label: BUDGET_LABELS[tier],
-      score: merged.budget.get(tier) ?? 0,
-    })),
-    ...(["SHORT", "MEDIUM", "LONG"] as const).map((bucket) => ({
-      category: "Duración",
-      label: RUNTIME_LABELS[bucket],
-      score: merged.runtime.get(bucket) ?? 0,
-    })),
-    ...(["LOW", "MID", "HIGH"] as const).map((range) => ({
-      category: "Popularidad",
-      label: POPULARITY_LABELS[range],
-      score: merged.popularity.get(range) ?? 0,
-    })),
-    ...[...merged.country.entries()]
-      .filter(([, score]) => score !== 0)
-      .map(([code, score]) => ({ category: "País", label: countryName(code), score })),
-    ...personRatings
-      .filter((p) => p.score !== 0)
-      .map((p) => ({ category: "Actor/director", label: p.name, score: p.score })),
-  ].sort((a, b) => b.score - a.score);
-
-  return NextResponse.json({
-    genres,
-    countries,
-    genrePreferences: genrePrefs,
-    countryPreferences: countryPrefs,
-    typePreferences: typePrefs,
-    audiencePreferences: audiencePrefs,
-    budgetPreferences: budgetPrefs,
-    runtimePreferences: runtimePrefs,
-    personRatings,
-    summary,
-  });
+  return NextResponse.json({ groups });
 }
-
-const bodySchema = z.object({
-  genrePreferences: z.array(genrePreferenceSchema).optional(),
-  countryPreferences: z.array(countryPreferenceSchema).optional(),
-  typePreferences: z.array(typePreferenceSchema).optional(),
-  audiencePreferences: z.array(audiencePreferenceSchema).optional(),
-  budgetPreferences: z.array(budgetPreferenceSchema).optional(),
-  runtimePreferences: z.array(runtimePreferenceSchema).optional(),
-});
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -172,64 +134,98 @@ export async function POST(request: Request) {
   const userId = session.user.id;
 
   const body = await request.json().catch(() => null);
-  const parsed = bodySchema.safeParse(body);
+  const parsed = preferenceAdjustSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos" }, { status: 400 });
   }
+  const { category, key, delta } = parsed.data;
 
-  const {
-    genrePreferences = [],
-    countryPreferences = [],
-    typePreferences = [],
-    audiencePreferences = [],
-    budgetPreferences = [],
-    runtimePreferences = [],
-  } = parsed.data;
-
-  await prisma.$transaction([
-    ...genrePreferences.map((g) =>
-      prisma.userGenrePreference.upsert({
-        where: { userId_genreId: { userId, genreId: g.genreId } },
-        update: { weight: g.weight },
-        create: { userId, genreId: g.genreId, weight: g.weight },
-      }),
-    ),
-    ...countryPreferences.map((c) =>
-      prisma.userCountryPreference.upsert({
-        where: { userId_countryCode: { userId, countryCode: c.countryCode } },
-        update: { weight: c.weight },
-        create: { userId, countryCode: c.countryCode, weight: c.weight },
-      }),
-    ),
-    ...typePreferences.map((t) =>
-      prisma.userTypePreference.upsert({
-        where: { userId_type: { userId, type: t.type } },
-        update: { weight: t.weight },
-        create: { userId, type: t.type, weight: t.weight },
-      }),
-    ),
-    ...audiencePreferences.map((a) =>
-      prisma.userAudiencePreference.upsert({
-        where: { userId_tier: { userId, tier: a.tier } },
-        update: { weight: a.weight },
-        create: { userId, tier: a.tier, weight: a.weight },
-      }),
-    ),
-    ...budgetPreferences.map((b) =>
-      prisma.userBudgetPreference.upsert({
-        where: { userId_tier: { userId, tier: b.tier } },
-        update: { weight: b.weight },
-        create: { userId, tier: b.tier, weight: b.weight },
-      }),
-    ),
-    ...runtimePreferences.map((r) =>
-      prisma.userRuntimePreference.upsert({
-        where: { userId_bucket: { userId, bucket: r.bucket } },
-        update: { weight: r.weight },
-        create: { userId, bucket: r.bucket, weight: r.weight },
-      }),
-    ),
-  ]);
+  switch (category) {
+    case "type": {
+      if (key !== "MOVIE" && key !== "SERIES") {
+        return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+      }
+      await prisma.userTypePreference.upsert({
+        where: { userId_type: { userId, type: key } },
+        update: { weight: { increment: delta } },
+        create: { userId, type: key, weight: delta },
+      });
+      break;
+    }
+    case "genre": {
+      const genreId = Number(key);
+      if (!Number.isInteger(genreId)) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+      await prisma.userGenrePreference.upsert({
+        where: { userId_genreId: { userId, genreId } },
+        update: { weight: { increment: delta } },
+        create: { userId, genreId, weight: delta },
+      });
+      break;
+    }
+    case "audience": {
+      if (key !== "MAINSTREAM" && key !== "INDIE") {
+        return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+      }
+      await prisma.userAudiencePreference.upsert({
+        where: { userId_tier: { userId, tier: key } },
+        update: { weight: { increment: delta } },
+        create: { userId, tier: key, weight: delta },
+      });
+      break;
+    }
+    case "budget": {
+      if (key !== "MEGA" && key !== "SMALL") {
+        return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+      }
+      await prisma.userBudgetPreference.upsert({
+        where: { userId_tier: { userId, tier: key } },
+        update: { weight: { increment: delta } },
+        create: { userId, tier: key, weight: delta },
+      });
+      break;
+    }
+    case "runtime": {
+      if (key !== "SHORT" && key !== "MEDIUM" && key !== "LONG") {
+        return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+      }
+      await prisma.userRuntimePreference.upsert({
+        where: { userId_bucket: { userId, bucket: key } },
+        update: { weight: { increment: delta } },
+        create: { userId, bucket: key, weight: delta },
+      });
+      break;
+    }
+    case "popularity": {
+      if (key !== "LOW" && key !== "MID" && key !== "HIGH") {
+        return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+      }
+      await prisma.userPopularityPreference.upsert({
+        where: { userId_range: { userId, range: key } },
+        update: { weight: { increment: delta } },
+        create: { userId, range: key, weight: delta },
+      });
+      break;
+    }
+    case "country": {
+      await prisma.userCountryPreference.upsert({
+        where: { userId_countryCode: { userId, countryCode: key } },
+        update: { weight: { increment: delta } },
+        create: { userId, countryCode: key, weight: delta },
+      });
+      break;
+    }
+    case "actor":
+    case "director": {
+      // Same underlying table for both -- see preferenceCounts.ts's note on
+      // sharing one manual adjustment across both roles for a given person.
+      await prisma.userPersonRating.upsert({
+        where: { userId_personId: { userId, personId: key } },
+        update: { score: { increment: delta } },
+        create: { userId, personId: key, score: delta },
+      });
+      break;
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

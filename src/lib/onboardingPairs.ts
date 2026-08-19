@@ -18,19 +18,16 @@ export const ONBOARDING_ROUNDS = 7;
 // votes); this is a floor, not a target.
 const POPULAR_VOTE_COUNT = 1000;
 
-const PREFERENCE_WEIGHT_MAX = 2;
-const PREFERENCE_WEIGHT_MIN = -2;
-
 // Safety net: if the catalog's streaming data for this country is too thin
 // to fill several rounds (e.g. a country TMDB barely covers), requiring
 // streaming availability would just break the flow instead of steering it.
 // Drop the requirement rather than dead-end.
 const MIN_STREAMING_COVERAGE = 30;
 
-// Once both movie and series have a weight recorded, format is "covered" --
-// stop deliberately engineering movie-vs-series rounds (an incidental one
-// can still happen through the normal genre flow, and still nudges type a
-// little, see recordPairWinner).
+// Once the person has seen something of both formats, format is "covered"
+// -- stop deliberately engineering movie-vs-series rounds (an incidental
+// one can still happen through the normal genre flow, and still counts as
+// type evidence for scoring either way -- see preferenceCounts.ts).
 const TYPE_COVERAGE_TARGET = 2;
 
 export interface PairTitle {
@@ -51,48 +48,31 @@ type TitleWithCredits = {
   crew: { personId: string }[];
 };
 
-// Movie-vs-series taste is the one dimension still bumped incrementally on
-// write (unchanged by the switch to derived scoring for everything else --
-// see preferenceCounts.ts): a much smaller signal space than genre (only two
-// possible values), so it fills in fast either way.
-async function bumpTypePreference(userId: string, type: TitleType, delta: number) {
-  const existing = await prisma.userTypePreference.findUnique({ where: { userId_type: { userId, type } } });
-  const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
-  await prisma.userTypePreference.upsert({
-    where: { userId_type: { userId, type } },
-    update: { weight: next },
-    create: { userId, type, weight: next },
-  });
-}
-
 // A favorite is the strongest, least ambiguous signal onboarding gets --
 // explicitly named, so it's recorded as a real 5-star rating, unlike
-// pairwise picks below. That rating is all genre/actor/director/audience/
-// budget/runtime/country/popularity preference needs now: those are all
-// derived fresh from "vs" wins and 4-5-star ratings (see
+// pairwise picks below. That rating is all type/genre/actor/director/
+// audience/budget/runtime/country/popularity preference needs now: every
+// one of those is derived fresh from "vs" wins and 4-5-star ratings (see
 // preferenceCounts.ts) rather than bumped here on write.
 export async function recordFavorite(userId: string, titleId: string) {
-  const title = await prisma.title.findUnique({ where: { id: titleId }, select: { type: true } });
   await prisma.userTitleRating.upsert({
     where: { userId_titleId: { userId, titleId } },
     update: { seen: true, score: 5 },
     create: { userId, titleId, seen: true, score: 5 },
   });
-  if (title) await bumpTypePreference(userId, title.type, PREFERENCE_WEIGHT_MAX);
 }
 
 // A pairwise pick is weaker evidence than a favorite (even now that both
 // sides are confirmed seen, we only know they preferred the winner, not by
 // how much) -- logged for coverage tracking (OnboardingChoice is also the
-// raw source computeDerivedPreferences reads "vs" wins from), and only the
-// winner nudges type preference, never the loser. Both titles are marked
-// "seen" here: picking between them only makes sense once you've actually
-// watched both (see recordNotSeen for the "swap this one out" escape hatch).
+// raw source computeDerivedPreferences reads "vs" wins from). Both titles
+// are marked "seen" here: picking between them only makes sense once you've
+// actually watched both (see recordNotSeen for the "swap this one out"
+// escape hatch).
 export async function recordPairWinner(userId: string, titleAId: string, titleBId: string, winnerId: string) {
   if (winnerId !== titleAId && winnerId !== titleBId) {
     throw new Error("winnerId must be titleAId or titleBId");
   }
-  const winner = await prisma.title.findUnique({ where: { id: winnerId }, select: { type: true } });
   await Promise.all([
     prisma.onboardingChoice.create({ data: { userId, titleAId, titleBId, winnerId } }),
     prisma.userTitleRating.upsert({
@@ -106,7 +86,6 @@ export async function recordPairWinner(userId: string, titleAId: string, titleBI
       create: { userId, titleId: titleBId, seen: true, score: null },
     }),
   ]);
-  if (winner) await bumpTypePreference(userId, winner.type, 1);
 }
 
 // "No la he visto": the swapped-out title is recorded as explicitly unseen
@@ -326,16 +305,20 @@ export async function pickNextPair(
   userCountry: string | null = null,
   fixedTitleId?: string,
 ): Promise<{ titleA: PairTitle; titleB: PairTitle } | null> {
-  const [shownCountByGenre, previousChoices, ratedTitleIds, typeCoverage, streamingCoverage] = await Promise.all([
+  const [shownCountByGenre, previousChoices, ratedTitles, streamingCoverage] = await Promise.all([
     computeGenreShownCounts(userId),
     prisma.onboardingChoice.findMany({ where: { userId }, select: { titleAId: true, titleBId: true } }),
-    prisma.userTitleRating.findMany({ where: { userId }, select: { titleId: true } }),
-    prisma.userTypePreference.count({ where: { userId } }),
+    prisma.userTitleRating.findMany({ where: { userId }, select: { titleId: true, title: { select: { type: true } } } }),
     userCountry
       ? prisma.title.count({ where: { voteCount: { gte: POPULAR_VOTE_COUNT }, ...streamingWhere(userCountry) } })
       : Promise.resolve(0),
   ]);
   const effectiveCountry = streamingCoverage >= MIN_STREAMING_COVERAGE ? userCountry : null;
+  // Type is now fully derived (see preferenceCounts.ts) instead of bumped
+  // into UserTypePreference on write, so "coverage" can't be read off that
+  // table's row count anymore -- go straight to the source: how many
+  // distinct formats has this person actually seen something in.
+  const typeCoverage = new Set(ratedTitles.map((r) => r.title.type)).size;
 
   const shownIds = new Set<string>(extraExcludeIds);
   if (fixedTitleId) shownIds.add(fixedTitleId);
@@ -343,7 +326,7 @@ export async function pickNextPair(
     shownIds.add(c.titleAId);
     shownIds.add(c.titleBId);
   }
-  for (const r of ratedTitleIds) shownIds.add(r.titleId);
+  for (const r of ratedTitles) shownIds.add(r.titleId);
   const excludeIds = [...shownIds];
 
   // Format gap: only as a fresh pair, not while mid-swap (a swap should stay

@@ -40,6 +40,15 @@ enum RuntimeBucket {
   LONG
 }
 
+// Raw TMDB vote-count tier -- see classifyPopularityRange in
+// src/lib/titleAttributes.ts. Deliberately much lower thresholds than
+// AudienceTier: a separate signal, not a restatement of mainstream/indie.
+enum PopularityRange {
+  LOW
+  MID
+  HIGH
+}
+
 model User {
   id                    String    @id @default(cuid())
   email                 String    @unique
@@ -59,6 +68,7 @@ model User {
   audiencePreferences UserAudiencePreference[]
   budgetPreferences   UserBudgetPreference[]
   runtimePreferences  UserRuntimePreference[]
+  popularityPreferences UserPopularityPreference[]
   wishlist           Wishlist[]
   onboardingChoices  OnboardingChoice[]
   ownedGroups        Group[]       @relation("GroupOwner")
@@ -276,19 +286,20 @@ model UserTitleRating {
   @@index([userId])
 }
 
-// Explicit, manual actor/director rating only (set from "Mis gustos") --
-// covers both actors and directors (Person is shared between the two roles).
-// Nothing writes here automatically anymore: a positive actor/director
-// preference is *derived* at read time from accumulated 4-5-star ratings
-// (see computeDerivedPersonTiers in src/lib/personPreference.ts), requiring
-// several corroborating titles before assuming someone likes a person,
-// rather than reading it off a single onboarding pick. A row here always
-// wins over the derived value for that person.
+// Manual actor/director adjustment (set from "Mis gustos", shared between
+// both roles since Person covers both) -- ADDED to the derived score, not a
+// replacement. `score` is an accumulated total of every +1/-1 click, not a
+// bounded scale. The onboarding "rate people you know" step also writes
+// here directly (an absolute set, not an increment) as a starting point.
+// The derived component comes from accumulated "vs" wins + 4-5-star
+// ratings requiring several corroborating titles (see
+// computeDerivedPreferences in src/lib/preferenceCounts.ts) -- this table
+// only ever holds the manual layer on top of that.
 model UserPersonRating {
   id       String @id @default(cuid())
   userId   String
   personId String
-  score    Int // -1 dislike, 0 neutral, 1 like (simple 3-way scale)
+  score    Int // accumulated manual adjustment, added to the derived actor/director score
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -296,11 +307,17 @@ model UserPersonRating {
   @@index([userId])
 }
 
+// Manual adjustment tables below (genre/country/type/audience/budget/
+// runtime/popularity) all follow the same pattern: `weight` is an
+// accumulated total of every +1/-1 click from "Mis gustos", ADDED to
+// (never replacing) the dimension's derived score from
+// computeDerivedPreferences -- see preferenceCounts.ts.
+
 model UserGenrePreference {
   id      String @id @default(cuid())
   userId  String
   genreId Int
-  weight  Int // -2..2
+  weight  Int
   user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
@@ -312,36 +329,29 @@ model UserCountryPreference {
   id          String @id @default(cuid())
   userId      String
   countryCode String
-  weight      Int // -2..2
+  weight      Int
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, countryCode])
   @@index([userId])
 }
 
-// Movie-vs-series taste, same -2..2 scale as genre/country -- kept separate
-// from genre because "prefers series" is a real, learnable signal on its
-// own that a genre weight doesn't capture (someone can love Drama in both
-// formats but still reach for a series over a movie most nights).
 model UserTypePreference {
   id     String    @id @default(cuid())
   userId String
   type   TitleType
-  weight Int // -2..2
+  weight Int
   user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type])
   @@index([userId])
 }
 
-// Same -2..2, bump-on-vs-winner/favorite pattern as genre/type -- these are
-// objective properties of the title itself (not "you like this specific
-// person"), so a single pick is reasonable evidence, same as genre.
 model UserAudiencePreference {
   id     String       @id @default(cuid())
   userId String
   tier   AudienceTier
-  weight Int // -2..2
+  weight Int
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tier])
@@ -352,7 +362,7 @@ model UserBudgetPreference {
   id     String     @id @default(cuid())
   userId String
   tier   BudgetTier
-  weight Int // -2..2
+  weight Int
   user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tier])
@@ -363,9 +373,20 @@ model UserRuntimePreference {
   id     String        @id @default(cuid())
   userId String
   bucket RuntimeBucket
-  weight Int // -2..2
+  weight Int
   user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bucket])
+  @@index([userId])
+}
+
+model UserPopularityPreference {
+  id     String          @id @default(cuid())
+  userId String
+  range  PopularityRange
+  weight Int
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, range])
   @@index([userId])
 }
