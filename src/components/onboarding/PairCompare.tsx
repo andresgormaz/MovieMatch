@@ -90,7 +90,10 @@ export function PairCompare({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ titleAId: pair.titleA.id, titleBId: pair.titleB.id, winnerId }),
       });
-      if (!res.ok) throw new Error("failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
       const nextRound = round + 1;
       onRoundComplete?.(nextRound);
       if (!unlimited && roundsTarget && nextRound > roundsTarget) {
@@ -106,8 +109,9 @@ export function PairCompare({
       }
       setRound(nextRound);
       setPair(next);
-    } catch {
-      setError("No se pudo guardar tu elección. Inténtalo de nuevo.");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setError(`No se pudo guardar tu elección (${detail}). Inténtalo de nuevo.`);
     } finally {
       setLoadingSlot(null);
     }
@@ -125,7 +129,10 @@ export function PairCompare({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ titleAId: pair.titleA.id, titleBId: pair.titleB.id, notSeenId: changed.id }),
       });
-      if (!res.ok) throw new Error("failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
       const next = await fetchPair(kept.id);
       if (!next) {
         setPair(null);
@@ -138,8 +145,9 @@ export function PairCompare({
       // slot, so that card's object identity never changes and it doesn't
       // re-render.
       setPair(slot === "A" ? { titleA: next.titleA, titleB: kept } : { titleA: kept, titleB: next.titleA });
-    } catch {
-      setError("No se pudo guardar. Inténtalo de nuevo.");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setError(`No se pudo guardar (${detail}). Inténtalo de nuevo.`);
     } finally {
       setLoadingSlot(null);
     }
@@ -155,7 +163,10 @@ export function PairCompare({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ titleAId: pair.titleA.id, titleBId: pair.titleB.id, bothNotSeen: true }),
       });
-      if (!res.ok) throw new Error("failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
       const next = await fetchPair();
       if (!next) {
         setPair(null);
@@ -163,8 +174,9 @@ export function PairCompare({
         return;
       }
       setPair(next);
-    } catch {
-      setError("No se pudo guardar. Inténtalo de nuevo.");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      setError(`No se pudo guardar (${detail}). Inténtalo de nuevo.`);
     } finally {
       setLoadingSlot(null);
     }

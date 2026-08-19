@@ -70,24 +70,35 @@ export async function POST(request: Request) {
   }
   const { titleAId, titleBId, winnerId, notSeenId, bothNotSeen } = parsed.data;
 
-  if (bothNotSeen) {
-    await recordBothNotSeen(session.user.id, titleAId, titleBId);
-    return NextResponse.json({ ok: true });
-  }
+  try {
+    if (bothNotSeen) {
+      await recordBothNotSeen(session.user.id, titleAId, titleBId);
+      return NextResponse.json({ ok: true });
+    }
 
-  if (notSeenId !== undefined) {
-    if (notSeenId !== titleAId && notSeenId !== titleBId) {
+    if (notSeenId !== undefined) {
+      if (notSeenId !== titleAId && notSeenId !== titleBId) {
+        return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+      }
+      await recordNotSeen(session.user.id, notSeenId);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (winnerId === undefined || (winnerId !== titleAId && winnerId !== titleBId)) {
       return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
     }
-    await recordNotSeen(session.user.id, notSeenId);
+
+    await recordPairWinner(session.user.id, titleAId, titleBId, winnerId);
+
     return NextResponse.json({ ok: true });
+  } catch (err) {
+    // Same reasoning as the GET handler: without this, an exception here
+    // becomes a generic HTML error page and the client can only report "no
+    // se pudo guardar" with no way to tell what actually failed.
+    console.error("POST /api/onboarding/pair failed", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Error desconocido" },
+      { status: 500 },
+    );
   }
-
-  if (winnerId === undefined || (winnerId !== titleAId && winnerId !== titleBId)) {
-    return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
-  }
-
-  await recordPairWinner(session.user.id, titleAId, titleBId, winnerId);
-
-  return NextResponse.json({ ok: true });
 }
