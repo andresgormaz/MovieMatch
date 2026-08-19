@@ -119,10 +119,17 @@ export interface TmdbRecommendations {
   results: TmdbListItem[];
 }
 
+export interface TmdbCollection {
+  id: number;
+  name: string;
+}
+
 export interface TmdbMovieDetails extends TmdbListItem {
   genres: TmdbGenre[];
   production_countries: TmdbCountry[];
   budget: number; // USD, 0 when unknown -- TV has no equivalent field
+  runtime: number | null; // minutes
+  belongs_to_collection: TmdbCollection | null; // franchise/trilogy grouping
   credits: TmdbCredits;
   "watch/providers": TmdbWatchProviders;
   recommendations: TmdbRecommendations;
@@ -138,6 +145,7 @@ export interface TmdbTvDetails extends TmdbListItem {
   genres: TmdbGenre[];
   origin_country: string[];
   created_by: TmdbCreatedBy[];
+  episode_run_time: number[]; // minutes; empty/varies for some shows
   credits: TmdbCredits;
   "watch/providers": TmdbWatchProviders;
   recommendations: TmdbRecommendations;
@@ -180,6 +188,11 @@ export const tmdb = {
   // that titles already have, so more titles fit in one batch.
   movieVotes: (id: number) => tmdbFetch<Pick<TmdbListItem, "vote_average" | "vote_count">>(`/movie/${id}`),
   tvVotes: (id: number) => tmdbFetch<Pick<TmdbListItem, "vote_average" | "vote_count">>(`/tv/${id}`),
+  // Same bare-call idea, for the one-time runtime/collection/budget backfill
+  // (titles imported before those fields existed).
+  movieAttributes: (id: number) =>
+    tmdbFetch<Pick<TmdbMovieDetails, "budget" | "runtime" | "belongs_to_collection">>(`/movie/${id}`),
+  tvAttributes: (id: number) => tmdbFetch<Pick<TmdbTvDetails, "episode_run_time">>(`/tv/${id}`),
 };
 
 export function sleep(ms: number) {

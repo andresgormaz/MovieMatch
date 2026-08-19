@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import type { TitleType } from "@/generated/prisma/enums";
+import type { TitleType, AudienceTier, BudgetTier, RuntimeBucket } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { displayTitleName } from "@/lib/titleDisplay";
 import { isInTheaters } from "@/lib/inTheaters";
+import { classifyAudienceTier, classifyBudgetTier, classifyRuntimeBucket } from "@/lib/titleAttributes";
+import { computeDerivedPersonTiers, computeGroupPersonScores, effectivePersonScore } from "@/lib/personPreference";
 
 const WEIGHTS = {
   genre: 2,
@@ -20,6 +22,11 @@ const WEIGHTS = {
   // not actually watchable right now -- still worth surfacing if nothing
   // else scores well, but pushed down rather than recommended at face value.
   noStreaming: 4,
+  // Softer than genre/cast: these are secondary attributes of a title, not
+  // its core identity.
+  audience: 1.5,
+  budget: 1,
+  runtime: 1,
 };
 
 // The catalog can be thousands of titles now (TMDB + anime import); scoring
@@ -140,6 +147,9 @@ function scoreCandidates(
   genreWeight: Map<number, number>,
   countryWeight: Map<string, number>,
   typeWeight: Map<TitleType, number>,
+  audienceWeight: Map<AudienceTier, number>,
+  budgetWeight: Map<BudgetTier, number>,
+  runtimeWeight: Map<RuntimeBucket, number>,
   personScore: Map<string, number>,
   similarity: SimilarityBoost,
   reasonSuffix: string,
@@ -167,6 +177,42 @@ function scoreCandidates(
     if (typeW !== 0) {
       score += typeW * WEIGHTS.type;
       if (typeW > 0) reasons.push(`Les gustan ${title.type === "MOVIE" ? "las películas" : "las series"}${reasonSuffix}`);
+    }
+
+    const audienceTier = classifyAudienceTier(title);
+    if (audienceTier) {
+      const w = audienceWeight.get(audienceTier) ?? 0;
+      if (w !== 0) {
+        score += w * WEIGHTS.audience;
+        if (w > 0) {
+          const label = audienceTier === "MAINSTREAM" ? "masivas" : "independientes";
+          reasons.push(`Les gustan las producciones ${label}${reasonSuffix}`);
+        }
+      }
+    }
+
+    const budgetTier = classifyBudgetTier(title);
+    if (budgetTier) {
+      const w = budgetWeight.get(budgetTier) ?? 0;
+      if (w !== 0) {
+        score += w * WEIGHTS.budget;
+        if (w > 0) {
+          const label = budgetTier === "MEGA" ? "megaproducciones" : "producciones de bajo presupuesto";
+          reasons.push(`Les gustan las ${label}${reasonSuffix}`);
+        }
+      }
+    }
+
+    const runtimeBucket = classifyRuntimeBucket(title);
+    if (runtimeBucket) {
+      const w = runtimeWeight.get(runtimeBucket) ?? 0;
+      if (w !== 0) {
+        score += w * WEIGHTS.runtime;
+        if (w > 0) {
+          const label = runtimeBucket === "SHORT" ? "cortas" : runtimeBucket === "LONG" ? "largas" : "de duración media";
+          reasons.push(`Les gustan las duraciones ${label}${reasonSuffix}`);
+        }
+      }
     }
 
     for (const c of title.cast) {
@@ -241,21 +287,35 @@ export async function getRecommendations(
   const limit = opts.limit ?? 24;
   const useOriginalTitles = opts.useOriginalTitles ?? false;
 
-  const [genrePrefs, countryPrefs, typePrefs, personRatings, titleRatings] = await Promise.all([
-    prisma.userGenrePreference.findMany({ where: { userId } }),
-    prisma.userCountryPreference.findMany({ where: { userId } }),
-    prisma.userTypePreference.findMany({ where: { userId } }),
-    prisma.userPersonRating.findMany({ where: { userId } }),
-    prisma.userTitleRating.findMany({
-      where: { userId, seen: true, score: { not: null } },
-      select: { titleId: true, score: true },
-    }),
-  ]);
+  const [genrePrefs, countryPrefs, typePrefs, audiencePrefs, budgetPrefs, runtimePrefs, personRatings, titleRatings, derivedPersonTiers] =
+    await Promise.all([
+      prisma.userGenrePreference.findMany({ where: { userId } }),
+      prisma.userCountryPreference.findMany({ where: { userId } }),
+      prisma.userTypePreference.findMany({ where: { userId } }),
+      prisma.userAudiencePreference.findMany({ where: { userId } }),
+      prisma.userBudgetPreference.findMany({ where: { userId } }),
+      prisma.userRuntimePreference.findMany({ where: { userId } }),
+      prisma.userPersonRating.findMany({ where: { userId } }),
+      prisma.userTitleRating.findMany({
+        where: { userId, seen: true, score: { not: null } },
+        select: { titleId: true, score: true },
+      }),
+      computeDerivedPersonTiers(userId),
+    ]);
 
   const genreWeight = new Map(genrePrefs.map((g) => [g.genreId, g.weight]));
   const countryWeight = new Map(countryPrefs.map((c) => [c.countryCode, c.weight]));
   const typeWeight = new Map(typePrefs.map((t) => [t.type, t.weight]));
-  const personScore = new Map(personRatings.map((p) => [p.personId, p.score]));
+  const audienceWeight = new Map(audiencePrefs.map((a) => [a.tier, a.weight]));
+  const budgetWeight = new Map(budgetPrefs.map((b) => [b.tier, b.weight]));
+  const runtimeWeight = new Map(runtimePrefs.map((r) => [r.bucket, r.weight]));
+  const manualPersonScore = new Map(personRatings.map((p) => [p.personId, p.score]));
+  const personScore = new Map(
+    [...new Set([...manualPersonScore.keys(), ...derivedPersonTiers.keys()])].map((id) => [
+      id,
+      effectivePersonScore(id, manualPersonScore, derivedPersonTiers),
+    ]),
+  );
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
     useOriginalTitles,
@@ -275,6 +335,9 @@ export async function getRecommendations(
     genreWeight,
     countryWeight,
     typeWeight,
+    audienceWeight,
+    budgetWeight,
+    runtimeWeight,
     personScore,
     similarity,
     "",
@@ -304,21 +367,26 @@ export async function getGroupRecommendations(
   const memberIds = members.map((m) => m.userId);
   if (memberIds.length === 0) return [];
 
-  const [genrePrefs, countryPrefs, typePrefs, personRatings, titleRatings] = await Promise.all([
+  const [genrePrefs, countryPrefs, typePrefs, audiencePrefs, budgetPrefs, runtimePrefs, titleRatings, personScore] = await Promise.all([
     prisma.userGenrePreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userCountryPreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userTypePreference.findMany({ where: { userId: { in: memberIds } } }),
-    prisma.userPersonRating.findMany({ where: { userId: { in: memberIds } } }),
+    prisma.userAudiencePreference.findMany({ where: { userId: { in: memberIds } } }),
+    prisma.userBudgetPreference.findMany({ where: { userId: { in: memberIds } } }),
+    prisma.userRuntimePreference.findMany({ where: { userId: { in: memberIds } } }),
     prisma.userTitleRating.findMany({
       where: { userId: { in: memberIds }, seen: true, score: { not: null } },
       select: { titleId: true, score: true },
     }),
+    computeGroupPersonScores(memberIds),
   ]);
 
   const genreWeight = sumBy(genrePrefs, (g) => g.genreId, (g) => g.weight);
   const countryWeight = sumBy(countryPrefs, (c) => c.countryCode, (c) => c.weight);
   const typeWeight = sumBy(typePrefs, (t) => t.type, (t) => t.weight);
-  const personScore = sumBy(personRatings, (p) => p.personId, (p) => p.score);
+  const audienceWeight = sumBy(audiencePrefs, (a) => a.tier, (a) => a.weight);
+  const budgetWeight = sumBy(budgetPrefs, (b) => b.tier, (b) => b.weight);
+  const runtimeWeight = sumBy(runtimePrefs, (r) => r.bucket, (r) => r.weight);
   const similarity = await buildSimilarityBoost(
     titleRatings.map((r) => ({ titleId: r.titleId, score: r.score! })),
     useOriginalTitles,
@@ -338,6 +406,9 @@ export async function getGroupRecommendations(
     genreWeight,
     countryWeight,
     typeWeight,
+    audienceWeight,
+    budgetWeight,
+    runtimeWeight,
     personScore,
     similarity,
     " del grupo",

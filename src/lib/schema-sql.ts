@@ -32,6 +32,8 @@ export const TABLE_STATEMENTS = [
     "voteAverage" REAL,
     "voteCount" INTEGER,
     "budget" INTEGER,
+    "runtime" INTEGER,
+    "collectionId" INTEGER,
     "originCountry" TEXT,
     "onboardingRank" INTEGER,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -167,6 +169,27 @@ export const TABLE_STATEMENTS = [
     "weight" INTEGER NOT NULL,
     CONSTRAINT "UserTypePreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "UserAudiencePreference" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "tier" TEXT NOT NULL,
+    "weight" INTEGER NOT NULL,
+    CONSTRAINT "UserAudiencePreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "UserBudgetPreference" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "tier" TEXT NOT NULL,
+    "weight" INTEGER NOT NULL,
+    CONSTRAINT "UserBudgetPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "UserRuntimePreference" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "bucket" TEXT NOT NULL,
+    "weight" INTEGER NOT NULL,
+    CONSTRAINT "UserRuntimePreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -205,6 +228,12 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "OnboardingChoice_userId_idx" ON "OnboardingChoice"("userId")`,
   `CREATE INDEX IF NOT EXISTS "UserTypePreference_userId_idx" ON "UserTypePreference"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserTypePreference_userId_type_key" ON "UserTypePreference"("userId", "type")`,
+  `CREATE INDEX IF NOT EXISTS "UserAudiencePreference_userId_idx" ON "UserAudiencePreference"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserAudiencePreference_userId_tier_key" ON "UserAudiencePreference"("userId", "tier")`,
+  `CREATE INDEX IF NOT EXISTS "UserBudgetPreference_userId_idx" ON "UserBudgetPreference"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserBudgetPreference_userId_tier_key" ON "UserBudgetPreference"("userId", "tier")`,
+  `CREATE INDEX IF NOT EXISTS "UserRuntimePreference_userId_idx" ON "UserRuntimePreference"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserRuntimePreference_userId_bucket_key" ON "UserRuntimePreference"("userId", "bucket")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
@@ -220,6 +249,8 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "OnboardingChoice" ADD COLUMN "skipped" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "Title" ADD COLUMN "releaseDate" DATETIME`,
   `ALTER TABLE "User" ADD COLUMN "homeVisitedAt" DATETIME`,
+  `ALTER TABLE "Title" ADD COLUMN "runtime" INTEGER`,
+  `ALTER TABLE "Title" ADD COLUMN "collectionId" INTEGER`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

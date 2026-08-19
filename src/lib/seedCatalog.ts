@@ -10,7 +10,7 @@ import {
 } from "../../prisma/seed-data/fallback";
 
 export interface SeedResult {
-  mode: "tmdb" | "fallback" | "anime" | "votes";
+  mode: "tmdb" | "fallback" | "anime" | "votes" | "attributes";
   skipped: boolean;
   titles: number;
   people: number;
@@ -18,7 +18,8 @@ export interface SeedResult {
   seriesTotal?: number;
   animeTotal?: number;
   votesRemaining?: number; // votes mode only: titles still missing voteCount after this batch
-  done?: boolean; // tmdb/anime/votes mode only: true once there's nothing left to do
+  attributesRemaining?: number; // attributes mode only: titles still missing runtime after this batch
+  done?: boolean; // tmdb/anime/votes/attributes mode only: true once there's nothing left to do
 }
 
 // Creates the schema if it doesn't exist yet, and applies any column
@@ -51,7 +52,7 @@ export async function ensureSchema() {
 }
 
 export async function seedCatalog(
-  opts: { force?: boolean; source?: "auto" | "anime" | "votes" } = {},
+  opts: { force?: boolean; source?: "auto" | "anime" | "votes" | "attributes" } = {},
 ): Promise<SeedResult> {
   await ensureSchema();
 
@@ -61,6 +62,12 @@ export async function seedCatalog(
     // regular re-enrichment loop (which only touches 40 titles per call and
     // is biased toward titles still missing cast/providers too).
     return backfillVoteCounts();
+  }
+
+  if (opts.source === "attributes") {
+    // Same idea as votes, for runtime/collection/budget -- titles imported
+    // before those columns existed (or before this backfill existed).
+    return backfillAttributes();
   }
 
   if (opts.source === "anime") {
@@ -376,6 +383,8 @@ async function enrichTitles(
 ): Promise<number> {
   const countryByTitleId = new Map<string, string>();
   const budgetByTitleId = new Map<string, number>();
+  const runtimeByTitleId = new Map<string, number>();
+  const collectionIdByTitleId = new Map<string, number>();
   const nameByTitleId = new Map<string, string>();
   const overviewByTitleId = new Map<string, string>();
   const releaseDateByTitleId = new Map<string, Date>();
@@ -400,8 +409,15 @@ async function enrichTitles(
     if (country) countryByTitleId.set(t.id, country);
 
     if (t.type === "MOVIE") {
-      const budget = (details as { budget: number }).budget;
-      if (budget > 0) budgetByTitleId.set(t.id, budget);
+      const movieDetails = details as { budget: number; runtime: number | null; belongs_to_collection: { id: number } | null };
+      if (movieDetails.budget > 0) budgetByTitleId.set(t.id, movieDetails.budget);
+      if (movieDetails.runtime) runtimeByTitleId.set(t.id, movieDetails.runtime);
+      if (movieDetails.belongs_to_collection) collectionIdByTitleId.set(t.id, movieDetails.belongs_to_collection.id);
+    } else {
+      // TMDB reports episode runtime as an array (can vary by episode/season);
+      // the first entry is a reasonable single representative value.
+      const episodeRunTime = (details as { episode_run_time: number[] }).episode_run_time;
+      if (episodeRunTime?.[0]) runtimeByTitleId.set(t.id, episodeRunTime[0]);
     }
 
     // Refreshes the locale-translated name/overview on every re-enrichment
@@ -602,6 +618,8 @@ async function enrichTitles(
   const titleIdsNeedingUpdate = new Set([
     ...countryByTitleId.keys(),
     ...budgetByTitleId.keys(),
+    ...runtimeByTitleId.keys(),
+    ...collectionIdByTitleId.keys(),
     ...nameByTitleId.keys(),
     ...overviewByTitleId.keys(),
     ...releaseDateByTitleId.keys(),
@@ -614,6 +632,8 @@ async function enrichTitles(
       data: {
         originCountry: countryByTitleId.get(titleId),
         budget: budgetByTitleId.get(titleId),
+        runtime: runtimeByTitleId.get(titleId),
+        collectionId: collectionIdByTitleId.get(titleId),
         name: nameByTitleId.get(titleId),
         overview: overviewByTitleId.get(titleId),
         releaseDate: releaseDateByTitleId.get(titleId),
@@ -662,6 +682,63 @@ async function backfillVoteCounts(): Promise<SeedResult> {
     people: 0,
     votesRemaining,
     done: votesRemaining === 0,
+  };
+}
+
+const ATTRIBUTES_BACKFILL_PER_CALL = 150; // same lightweight bare-call budget as votes
+
+// One-time bulk fill for titles whose runtime is still null (imported before
+// that column existed, or before this backfill existed) -- also catches up
+// budget/collection for movies along the way, from the same bare call.
+// Resumable the same way as votes: revisit with &source=attributes until
+// `done` comes back true.
+async function backfillAttributes(): Promise<SeedResult> {
+  const titles = await prisma.title.findMany({
+    where: { tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, runtime: null },
+    orderBy: { popularity: "desc" },
+    take: ATTRIBUTES_BACKFILL_PER_CALL,
+    select: { id: true, tmdbId: true, type: true },
+  });
+
+  for (const t of titles) {
+    if (t.type === "MOVIE") {
+      const attrs = await tmdb.movieAttributes(t.tmdbId);
+      await sleep(80);
+      await prisma.title.update({
+        where: { id: t.id },
+        data: {
+          // 0 (not undefined/null) when TMDB has no runtime -- same
+          // "checked, nothing there" reasoning as the series branch below,
+          // so a runtime-less movie doesn't get re-queried forever.
+          runtime: attrs.runtime || 0,
+          budget: attrs.budget > 0 ? attrs.budget : undefined,
+          collectionId: attrs.belongs_to_collection?.id,
+        },
+      });
+    } else {
+      const attrs = await tmdb.tvAttributes(t.tmdbId);
+      await sleep(80);
+      // 0 (not null) when TMDB has no episode runtime for this show -- marks
+      // it as "checked, nothing there" so it isn't re-queried by `runtime:
+      // null` forever; classifyRuntimeBucket treats 0 the same as unknown.
+      await prisma.title.update({
+        where: { id: t.id },
+        data: { runtime: attrs.episode_run_time?.[0] || 0 },
+      });
+    }
+  }
+
+  const attributesRemaining = await prisma.title.count({
+    where: { tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, runtime: null },
+  });
+
+  return {
+    mode: "attributes",
+    skipped: false,
+    titles: titles.length,
+    people: 0,
+    attributesRemaining,
+    done: attributesRemaining === 0,
   };
 }
 

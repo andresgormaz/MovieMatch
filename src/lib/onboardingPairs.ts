@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
+import { classifyAudienceTier, classifyBudgetTier, classifyRuntimeBucket } from "@/lib/titleAttributes";
 import type { Prisma } from "@/generated/prisma/client";
-import type { TitleType } from "@/generated/prisma/enums";
+import type { TitleType, AudienceTier, BudgetTier, RuntimeBucket } from "@/generated/prisma/enums";
 
 // Short on purpose: the point of the new onboarding is a couple of minutes,
 // not a marathon. Two favorites (seed) + this many "which do you like more"
@@ -87,42 +88,78 @@ async function bumpTypePreference(userId: string, type: TitleType, delta: number
   });
 }
 
-// Credits a title's lead cast + director/creator with a mild "liked" signal
-// -- but only fills gaps (never overwrites a rating the person set
-// explicitly, e.g. a dislike on the "Mis gustos" page).
-async function bumpPersonPreferences(userId: string, titleId: string) {
-  const [cast, crew] = await Promise.all([
-    prisma.titleCast.findMany({ where: { titleId }, orderBy: { order: "asc" }, take: 3, select: { personId: true } }),
-    prisma.titleCrew.findMany({
-      where: { titleId, job: { in: ["Director", "Creator"] } },
-      select: { personId: true },
-    }),
+// Same idea as type, for the "objective attribute" dimensions -- audience
+// reach, production budget, runtime. These describe the title itself (not
+// "you like this specific person"), so a single pick is reasonable evidence,
+// same reasoning as genre. Skips the bump entirely when the title doesn't
+// clearly classify into either tier (see titleAttributes.ts) rather than
+// forcing a guess.
+async function bumpAudiencePreference(userId: string, tier: AudienceTier | null, delta: number) {
+  if (!tier) return;
+  const existing = await prisma.userAudiencePreference.findUnique({ where: { userId_tier: { userId, tier } } });
+  const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
+  await prisma.userAudiencePreference.upsert({
+    where: { userId_tier: { userId, tier } },
+    update: { weight: next },
+    create: { userId, tier, weight: next },
+  });
+}
+
+async function bumpBudgetPreference(userId: string, tier: BudgetTier | null, delta: number) {
+  if (!tier) return;
+  const existing = await prisma.userBudgetPreference.findUnique({ where: { userId_tier: { userId, tier } } });
+  const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
+  await prisma.userBudgetPreference.upsert({
+    where: { userId_tier: { userId, tier } },
+    update: { weight: next },
+    create: { userId, tier, weight: next },
+  });
+}
+
+async function bumpRuntimePreference(userId: string, bucket: RuntimeBucket | null, delta: number) {
+  if (!bucket) return;
+  const existing = await prisma.userRuntimePreference.findUnique({ where: { userId_bucket: { userId, bucket } } });
+  const next = Math.max(PREFERENCE_WEIGHT_MIN, Math.min(PREFERENCE_WEIGHT_MAX, (existing?.weight ?? 0) + delta));
+  await prisma.userRuntimePreference.upsert({
+    where: { userId_bucket: { userId, bucket } },
+    update: { weight: next },
+    create: { userId, bucket, weight: next },
+  });
+}
+
+const ATTRIBUTE_SELECT = { type: true, voteCount: true, budget: true, runtime: true } satisfies Prisma.TitleSelect;
+
+// Bumps every "objective attribute" dimension a title classifies into --
+// shared by recordFavorite and recordPairWinner so they can't drift apart.
+async function bumpAttributePreferences(
+  userId: string,
+  title: { type: TitleType; voteCount: number | null; budget: number | null; runtime: number | null },
+  delta: number,
+) {
+  await Promise.all([
+    bumpTypePreference(userId, title.type, delta),
+    bumpAudiencePreference(userId, classifyAudienceTier(title), delta),
+    bumpBudgetPreference(userId, classifyBudgetTier(title), delta),
+    bumpRuntimePreference(userId, classifyRuntimeBucket(title), delta),
   ]);
-  const personIds = [...new Set([...cast.map((c) => c.personId), ...crew.map((c) => c.personId)])];
-  for (const personId of personIds) {
-    await prisma.userPersonRating.upsert({
-      where: { userId_personId: { userId, personId } },
-      update: {},
-      create: { userId, personId, score: 1 },
-    });
-  }
 }
 
 // A favorite is the strongest, least ambiguous signal onboarding gets --
 // explicitly named, so it's recorded as a real 5-star rating as well as a
-// strong genre/type/cast bump, unlike pairwise picks below.
+// strong genre/attribute bump, unlike pairwise picks below. Actor/director
+// preference is deliberately NOT bumped here: liking one title isn't enough
+// evidence to assume you like its cast/director's other work -- see
+// personPreference.ts, which derives that from several corroborating
+// highly-rated titles instead.
 export async function recordFavorite(userId: string, titleId: string) {
-  const title = await prisma.title.findUnique({ where: { id: titleId }, select: { type: true } });
+  const title = await prisma.title.findUnique({ where: { id: titleId }, select: ATTRIBUTE_SELECT });
   await prisma.userTitleRating.upsert({
     where: { userId_titleId: { userId, titleId } },
     update: { seen: true, score: 5 },
     create: { userId, titleId, seen: true, score: 5 },
   });
-  await Promise.all([
-    bumpGenrePreferences(userId, titleId, PREFERENCE_WEIGHT_MAX),
-    bumpPersonPreferences(userId, titleId),
-    title ? bumpTypePreference(userId, title.type, PREFERENCE_WEIGHT_MAX) : Promise.resolve(),
-  ]);
+  await bumpGenrePreferences(userId, titleId, PREFERENCE_WEIGHT_MAX);
+  if (title) await bumpAttributePreferences(userId, title, PREFERENCE_WEIGHT_MAX);
 }
 
 // A pairwise pick is weaker evidence than a favorite (even now that both
@@ -131,11 +168,13 @@ export async function recordFavorite(userId: string, titleId: string) {
 // preferences, by a smaller amount, never the loser. Both titles are marked
 // "seen" here: picking between them only makes sense once you've actually
 // watched both (see recordNotSeen for the "swap this one out" escape hatch).
+// Same as recordFavorite: no actor/director bump from a single win, that's
+// derived from ratings instead (see personPreference.ts).
 export async function recordPairWinner(userId: string, titleAId: string, titleBId: string, winnerId: string) {
   if (winnerId !== titleAId && winnerId !== titleBId) {
     throw new Error("winnerId must be titleAId or titleBId");
   }
-  const winner = await prisma.title.findUnique({ where: { id: winnerId }, select: { type: true } });
+  const winner = await prisma.title.findUnique({ where: { id: winnerId }, select: ATTRIBUTE_SELECT });
   await Promise.all([
     prisma.onboardingChoice.create({ data: { userId, titleAId, titleBId, winnerId } }),
     prisma.userTitleRating.upsert({
@@ -149,11 +188,8 @@ export async function recordPairWinner(userId: string, titleAId: string, titleBI
       create: { userId, titleId: titleBId, seen: true, score: null },
     }),
   ]);
-  await Promise.all([
-    bumpGenrePreferences(userId, winnerId, 1),
-    bumpPersonPreferences(userId, winnerId),
-    winner ? bumpTypePreference(userId, winner.type, 1) : Promise.resolve(),
-  ]);
+  await bumpGenrePreferences(userId, winnerId, 1);
+  if (winner) await bumpAttributePreferences(userId, winner, 1);
 }
 
 // "No la he visto": the swapped-out title is recorded as explicitly unseen

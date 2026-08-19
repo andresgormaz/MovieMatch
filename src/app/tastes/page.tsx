@@ -14,7 +14,8 @@ interface Country {
 }
 interface PersonRating {
   personId: string;
-  score: -1 | 0 | 1;
+  score: number;
+  isInferred: boolean;
   name: string;
   photoUrl: string | null;
   department: string | null;
@@ -27,15 +28,26 @@ const PERSON_LEVELS: { value: -1 | 0 | 1; label: string; aria: string }[] = [
 ];
 
 // Everything onboarding and "vs" have ever inferred about your taste --
-// genres, movies-vs-series, actors and directors -- in one place, editable
-// by hand. Nothing here is a black box: if the algorithm got something
-// wrong, fix it directly instead of trying to "outvote" it with more picks.
+// genres, movies-vs-series, mainstream/indie, presupuesto, duración, actores
+// y directores -- in one place, editable by hand. Nothing here is a black
+// box: if the algorithm got something wrong, fix it directly instead of
+// trying to "outvote" it with more picks.
 export default function TastesPage() {
   const [genres, setGenres] = useState<Genre[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [genreWeights, setGenreWeights] = useState<Record<number, number>>({});
   const [countryWeights, setCountryWeights] = useState<Record<string, number>>({});
   const [typeWeights, setTypeWeights] = useState<Record<"MOVIE" | "SERIES", number>>({ MOVIE: 0, SERIES: 0 });
+  const [audienceWeights, setAudienceWeights] = useState<Record<"MAINSTREAM" | "INDIE", number>>({
+    MAINSTREAM: 0,
+    INDIE: 0,
+  });
+  const [budgetWeights, setBudgetWeights] = useState<Record<"MEGA" | "SMALL", number>>({ MEGA: 0, SMALL: 0 });
+  const [runtimeWeights, setRuntimeWeights] = useState<Record<"SHORT" | "MEDIUM" | "LONG", number>>({
+    SHORT: 0,
+    MEDIUM: 0,
+    LONG: 0,
+  });
   const [people, setPeople] = useState<PersonRating[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -56,6 +68,19 @@ export default function TastesPage() {
     setTypeWeights({
       MOVIE: data.typePreferences.find((t: { type: string }) => t.type === "MOVIE")?.weight ?? 0,
       SERIES: data.typePreferences.find((t: { type: string }) => t.type === "SERIES")?.weight ?? 0,
+    });
+    setAudienceWeights({
+      MAINSTREAM: data.audiencePreferences.find((a: { tier: string }) => a.tier === "MAINSTREAM")?.weight ?? 0,
+      INDIE: data.audiencePreferences.find((a: { tier: string }) => a.tier === "INDIE")?.weight ?? 0,
+    });
+    setBudgetWeights({
+      MEGA: data.budgetPreferences.find((b: { tier: string }) => b.tier === "MEGA")?.weight ?? 0,
+      SMALL: data.budgetPreferences.find((b: { tier: string }) => b.tier === "SMALL")?.weight ?? 0,
+    });
+    setRuntimeWeights({
+      SHORT: data.runtimePreferences.find((r: { bucket: string }) => r.bucket === "SHORT")?.weight ?? 0,
+      MEDIUM: data.runtimePreferences.find((r: { bucket: string }) => r.bucket === "MEDIUM")?.weight ?? 0,
+      LONG: data.runtimePreferences.find((r: { bucket: string }) => r.bucket === "LONG")?.weight ?? 0,
     });
     setPeople(data.personRatings);
     setLoading(false);
@@ -93,9 +118,36 @@ export default function TastesPage() {
     });
   }
 
+  async function saveAudience(tier: "MAINSTREAM" | "INDIE", weight: number) {
+    setAudienceWeights((prev) => ({ ...prev, [tier]: weight }));
+    await fetch("/api/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audiencePreferences: [{ tier, weight }] }),
+    });
+  }
+
+  async function saveBudget(tier: "MEGA" | "SMALL", weight: number) {
+    setBudgetWeights((prev) => ({ ...prev, [tier]: weight }));
+    await fetch("/api/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ budgetPreferences: [{ tier, weight }] }),
+    });
+  }
+
+  async function saveRuntime(bucket: "SHORT" | "MEDIUM" | "LONG", weight: number) {
+    setRuntimeWeights((prev) => ({ ...prev, [bucket]: weight }));
+    await fetch("/api/preferences", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runtimePreferences: [{ bucket, weight }] }),
+    });
+  }
+
   async function savePerson(personId: string, score: -1 | 0 | 1) {
     setSavingId(personId);
-    setPeople((prev) => prev.map((p) => (p.personId === personId ? { ...p, score } : p)));
+    setPeople((prev) => prev.map((p) => (p.personId === personId ? { ...p, score, isInferred: false } : p)));
     await fetch("/api/people/rate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,10 +201,46 @@ export default function TastesPage() {
       </section>
 
       <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-muted">Masivo o independiente</h2>
+        <WeightSelector
+          label="Producciones masivas"
+          value={audienceWeights.MAINSTREAM}
+          onChange={(v) => saveAudience("MAINSTREAM", v)}
+        />
+        <WeightSelector
+          label="Producciones independientes"
+          value={audienceWeights.INDIE}
+          onChange={(v) => saveAudience("INDIE", v)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-muted">Presupuesto (solo películas)</h2>
+        <WeightSelector label="Megaproducciones" value={budgetWeights.MEGA} onChange={(v) => saveBudget("MEGA", v)} />
+        <WeightSelector
+          label="Bajo presupuesto"
+          value={budgetWeights.SMALL}
+          onChange={(v) => saveBudget("SMALL", v)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-muted">Duración</h2>
+        <WeightSelector label="Cortas" value={runtimeWeights.SHORT} onChange={(v) => saveRuntime("SHORT", v)} />
+        <WeightSelector label="Duración media" value={runtimeWeights.MEDIUM} onChange={(v) => saveRuntime("MEDIUM", v)} />
+        <WeightSelector label="Largas" value={runtimeWeights.LONG} onChange={(v) => saveRuntime("LONG", v)} />
+      </section>
+
+      <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-muted">Actores y directores</h2>
+        <p className="text-xs text-muted">
+          Se marcan solos cuando calificas con 4-5★ varios títulos que comparten a la misma persona -- puedes
+          corregir cualquiera a mano.
+        </p>
         {people.length === 0 && (
           <p className="rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
-            Todavía no tenemos señal sobre actores o directores. Va a ir sumando a medida que califiques títulos.
+            Todavía no tenemos señal sobre actores o directores. Va a ir sumando a medida que califiques títulos con
+            4-5★.
           </p>
         )}
         {people.map((p) => (
@@ -171,7 +259,10 @@ export default function TastesPage() {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm text-white">{p.name}</p>
-                {p.department && <p className="text-xs text-muted">{p.department}</p>}
+                <p className="text-xs text-muted">
+                  {p.department}
+                  {p.isInferred && (p.department ? " · inferido" : "Inferido automáticamente")}
+                </p>
               </div>
             </div>
             <div className="flex flex-shrink-0 gap-1">
@@ -182,7 +273,7 @@ export default function TastesPage() {
                   onClick={() => savePerson(p.personId, l.value)}
                   aria-label={l.aria}
                   className={`rounded-full px-2 py-1 text-base transition-colors disabled:opacity-50 ${
-                    p.score === l.value ? "bg-accent" : "hover:bg-surface-hover"
+                    p.score === l.value || (l.value === 1 && p.score >= 1) ? "bg-accent" : "hover:bg-surface-hover"
                   }`}
                 >
                   {l.label}

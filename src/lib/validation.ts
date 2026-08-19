@@ -31,6 +31,21 @@ export const countryPreferenceSchema = z.object({
   weight: z.number().int().min(-2).max(2),
 });
 
+export const audiencePreferenceSchema = z.object({
+  tier: z.enum(["MAINSTREAM", "INDIE"]),
+  weight: z.number().int().min(-2).max(2),
+});
+
+export const budgetPreferenceSchema = z.object({
+  tier: z.enum(["MEGA", "SMALL"]),
+  weight: z.number().int().min(-2).max(2),
+});
+
+export const runtimePreferenceSchema = z.object({
+  bucket: z.enum(["SHORT", "MEDIUM", "LONG"]),
+  weight: z.number().int().min(-2).max(2),
+});
+
 export const wishlistSchema = z.object({
   titleId: z.string().min(1),
 });

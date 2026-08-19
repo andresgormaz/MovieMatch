@@ -13,6 +13,8 @@ import { seedCatalog } from "@/lib/seedCatalog";
 // within Vercel's function time limit. Add &source=anime to import anime
 // from Jikan/MyAnimeList instead (also resumable the same way). Add
 // &source=votes to run the one-time voteCount backfill (also resumable).
+// Add &source=attributes to run the one-time runtime/collection/budget
+// backfill (also resumable).
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
@@ -31,7 +33,14 @@ export async function GET(request: Request) {
 
   const force = searchParams.get("force") === "1";
   const sourceParam = searchParams.get("source");
-  const source = sourceParam === "anime" ? "anime" : sourceParam === "votes" ? "votes" : "auto";
+  const source =
+    sourceParam === "anime"
+      ? "anime"
+      : sourceParam === "votes"
+        ? "votes"
+        : sourceParam === "attributes"
+          ? "attributes"
+          : "auto";
 
   try {
     const result = await seedCatalog({ force, source });
@@ -51,6 +60,10 @@ export async function GET(request: Request) {
       message = result.done
         ? `Listo, ya no queda ningún título sin cantidad de votos.`
         : `Completamos la cantidad de votos de ${result.titles} títulos más (quedan ${result.votesRemaining} pendientes). Vuelve a visitar esta misma URL (con &source=votes) para seguir completando.`;
+    } else if (result.mode === "attributes") {
+      message = result.done
+        ? `Listo, ya no queda ningún título sin duración/colección.`
+        : `Completamos duración/colección de ${result.titles} títulos más (quedan ${result.attributesRemaining} pendientes). Vuelve a visitar esta misma URL (con &source=attributes) para seguir completando.`;
     } else {
       message = `Listo: se cargaron ${result.titles} títulos y ${result.people} personas (dataset local).`;
     }

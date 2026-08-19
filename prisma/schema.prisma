@@ -17,6 +17,29 @@ enum TitleType {
   SERIES
 }
 
+// Audience reach: how widely-seen/mass-market a title is, derived from
+// popularity/vote count (primary) and budget (reinforcement) -- see
+// classifyAudienceTier in src/lib/titleAttributes.ts. Independent from
+// BudgetTier: reach and production spend are correlated but not the same
+// thing (a low-budget film can go viral; a mega-budget one can flop).
+enum AudienceTier {
+  MAINSTREAM
+  INDIE
+}
+
+// Pure production-scale signal, from budget alone (movies only -- TMDB
+// doesn't report series budgets).
+enum BudgetTier {
+  MEGA
+  SMALL
+}
+
+enum RuntimeBucket {
+  SHORT
+  MEDIUM
+  LONG
+}
+
 model User {
   id                    String    @id @default(cuid())
   email                 String    @unique
@@ -33,6 +56,9 @@ model User {
   genrePreferences   UserGenrePreference[]
   countryPreferences UserCountryPreference[]
   typePreferences    UserTypePreference[]
+  audiencePreferences UserAudiencePreference[]
+  budgetPreferences   UserBudgetPreference[]
+  runtimePreferences  UserRuntimePreference[]
   wishlist           Wishlist[]
   onboardingChoices  OnboardingChoice[]
   ownedGroups        Group[]       @relation("GroupOwner")
@@ -101,6 +127,11 @@ model Title {
   voteAverage    Float?
   voteCount      Int? // TMDB vote count -- used as the "masividad" filter
   budget         Int? // USD, movies only (TMDB doesn't report it for series)
+  runtime        Int? // minutes -- movie runtime, or a representative episode runtime for series
+  collectionId   Int? // TMDB "belongs_to_collection" id, movies only -- lets sequels/trilogies
+  // (Lord of the Rings 1-2-3, the Harry Potter films...) count as one unit of
+  // evidence instead of N when inferring an actor/director preference, so a
+  // single franchise binge can't manufacture a preference on its own.
   originCountry  String? // primary ISO 3166-1 country code
   onboardingRank Int? // lower = shown earlier during onboarding ("top 100")
   createdAt      DateTime  @default(now())
@@ -245,7 +276,14 @@ model UserTitleRating {
   @@index([userId])
 }
 
-// Covers both actors and directors (Person is shared between the two roles)
+// Explicit, manual actor/director rating only (set from "Mis gustos") --
+// covers both actors and directors (Person is shared between the two roles).
+// Nothing writes here automatically anymore: a positive actor/director
+// preference is *derived* at read time from accumulated 4-5-star ratings
+// (see computeDerivedPersonTiers in src/lib/personPreference.ts), requiring
+// several corroborating titles before assuming someone likes a person,
+// rather than reading it off a single onboarding pick. A row here always
+// wins over the derived value for that person.
 model UserPersonRating {
   id       String @id @default(cuid())
   userId   String
@@ -293,5 +331,41 @@ model UserTypePreference {
   user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type])
+  @@index([userId])
+}
+
+// Same -2..2, bump-on-vs-winner/favorite pattern as genre/type -- these are
+// objective properties of the title itself (not "you like this specific
+// person"), so a single pick is reasonable evidence, same as genre.
+model UserAudiencePreference {
+  id     String       @id @default(cuid())
+  userId String
+  tier   AudienceTier
+  weight Int // -2..2
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier])
+  @@index([userId])
+}
+
+model UserBudgetPreference {
+  id     String     @id @default(cuid())
+  userId String
+  tier   BudgetTier
+  weight Int // -2..2
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier])
+  @@index([userId])
+}
+
+model UserRuntimePreference {
+  id     String        @id @default(cuid())
+  userId String
+  bucket RuntimeBucket
+  weight Int // -2..2
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bucket])
   @@index([userId])
 }
