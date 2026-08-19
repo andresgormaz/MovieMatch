@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     // so this is diagnosable in one round-trip from a phone with no access
     // to Vercel's function logs. Revert to message-only once root-caused.
     const detail =
-      err instanceof Error ? `${err.message}\n${err.stack?.split("\n").slice(0, 5).join("\n")}` : "Error desconocido";
+      err instanceof Error ? `${err.message}\n${err.stack?.split("\n").slice(0, 20).join("\n")}` : "Error desconocido";
     return NextResponse.json({ error: detail }, { status: 500 });
   }
 }
