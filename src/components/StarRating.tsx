@@ -32,7 +32,7 @@ export function StarRating({
             aria-label={`${s} estrella${s > 1 ? "s" : ""}`}
             className={`flex ${starClass} items-center justify-center rounded-md border transition-colors duration-150 disabled:opacity-50 ${
               filled
-                ? "border-yellow-400/60 bg-yellow-400/10 text-yellow-400"
+                ? "border-yellow-300 bg-yellow-400/25 text-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.55)]"
                 : "border-white/15 text-neutral-500 hover:border-accent hover:bg-accent hover:text-white"
             }`}
           >
