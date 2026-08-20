@@ -536,15 +536,25 @@ async function enrichTitles(
   const existingCastKeys = new Set(existingCast.map((r) => `${r.titleId}:${r.personId}`));
   const existingCrewKeys = new Set(existingCrew.map((r) => `${r.titleId}:${r.personId}:${r.job}`));
 
-  const castRows: { titleId: string; personId: string; order: number }[] = [];
+  // TMDB occasionally lists the same person twice in one title's cast (dual
+  // roles, data quality issues) -- a plain array here would push both and
+  // trip the (titleId, personId) unique constraint on the second insert.
+  // Keyed by title+person, like crewRowsByKey below, so an in-batch repeat
+  // just overwrites instead of duplicating (first occurrence's `order` --
+  // typically the more prominent billing -- wins since later ones are
+  // skipped once the key exists).
+  const castRowsByKey = new Map<string, { titleId: string; personId: string; order: number }>();
   for (const [titleId, cast] of castByTitleId) {
     cast.forEach((c, order) => {
       const personId = personIdByTmdbId.get(c.tmdbId);
-      if (personId && !existingCastKeys.has(`${titleId}:${personId}`)) castRows.push({ titleId, personId, order });
+      if (!personId) return;
+      const key = `${titleId}:${personId}`;
+      if (existingCastKeys.has(key) || castRowsByKey.has(key)) return;
+      castRowsByKey.set(key, { titleId, personId, order });
     });
   }
-  if (castRows.length > 0) {
-    await prisma.titleCast.createMany({ data: castRows });
+  if (castRowsByKey.size > 0) {
+    await prisma.titleCast.createMany({ data: [...castRowsByKey.values()] });
   }
 
   const crewRowsByKey = new Map<string, { titleId: string; personId: string; job: string }>();
@@ -838,15 +848,28 @@ async function seedAnimeFromJikan(): Promise<SeedResult> {
     });
     const titleIdByTmdbId = new Map(persistedTitles.map((t) => [t.tmdbId, t.id]));
 
+    // Keyed by title+genre, not a plain array -- translateAnimeGenre can map
+    // more than one MAL genre label onto the same internal genre, so two of
+    // an anime's own genres colliding after translation would otherwise
+    // push the same (titleId, genreId) pair twice and trip TitleGenre's
+    // unique constraint on insert (same failure mode as the TitleCast bug
+    // above, different source).
+    const genrePairKeys = new Set<string>();
     const genrePairs: { titleId: string; genreId: number }[] = [];
+    function addGenrePair(titleId: string, genreId: number) {
+      const key = `${titleId}:${genreId}`;
+      if (genrePairKeys.has(key)) return;
+      genrePairKeys.add(key);
+      genrePairs.push({ titleId, genreId });
+    }
     const allStudios = new Map<number, { mal_id: number; name: string }>();
     for (const it of newItems) {
       const titleId = titleIdByTmdbId.get(ANIME_ID_OFFSET + it.mal_id);
       if (!titleId) continue;
-      genrePairs.push({ titleId, genreId: genreIdByName.get("Anime")! });
+      addGenrePair(titleId, genreIdByName.get("Anime")!);
       for (const g of it.genres) {
         const genreId = genreIdByName.get(translateAnimeGenre(g.name));
-        if (genreId) genrePairs.push({ titleId, genreId });
+        if (genreId) addGenrePair(titleId, genreId);
       }
       for (const s of it.studios) allStudios.set(s.mal_id, s);
     }
@@ -871,16 +894,18 @@ async function seedAnimeFromJikan(): Promise<SeedResult> {
       });
       const studioPersonIdByTmdbId = new Map(studioPeople.map((p) => [p.tmdbId, p.id]));
 
-      const crewRows: { titleId: string; personId: string; job: string }[] = [];
+      // Same reasoning as the cast/genre dedup above -- keyed, not a plain
+      // array, in case an anime lists the same studio more than once.
+      const crewRowsByKey = new Map<string, { titleId: string; personId: string; job: string }>();
       for (const it of newItems) {
         const titleId = titleIdByTmdbId.get(ANIME_ID_OFFSET + it.mal_id);
         if (!titleId) continue;
         for (const s of it.studios) {
           const personId = studioPersonIdByTmdbId.get(ANIME_ID_OFFSET + s.mal_id);
-          if (personId) crewRows.push({ titleId, personId, job: "Estudio" });
+          if (personId) crewRowsByKey.set(`${titleId}:${personId}:Estudio`, { titleId, personId, job: "Estudio" });
         }
       }
-      if (crewRows.length > 0) await prisma.titleCrew.createMany({ data: crewRows });
+      if (crewRowsByKey.size > 0) await prisma.titleCrew.createMany({ data: [...crewRowsByKey.values()] });
     }
   }
 
