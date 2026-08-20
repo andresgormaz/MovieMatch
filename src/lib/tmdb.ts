@@ -158,6 +158,14 @@ export interface TmdbDiscoverResponse {
   total_results: number;
 }
 
+export interface TmdbPersonDetails {
+  id: number;
+  biography: string;
+  birthday: string | null; // "YYYY-MM-DD"
+  deathday: string | null;
+  place_of_birth: string | null;
+}
+
 export const tmdb = {
   movieGenres: () => tmdbFetch<{ genres: TmdbGenre[] }>("/genre/movie/list"),
   tvGenres: () => tmdbFetch<{ genres: TmdbGenre[] }>("/genre/tv/list"),
@@ -193,6 +201,11 @@ export const tmdb = {
   movieAttributes: (id: number) =>
     tmdbFetch<Pick<TmdbMovieDetails, "budget" | "runtime" | "belongs_to_collection">>(`/movie/${id}`),
   tvAttributes: (id: number) => tmdbFetch<Pick<TmdbTvDetails, "episode_run_time">>(`/tv/${id}`),
+  // Fetched lazily, once, the first time a person's detail page is opened
+  // (see /api/people/[id]) -- not part of the catalog import, so there's no
+  // batch backfill for it and no rate-limit budget spent on people nobody
+  // ever clicks into.
+  personDetails: (id: number) => tmdbFetch<TmdbPersonDetails>(`/person/${id}`),
 };
 
 export function sleep(ms: number) {

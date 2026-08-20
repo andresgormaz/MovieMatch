@@ -270,6 +270,11 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "User" ADD COLUMN "homeVisitedAt" DATETIME`,
   `ALTER TABLE "Title" ADD COLUMN "runtime" INTEGER`,
   `ALTER TABLE "Title" ADD COLUMN "collectionId" INTEGER`,
+  `ALTER TABLE "Person" ADD COLUMN "biography" TEXT`,
+  `ALTER TABLE "Person" ADD COLUMN "birthday" DATETIME`,
+  `ALTER TABLE "Person" ADD COLUMN "deathday" DATETIME`,
+  `ALTER TABLE "Person" ADD COLUMN "placeOfBirth" TEXT`,
+  `ALTER TABLE "Person" ADD COLUMN "detailsFetchedAt" DATETIME`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

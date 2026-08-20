@@ -200,7 +200,16 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
             {director.length > 0 && (
               <div>
                 <dt className="inline text-muted">{title.type === "MOVIE" ? "Dirección: " : "Creación: "}</dt>
-                <dd className="inline text-neutral-200">{director.map((d) => d.name).join(", ")}</dd>
+                <dd className="inline text-neutral-200">
+                  {director.map((d, i) => (
+                    <span key={d.id}>
+                      {i > 0 && ", "}
+                      <Link href={`/person/${d.id}`} className="hover:underline">
+                        {d.name}
+                      </Link>
+                    </span>
+                  ))}
+                </dd>
               </div>
             )}
             {studio.length > 0 && (
@@ -299,7 +308,11 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
           <h2 className="mb-3 text-lg font-bold text-white">Reparto</h2>
           <div className="flex gap-3 overflow-x-auto pb-1">
             {title.cast.map((c) => (
-              <div key={c.id} className="flex w-20 flex-shrink-0 flex-col items-center gap-1.5 text-center">
+              <Link
+                key={c.id}
+                href={`/person/${c.id}`}
+                className="flex w-20 flex-shrink-0 flex-col items-center gap-1.5 text-center"
+              >
                 <div className="h-20 w-20 overflow-hidden rounded-full bg-white/10">
                   {c.photoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -310,8 +323,8 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
                 </div>
-                <p className="line-clamp-2 text-[11px] text-neutral-300">{c.name}</p>
-              </div>
+                <p className="line-clamp-2 text-[11px] text-neutral-300 hover:underline">{c.name}</p>
+              </Link>
             ))}
           </div>
         </div>

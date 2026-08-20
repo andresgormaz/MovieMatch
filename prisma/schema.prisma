@@ -241,6 +241,15 @@ model Person {
   name               String
   profilePath        String?
   knownForDepartment String?
+  biography          String?
+  birthday           DateTime?
+  deathday           DateTime?
+  placeOfBirth       String?
+  // Set once we've pulled biography/birthday/etc from TMDB for this person
+  // (see /api/people/[id]) -- null means "never tried yet, fetch on next
+  // view", distinct from an empty biography (which TMDB genuinely has
+  // nothing for) so we don't re-fetch on every single page load.
+  detailsFetchedAt   DateTime?
 
   castRoles TitleCast[]
   crewRoles TitleCrew[]
