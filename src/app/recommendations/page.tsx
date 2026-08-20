@@ -11,7 +11,10 @@ import {
   type Genre,
   type Country,
   type Provider,
+  type SavedFilterEntry,
 } from "@/components/explore/FilterPanel";
+import { loadStoredFilters, storeFilters, clearStoredFilters } from "@/lib/filterStorage";
+import { useSavedFilters } from "@/lib/useSavedFilters";
 
 export default function RecommendationsPage() {
   const [genres, setGenres] = useState<Genre[]>([]);
@@ -21,6 +24,7 @@ export default function RecommendationsPage() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { savedFilters, saveError, save, remove } = useSavedFilters();
 
   useEffect(() => {
     (async () => {
@@ -54,17 +58,32 @@ export default function RecommendationsPage() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount
-    load(EMPTY_CATALOG_FILTERS);
+    const stored = loadStoredFilters("recommendations") ?? EMPTY_CATALOG_FILTERS;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted filters + fetch on mount
+    setFilters(stored);
+    load(stored);
   }, [load]);
 
   function applyFilters() {
+    storeFilters("recommendations", filters);
     load(filters);
   }
 
   function clearFilters() {
+    clearStoredFilters("recommendations");
     setFilters(EMPTY_CATALOG_FILTERS);
     load(EMPTY_CATALOG_FILTERS);
+  }
+
+  function applySavedFilters(entry: SavedFilterEntry) {
+    setFilters(entry.filters);
+    storeFilters("recommendations", entry.filters);
+    load(entry.filters);
+  }
+
+  async function saveCurrentFilters(name: string) {
+    const ok = await save(name, filters);
+    if (ok) applyFilters();
   }
 
   function handleRated(titleId: string) {
@@ -85,6 +104,11 @@ export default function RecommendationsPage() {
               providers={providers}
               onApply={applyFilters}
               onClear={clearFilters}
+              savedFilters={savedFilters}
+              onApplySaved={applySavedFilters}
+              onDeleteSaved={remove}
+              onSaveCurrent={saveCurrentFilters}
+              saveError={saveError}
             />
           </div>
         </aside>

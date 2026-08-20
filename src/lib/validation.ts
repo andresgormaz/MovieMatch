@@ -36,3 +36,35 @@ export const preferenceAdjustSchema = z.object({
 export const wishlistSchema = z.object({
   titleId: z.string().min(1),
 });
+
+// Mirrors CatalogFilters (src/components/explore/FilterPanel.tsx) -- the
+// same shape the filter panel already builds client-side, just validated
+// and size-capped before it's JSON-stringified into SavedFilter.filters.
+const personOptionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  photoUrl: z.string().nullable(),
+});
+
+const catalogFiltersSchema = z.object({
+  q: z.string().max(200),
+  type: z.enum(["", "MOVIE", "SERIES"]),
+  yearFrom: z.union([z.number(), z.literal("")]),
+  yearTo: z.union([z.number(), z.literal("")]),
+  scoreFrom: z.union([z.number(), z.literal("")]),
+  scoreTo: z.union([z.number(), z.literal("")]),
+  votesMin: z.union([z.number(), z.literal("")]),
+  budgetFrom: z.union([z.number(), z.literal("")]),
+  budgetTo: z.union([z.number(), z.literal("")]),
+  genreIds: z.array(z.number()).max(200),
+  countries: z.array(z.string()).max(200),
+  providerIds: z.array(z.number()).max(200),
+  actor: personOptionSchema.nullable(),
+  director: personOptionSchema.nullable(),
+  sort: z.enum(["popularity", "year", "score", "votes"]),
+});
+
+export const savedFilterSchema = z.object({
+  name: z.string().trim().min(1, "Ponle un nombre al filtro").max(60, "Nombre muy largo (máx. 60 caracteres)"),
+  filters: catalogFiltersSchema,
+});

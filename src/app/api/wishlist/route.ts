@@ -4,8 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl, tmdbLogoUrl } from "@/lib/tmdb";
 import { wishlistSchema } from "@/lib/validation";
 import { displayTitleName } from "@/lib/titleDisplay";
+import { parseTitleFilterParams, buildTitleWhere } from "@/lib/titleFilters";
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   const userId = session.user.id;
@@ -16,8 +17,12 @@ export async function GET() {
   });
   const userCountry = user?.country ?? null;
 
+  const { searchParams } = new URL(request.url);
+  const filterParams = parseTitleFilterParams(searchParams);
+  const titleWhere = buildTitleWhere(filterParams, userCountry);
+
   const entries = await prisma.wishlist.findMany({
-    where: { userId },
+    where: { userId, title: titleWhere },
     orderBy: { addedAt: "desc" },
     include: {
       title: {

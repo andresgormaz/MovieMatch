@@ -12,7 +12,10 @@ import {
   type Genre,
   type Country,
   type Provider,
+  type SavedFilterEntry,
 } from "@/components/explore/FilterPanel";
+import { loadStoredFilters, storeFilters, clearStoredFilters } from "@/lib/filterStorage";
+import { useSavedFilters } from "@/lib/useSavedFilters";
 
 export default function ExplorePage() {
   return (
@@ -34,6 +37,7 @@ function ExplorePageInner() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { savedFilters, saveError, save, remove } = useSavedFilters();
 
   useEffect(() => {
     (async () => {
@@ -63,18 +67,37 @@ function ExplorePageInner() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial results load on mount, including ?q= from the navbar search
-    runSearch({ ...EMPTY_CATALOG_FILTERS, q: initialQ }, 1, false);
+    // Restore whatever was last applied on this page (sticky until
+    // "Limpiar") -- a `?q=` from the navbar search still wins over a stored
+    // search term, but the rest of the stored filters carry over.
+    const stored = loadStoredFilters("explore") ?? EMPTY_CATALOG_FILTERS;
+    const initial = initialQ ? { ...stored, q: initialQ } : stored;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted filters + initial results load on mount
+    setFilters(initial);
+    runSearch(initial, 1, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only ever re-runs from runSearch identity, initialQ is read once on mount
   }, [runSearch]);
 
   function applyFilters() {
+    storeFilters("explore", filters);
     runSearch(filters, 1, false);
   }
 
   function clearFilters() {
+    clearStoredFilters("explore");
     setFilters(EMPTY_CATALOG_FILTERS);
     runSearch(EMPTY_CATALOG_FILTERS, 1, false);
+  }
+
+  function applySavedFilters(entry: SavedFilterEntry) {
+    setFilters(entry.filters);
+    storeFilters("explore", entry.filters);
+    runSearch(entry.filters, 1, false);
+  }
+
+  async function saveCurrentFilters(name: string) {
+    const ok = await save(name, filters);
+    if (ok) applyFilters();
   }
 
   return (
@@ -93,6 +116,11 @@ function ExplorePageInner() {
               onClear={clearFilters}
               showSort
               showSearch
+              savedFilters={savedFilters}
+              onApplySaved={applySavedFilters}
+              onDeleteSaved={remove}
+              onSaveCurrent={saveCurrentFilters}
+              saveError={saveError}
             />
           </div>
         </aside>

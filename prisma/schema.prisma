@@ -73,6 +73,7 @@ model User {
   onboardingChoices  OnboardingChoice[]
   ownedGroups        Group[]       @relation("GroupOwner")
   groupMemberships   GroupMember[]
+  savedFilters       SavedFilter[]
 }
 
 // One "which do you like more" round from onboarding -- titleAId/titleBId
@@ -388,5 +389,25 @@ model UserPopularityPreference {
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, range])
+  @@index([userId])
+}
+
+// Named, reusable filter presets from the "Aplicar y guardar" button on the
+// filter panel -- the same CatalogFilters shape (src/components/explore/
+// FilterPanel.tsx) is meaningful on /explore, /recommendations, and
+// /wishlist, so a preset isn't scoped to whichever page it was created on.
+// `filters` is the whole CatalogFilters object, JSON-serialized -- there's
+// no relational precedent in this schema for a struct this shaped (ranges,
+// arrays, a nested actor/director pick), and it's only ever read back
+// through the same shape it was written in.
+model SavedFilter {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  filters   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
   @@index([userId])
 }

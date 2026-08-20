@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { RangeInput } from "@/components/explore/RangeInput";
 import { PersonAutocomplete } from "@/components/explore/PersonAutocomplete";
+import { EMPTY_CATALOG_FILTERS, buildCatalogQuery, type PersonOption, type CatalogFilters, type SortOption } from "@/lib/catalogFilters";
 
-export interface PersonOption {
-  id: string;
-  name: string;
-  photoUrl: string | null;
-}
+// Re-exported so existing imports (`from "@/components/explore/FilterPanel"`)
+// keep working -- the actual definitions live in src/lib/catalogFilters.ts,
+// a plain (non-"use client") module, so server code (the saved-filters API
+// routes) can import the same shape without pulling in this client component.
+export { EMPTY_CATALOG_FILTERS, buildCatalogQuery };
+export type { PersonOption, CatalogFilters, SortOption };
 
 export interface Genre {
   id: number;
@@ -24,61 +26,11 @@ export interface Provider {
   logoPath: string | null;
 }
 
-export type SortOption = "popularity" | "year" | "score" | "votes";
-
-export interface CatalogFilters {
-  q: string;
-  type: "" | "MOVIE" | "SERIES";
-  yearFrom: number | "";
-  yearTo: number | "";
-  scoreFrom: number | "";
-  scoreTo: number | "";
-  votesMin: number | "";
-  budgetFrom: number | "";
-  budgetTo: number | "";
-  genreIds: number[];
-  countries: string[];
-  providerIds: number[];
-  actor: PersonOption | null;
-  director: PersonOption | null;
-  sort: SortOption;
-}
-
-export const EMPTY_CATALOG_FILTERS: CatalogFilters = {
-  q: "",
-  type: "",
-  yearFrom: "",
-  yearTo: "",
-  scoreFrom: "",
-  scoreTo: "",
-  votesMin: "",
-  budgetFrom: "",
-  budgetTo: "",
-  genreIds: [],
-  countries: [],
-  providerIds: [],
-  actor: null,
-  director: null,
-  sort: "popularity",
-};
-
-export function buildCatalogQuery(filters: CatalogFilters): URLSearchParams {
-  const params = new URLSearchParams();
-  if (filters.q.trim()) params.set("q", filters.q.trim());
-  if (filters.type) params.set("type", filters.type);
-  if (filters.yearFrom !== "") params.set("yearFrom", String(filters.yearFrom));
-  if (filters.yearTo !== "") params.set("yearTo", String(filters.yearTo));
-  if (filters.scoreFrom !== "") params.set("scoreFrom", String(filters.scoreFrom));
-  if (filters.scoreTo !== "") params.set("scoreTo", String(filters.scoreTo));
-  if (filters.votesMin !== "") params.set("votesMin", String(filters.votesMin));
-  if (filters.budgetFrom !== "") params.set("budgetFrom", String(filters.budgetFrom));
-  if (filters.budgetTo !== "") params.set("budgetTo", String(filters.budgetTo));
-  if (filters.genreIds.length) params.set("genreIds", filters.genreIds.join(","));
-  if (filters.countries.length) params.set("countries", filters.countries.join(","));
-  if (filters.providerIds.length) params.set("providerIds", filters.providerIds.join(","));
-  if (filters.actor) params.set("actorId", filters.actor.id);
-  if (filters.director) params.set("directorId", filters.director.id);
-  return params;
+// One named, reusable filter preset -- see SavedFilter in schema.prisma.
+export interface SavedFilterEntry {
+  id: string;
+  name: string;
+  filters: CatalogFilters;
 }
 
 function FilterSection({
@@ -117,6 +69,11 @@ export function FilterPanel({
   showSort = false,
   showType = true,
   showSearch = false,
+  savedFilters,
+  onApplySaved,
+  onDeleteSaved,
+  onSaveCurrent,
+  saveError,
 }: {
   filters: CatalogFilters;
   onChange: (updater: (prev: CatalogFilters) => CatalogFilters) => void;
@@ -128,7 +85,23 @@ export function FilterPanel({
   showSort?: boolean;
   showType?: boolean;
   showSearch?: boolean;
+  savedFilters?: SavedFilterEntry[];
+  onApplySaved?: (entry: SavedFilterEntry) => void;
+  onDeleteSaved?: (id: string) => void;
+  onSaveCurrent?: (name: string) => void;
+  saveError?: string | null;
 }) {
+  const [savingName, setSavingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+
+  function confirmSave() {
+    const trimmed = nameDraft.trim();
+    if (!trimmed || !onSaveCurrent) return;
+    onSaveCurrent(trimmed);
+    setNameDraft("");
+    setSavingName(false);
+  }
+
   function toggleGenre(id: number) {
     onChange((f) => ({
       ...f,
@@ -167,6 +140,32 @@ export function FilterPanel({
       )}
 
       <h2 className="text-lg font-bold text-white">Filtros</h2>
+
+      {savedFilters !== undefined && savedFilters.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs text-muted">Filtros guardados</label>
+          <div className="flex flex-wrap gap-1.5">
+            {savedFilters.map((sf) => (
+              <span
+                key={sf.id}
+                className="flex items-center gap-1 rounded-full border border-white/15 py-1 pr-1 pl-2.5 text-xs text-neutral-300"
+              >
+                <button type="button" onClick={() => onApplySaved?.(sf)} className="hover:text-white">
+                  {sf.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteSaved?.(sf.id)}
+                  aria-label={`Eliminar filtro guardado ${sf.name}`}
+                  className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-white/10 hover:text-white"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showType && (
         <div className="flex gap-2">
@@ -337,6 +336,57 @@ export function FilterPanel({
           Limpiar
         </button>
       </div>
+
+      {onSaveCurrent && (
+        <div className="flex flex-col gap-2 border-t border-white/10 pt-3">
+          {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+          {!savingName ? (
+            <button
+              type="button"
+              onClick={() => setSavingName(true)}
+              className="text-left text-xs font-medium text-accent-hover hover:underline"
+            >
+              + Guardar estos filtros
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmSave();
+                }}
+                placeholder="Nombre del filtro"
+                maxLength={60}
+                aria-label="Nombre del filtro guardado"
+                className="rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={confirmSave}
+                  disabled={!nameDraft.trim()}
+                  className="flex-1 rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+                >
+                  Aplicar y guardar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSavingName(false);
+                    setNameDraft("");
+                  }}
+                  className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:border-white/30"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
