@@ -37,6 +37,7 @@ function ExplorePageInner() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [activeSavedFilterId, setActiveSavedFilterId] = useState<string | null>(null);
   const { savedFilters, saveError, save, remove } = useSavedFilters();
 
   useEffect(() => {
@@ -85,19 +86,31 @@ function ExplorePageInner() {
 
   function clearFilters() {
     clearStoredFilters("explore");
+    setActiveSavedFilterId(null);
     setFilters(EMPTY_CATALOG_FILTERS);
     runSearch(EMPTY_CATALOG_FILTERS, 1, false);
   }
 
+  // Any manual edit means the applied filters no longer exactly match
+  // whichever saved preset was last selected, so it stops looking "active".
+  function changeFilters(updater: (prev: CatalogFilters) => CatalogFilters) {
+    setActiveSavedFilterId(null);
+    setFilters(updater);
+  }
+
   function applySavedFilters(entry: SavedFilterEntry) {
+    setActiveSavedFilterId(entry.id);
     setFilters(entry.filters);
     storeFilters("explore", entry.filters);
     runSearch(entry.filters, 1, false);
   }
 
   async function saveCurrentFilters(name: string) {
-    const ok = await save(name, filters);
-    if (ok) applyFilters();
+    const saved = await save(name, filters);
+    if (saved) {
+      setActiveSavedFilterId(saved.id);
+      applyFilters();
+    }
   }
 
   return (
@@ -108,7 +121,7 @@ function ExplorePageInner() {
           <div className="lg:sticky lg:top-20">
             <FilterPanel
               filters={filters}
-              onChange={setFilters}
+              onChange={changeFilters}
               genres={genres}
               countries={countries}
               providers={providers}
@@ -117,6 +130,7 @@ function ExplorePageInner() {
               showSort
               showSearch
               savedFilters={savedFilters}
+              activeSavedFilterId={activeSavedFilterId}
               onApplySaved={applySavedFilters}
               onDeleteSaved={remove}
               onSaveCurrent={saveCurrentFilters}

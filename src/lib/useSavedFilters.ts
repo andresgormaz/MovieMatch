@@ -24,7 +24,9 @@ export function useSavedFilters() {
     refresh();
   }, [refresh]);
 
-  async function save(name: string, filters: CatalogFilters): Promise<boolean> {
+  // Returns the created entry (so the caller can mark it as the currently
+  // active saved filter) or null on failure.
+  async function save(name: string, filters: CatalogFilters): Promise<SavedFilterEntry | null> {
     setSaveError(null);
     try {
       const res = await fetch("/api/saved-filters", {
@@ -35,13 +37,14 @@ export function useSavedFilters() {
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         setSaveError(data?.error ?? "No se pudo guardar el filtro.");
-        return false;
+        return null;
       }
-      setSavedFilters((prev) => [...prev, data.savedFilter].sort((a, b) => a.name.localeCompare(b.name)));
-      return true;
+      const entry: SavedFilterEntry = data.savedFilter;
+      setSavedFilters((prev) => [...prev, entry].sort((a, b) => a.name.localeCompare(b.name)));
+      return entry;
     } catch {
       setSaveError("No se pudo guardar el filtro.");
-      return false;
+      return null;
     }
   }
 

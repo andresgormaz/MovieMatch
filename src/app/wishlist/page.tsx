@@ -24,6 +24,7 @@ export default function WishlistPage() {
   const [filters, setFilters] = useState<CatalogFilters>(EMPTY_CATALOG_FILTERS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeSavedFilterId, setActiveSavedFilterId] = useState<string | null>(null);
   const { savedFilters, saveError, save, remove } = useSavedFilters();
 
   useEffect(() => {
@@ -69,19 +70,29 @@ export default function WishlistPage() {
 
   function clearFilters() {
     clearStoredFilters("wishlist");
+    setActiveSavedFilterId(null);
     setFilters(EMPTY_CATALOG_FILTERS);
     load(EMPTY_CATALOG_FILTERS);
   }
 
+  function changeFilters(updater: (prev: CatalogFilters) => CatalogFilters) {
+    setActiveSavedFilterId(null);
+    setFilters(updater);
+  }
+
   function applySavedFilters(entry: SavedFilterEntry) {
+    setActiveSavedFilterId(entry.id);
     setFilters(entry.filters);
     storeFilters("wishlist", entry.filters);
     load(entry.filters);
   }
 
   async function saveCurrentFilters(name: string) {
-    const ok = await save(name, filters);
-    if (ok) applyFilters();
+    const saved = await save(name, filters);
+    if (saved) {
+      setActiveSavedFilterId(saved.id);
+      applyFilters();
+    }
   }
 
   function handleRemoved(titleId: string) {
@@ -96,13 +107,14 @@ export default function WishlistPage() {
           <div className="lg:sticky lg:top-20">
             <FilterPanel
               filters={filters}
-              onChange={setFilters}
+              onChange={changeFilters}
               genres={genres}
               countries={countries}
               providers={providers}
               onApply={applyFilters}
               onClear={clearFilters}
               savedFilters={savedFilters}
+              activeSavedFilterId={activeSavedFilterId}
               onApplySaved={applySavedFilters}
               onDeleteSaved={remove}
               onSaveCurrent={saveCurrentFilters}

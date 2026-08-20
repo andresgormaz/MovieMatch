@@ -70,6 +70,7 @@ export function FilterPanel({
   showType = true,
   showSearch = false,
   savedFilters,
+  activeSavedFilterId,
   onApplySaved,
   onDeleteSaved,
   onSaveCurrent,
@@ -86,6 +87,7 @@ export function FilterPanel({
   showType?: boolean;
   showSearch?: boolean;
   savedFilters?: SavedFilterEntry[];
+  activeSavedFilterId?: string | null;
   onApplySaved?: (entry: SavedFilterEntry) => void;
   onDeleteSaved?: (id: string) => void;
   onSaveCurrent?: (name: string) => void;
@@ -93,10 +95,26 @@ export function FilterPanel({
 }) {
   const [savingName, setSavingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  // Bumped every time a filter is actually applied (button, Enter, a saved
+  // chip, or "Aplicar y guardar") -- used as part of each FilterSection's
+  // `key` below so they remount collapsed, freeing up screen space for the
+  // results list instead of staying expanded after the user is done picking.
+  const [collapseSignal, setCollapseSignal] = useState(0);
+
+  function applyAndCollapse() {
+    setCollapseSignal((n) => n + 1);
+    onApply();
+  }
+
+  function applySavedAndCollapse(entry: SavedFilterEntry) {
+    setCollapseSignal((n) => n + 1);
+    onApplySaved?.(entry);
+  }
 
   function confirmSave() {
     const trimmed = nameDraft.trim();
     if (!trimmed || !onSaveCurrent) return;
+    setCollapseSignal((n) => n + 1);
     onSaveCurrent(trimmed);
     setNameDraft("");
     setSavingName(false);
@@ -131,7 +149,7 @@ export function FilterPanel({
           value={filters.q}
           onChange={(e) => onChange((f) => ({ ...f, q: e.target.value }))}
           onKeyDown={(e) => {
-            if (e.key === "Enter") onApply();
+            if (e.key === "Enter") applyAndCollapse();
           }}
           placeholder="Buscar por nombre…"
           aria-label="Buscar por nombre"
@@ -145,24 +163,35 @@ export function FilterPanel({
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-muted">Filtros guardados</label>
           <div className="flex flex-wrap gap-1.5">
-            {savedFilters.map((sf) => (
-              <span
-                key={sf.id}
-                className="flex items-center gap-1 rounded-full border border-white/15 py-1 pr-1 pl-2.5 text-xs text-neutral-300"
-              >
-                <button type="button" onClick={() => onApplySaved?.(sf)} className="hover:text-white">
-                  {sf.name}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDeleteSaved?.(sf.id)}
-                  aria-label={`Eliminar filtro guardado ${sf.name}`}
-                  className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-white/10 hover:text-white"
+            {savedFilters.map((sf) => {
+              const active = sf.id === activeSavedFilterId;
+              return (
+                <span
+                  key={sf.id}
+                  className={`flex items-center gap-1 rounded-full border py-1 pr-1 pl-2.5 text-xs transition-colors ${
+                    active ? "border-accent bg-accent text-white" : "border-white/15 text-neutral-300"
+                  }`}
                 >
-                  ×
-                </button>
-              </span>
-            ))}
+                  <button
+                    type="button"
+                    onClick={() => applySavedAndCollapse(sf)}
+                    className={active ? "" : "hover:text-white"}
+                  >
+                    {sf.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteSaved?.(sf.id)}
+                    aria-label={`Eliminar filtro guardado ${sf.name}`}
+                    className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full ${
+                      active ? "text-white/70 hover:bg-white/20 hover:text-white" : "text-neutral-500 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
@@ -189,7 +218,7 @@ export function FilterPanel({
         </div>
       )}
 
-      <FilterSection title="Plataformas, puntaje, popularidad y año">
+      <FilterSection key={`platforms-${collapseSignal}`} title="Plataformas, puntaje, popularidad y año">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-muted">Plataformas de streaming</label>
           {providers.length === 0 ? (
@@ -247,7 +276,7 @@ export function FilterPanel({
         />
       </FilterSection>
 
-      <FilterSection title="Más filtros">
+      <FilterSection key={`more-${collapseSignal}`} title="Más filtros">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs text-muted">Géneros</label>
           <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pr-1">
@@ -324,7 +353,7 @@ export function FilterPanel({
 
       <div className="flex gap-2">
         <button
-          onClick={onApply}
+          onClick={applyAndCollapse}
           className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
         >
           Aplicar filtros
