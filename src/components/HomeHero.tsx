@@ -118,7 +118,7 @@ export function HomeHero() {
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border bg-surface">
-      <div className="relative h-56 w-full sm:h-72">
+      <Link href={`/title/${pick.id}`} className="relative block h-56 w-full sm:h-72">
         {pick.backdropUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={pick.backdropUrl} alt="" className="h-full w-full object-cover" />
@@ -126,7 +126,7 @@ export function HomeHero() {
           <div className="h-full w-full bg-gradient-to-br from-accent/30 to-black" />
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent" />
-      </div>
+      </Link>
 
       <div className="relative -mt-14 flex flex-col gap-3 px-5 pb-5 sm:-mt-16">
         <span className="w-fit rounded bg-green-500/15 px-2 py-0.5 text-xs font-bold text-green-400">
