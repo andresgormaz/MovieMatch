@@ -181,9 +181,13 @@ function hashString(str: string): number {
 
 const FROM_DATE = "2000-01-01"; // "principales películas/series del 2000 a la fecha"
 const PAGE_SIZE = 20; // fixed by the TMDB API
-const MOVIE_PAGES_PER_CALL = 6; // ~120 movies per call
-const TV_PAGES_PER_CALL = 4; // ~80 series per call
-const ENRICH_PER_CALL = 40; // cast/crew/country lookups per call (rate + time budget)
+// Sized against the route's maxDuration=270s (see api/admin/seed/route.ts) --
+// enrichTitles is the dominant cost (one full details+credits+providers
+// call per title, ~80ms sleep between each), so ENRICH_PER_CALL is the
+// tightest of these; the discover-page loops are comparatively cheap.
+const MOVIE_PAGES_PER_CALL = 20; // ~400 movies per call
+const TV_PAGES_PER_CALL = 14; // ~280 series per call
+const ENRICH_PER_CALL = 140; // cast/crew/country lookups per call (rate + time budget)
 
 // Resumable: figures out where the last call left off from what's already
 // in the DB (no separate cursor table needed), fetches the next batch of
@@ -646,7 +650,7 @@ async function enrichTitles(
   return allPeople.size;
 }
 
-const VOTES_BACKFILL_PER_CALL = 150; // no credits/providers/recommendations parsing, so more fit per call
+const VOTES_BACKFILL_PER_CALL = 500; // no credits/providers/recommendations parsing, so more fit per call
 
 // One-time bulk fill for titles whose voteCount is still null (imported
 // before that column existed). Deliberately skips credits/watch-providers/
@@ -685,7 +689,7 @@ async function backfillVoteCounts(): Promise<SeedResult> {
   };
 }
 
-const ATTRIBUTES_BACKFILL_PER_CALL = 150; // same lightweight bare-call budget as votes
+const ATTRIBUTES_BACKFILL_PER_CALL = 500; // same lightweight bare-call budget as votes
 
 // One-time bulk fill for titles whose runtime is still null (imported before
 // that column existed, or before this backfill existed) -- also catches up
@@ -742,7 +746,7 @@ async function backfillAttributes(): Promise<SeedResult> {
   };
 }
 
-const ANIME_PAGES_PER_CALL = 6; // ~150 anime per call -- no per-title enrichment call needed
+const ANIME_PAGES_PER_CALL = 25; // Jikan's 400ms rate-limit sleep dominates here, not the fetch itself -- no per-title enrichment call needed
 
 // Anime import from Jikan. Unlike TMDB, genres/score/studio all come back in
 // the same list response, so there's no separate enrichment phase -- one

@@ -15,7 +15,14 @@ import { seedCatalog } from "@/lib/seedCatalog";
 // &source=votes to run the one-time voteCount backfill (also resumable).
 // Add &source=attributes to run the one-time runtime/collection/budget
 // backfill (also resumable).
-export const maxDuration = 60;
+//
+// 270s (not the old 60s) -- Vercel's Fluid Compute raised the Hobby-plan
+// serverless timeout to 300s; this leaves a margin. If the Vercel project
+// still has Fluid Compute off, this value is simply ignored and the
+// platform falls back to its own default -- harmless (a call just times
+// out and resumes next visit, same as before), but worth checking Project
+// Settings -> Functions if imports don't seem to be moving faster.
+export const maxDuration = 270;
 
 export async function GET(request: Request) {
   const secret = process.env.SEED_SECRET;
