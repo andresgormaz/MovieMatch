@@ -47,12 +47,25 @@ const POPULARITY_LABELS: Record<PopularityRange, string> = {
   HIGH: "Muy popular (TMDB)",
 };
 
-// The catalog can be thousands of titles now (TMDB + anime import); scoring
-// every single unrated one on every request doesn't scale and was timing
-// out the recommendations endpoint. Rank the most popular slice first --
-// a title with a handful of votes buried in the tail was unlikely to be a
-// great recommendation anyway, and popularity already factors into scoring.
-const CANDIDATE_POOL_SIZE = 600;
+// The catalog can be tens of thousands of titles now (TMDB + anime import);
+// scoring every single unrated one on every request doesn't scale and was
+// timing out the recommendations endpoint. Candidates come from two pools
+// instead of one flat "most popular" slice:
+//  - POPULARITY_POOL_SIZE: the most popular titles overall -- a reasonable
+//    baseline, and the only source available before someone has any
+//    preferences yet.
+//  - TARGETED_POOL_SIZE: titles connected to the user's strongest genre/
+//    actor/director preferences (via indexed lookups), regardless of how
+//    popular they are. Without this, a niche title that's a perfect match
+//    for someone's specific taste could never be considered just for
+//    sitting outside the popularity pool -- popularity and "will this
+//    person like it" are related but not the same thing.
+// The two pools are merged (deduped by id) before scoring, so a title only
+// needs to earn its way in through either door.
+const POPULARITY_POOL_SIZE = 400;
+const TARGETED_POOL_SIZE = 400;
+const MAX_TARGETED_GENRES = 10;
+const MAX_TARGETED_PEOPLE = 30;
 
 export interface RecommendationProvider {
   id: number;
@@ -100,15 +113,66 @@ function candidateInclude(userCountry?: string | null) {
   } satisfies Prisma.TitleInclude;
 }
 
-type CandidateTitle = Awaited<ReturnType<typeof fetchCandidates>>[number];
+type CandidateTitle = Awaited<ReturnType<typeof fetchPopularCandidates>>[number];
 
-function fetchCandidates(where: Prisma.TitleWhereInput, userCountry?: string | null) {
+function fetchPopularCandidates(where: Prisma.TitleWhereInput, userCountry?: string | null) {
   return prisma.title.findMany({
     where,
     orderBy: { popularity: "desc" },
-    take: CANDIDATE_POOL_SIZE,
+    take: POPULARITY_POOL_SIZE,
     include: candidateInclude(userCountry),
   });
+}
+
+// Sorted desc by weight, positive-only (a disliked genre/actor/director
+// shouldn't pull in more candidates to then get penalized), capped so the
+// resulting IN-list stays a reasonable size.
+function topPositiveKeys<K>(map: Map<K, number>, limit: number): K[] {
+  return [...map.entries()]
+    .filter(([, w]) => w > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([k]) => k);
+}
+
+function fetchTargetedCandidates(
+  where: Prisma.TitleWhereInput,
+  prefs: DerivedPreferences,
+  userCountry?: string | null,
+): Promise<CandidateTitle[]> {
+  const genreIds = topPositiveKeys(prefs.genre, MAX_TARGETED_GENRES);
+  const actorIds = topPositiveKeys(prefs.actor, MAX_TARGETED_PEOPLE);
+  const directorIds = topPositiveKeys(prefs.director, MAX_TARGETED_PEOPLE);
+
+  const or: Prisma.TitleWhereInput[] = [];
+  if (genreIds.length > 0) or.push({ genres: { some: { genreId: { in: genreIds } } } });
+  if (actorIds.length > 0) or.push({ cast: { some: { personId: { in: actorIds } } } });
+  if (directorIds.length > 0) or.push({ crew: { some: { personId: { in: directorIds } } } });
+  // No positive preferences yet (brand new user/group) -- nothing to
+  // target, the popularity pool alone is all there is to work with.
+  if (or.length === 0) return Promise.resolve([]);
+
+  return prisma.title.findMany({
+    where: { AND: [where, { OR: or }] },
+    orderBy: { popularity: "desc" },
+    take: TARGETED_POOL_SIZE,
+    include: candidateInclude(userCountry),
+  });
+}
+
+async function fetchCandidates(
+  where: Prisma.TitleWhereInput,
+  prefs: DerivedPreferences,
+  userCountry?: string | null,
+): Promise<CandidateTitle[]> {
+  const [popular, targeted] = await Promise.all([
+    fetchPopularCandidates(where, userCountry),
+    fetchTargetedCandidates(where, prefs, userCountry),
+  ]);
+  const byId = new Map<string, CandidateTitle>();
+  for (const t of popular) byId.set(t.id, t);
+  for (const t of targeted) byId.set(t.id, t);
+  return [...byId.values()];
 }
 
 // The single source of truth for how a title's score is built -- used both
@@ -305,6 +369,7 @@ export async function getRecommendations(
       wishlist: { none: { userId } },
       ...(opts.filters ?? {}),
     },
+    prefs,
     opts.userCountry,
   );
 
@@ -340,6 +405,7 @@ export async function getGroupRecommendations(
       wishlist: { none: { userId: { in: memberIds } } },
       ...(opts.filters ?? {}),
     },
+    prefs,
     opts.userCountry,
   );
 
