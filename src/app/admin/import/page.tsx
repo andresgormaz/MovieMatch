@@ -2,10 +2,11 @@
 
 import { useRef, useState } from "react";
 
-type Source = "auto" | "anime" | "votes" | "attributes";
+type Source = "auto" | "anime" | "votes" | "attributes" | "classic";
 
 const SOURCES: { value: Source; label: string; hint: string }[] = [
-  { value: "auto", label: "Catálogo (películas y series)", hint: "El import principal desde TMDB." },
+  { value: "auto", label: "Catálogo (2000 en adelante)", hint: "El import principal desde TMDB." },
+  { value: "classic", label: "Clásicas (1990-1999)", hint: "Complementa el catálogo con películas y series de los 90, sin repetir lo del 2000+." },
   { value: "anime", label: "Anime", hint: "Importa anime desde Jikan/MyAnimeList." },
   { value: "votes", label: "Votos faltantes", hint: "Rellena puntaje/cantidad de votos en títulos que quedaron sin eso." },
   { value: "attributes", label: "Duración/colección faltante", hint: "Rellena duración, presupuesto y colección en títulos que quedaron sin eso." },

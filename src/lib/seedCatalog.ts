@@ -52,7 +52,7 @@ export async function ensureSchema() {
 }
 
 export async function seedCatalog(
-  opts: { force?: boolean; source?: "auto" | "anime" | "votes" | "attributes" } = {},
+  opts: { force?: boolean; source?: "auto" | "anime" | "votes" | "attributes" | "classic" } = {},
 ): Promise<SeedResult> {
   await ensureSchema();
 
@@ -74,11 +74,20 @@ export async function seedCatalog(
     return seedAnimeFromJikan();
   }
 
+  if (opts.source === "classic") {
+    // A second, independent import stream for 1990-1999 -- bounded on both
+    // ends so it never re-walks the 2000-present range the main stream
+    // already covers. Its own resumable page counter is scoped to this era
+    // (see seedFromTmdb's releaseYear-bounded counts) so the two streams
+    // can't step on each other's pagination.
+    return seedFromTmdb({ fromDate: "1990-01-01", toDate: "1999-12-31" });
+  }
+
   if (hasTmdbKey()) {
     // Incremental/resumable: every call fetches the next batch of pages and
     // enriches a bounded number of titles, so revisiting the seed endpoint
     // keeps growing the catalog without ever timing out a single request.
-    return seedFromTmdb();
+    return seedFromTmdb({ fromDate: FROM_DATE });
   }
 
   const existing = await prisma.title.count();
@@ -201,7 +210,7 @@ const ENRICH_PER_CALL = 140; // cast/crew/country lookups per call (rate + time 
 // missing cast/crew. Safe to call repeatedly. Writes are batched (createMany
 // + a follow-up lookup) instead of one row at a time -- each network round
 // trip to Turso adds up fast, and a serverless function only gets ~60s.
-async function seedFromTmdb(): Promise<SeedResult> {
+async function seedFromTmdb(range: { fromDate: string; toDate?: string }): Promise<SeedResult> {
   // Real TMDB data supersedes the local fallback dataset (negative synthetic
   // ids) -- drop it once so the catalog doesn't show duplicates.
   await prisma.title.deleteMany({ where: { tmdbId: { lt: 0 } } });
@@ -226,10 +235,21 @@ async function seedFromTmdb(): Promise<SeedResult> {
   // gt:0/lt:ANIME_ID_OFFSET scopes these to real TMDB rows -- anime rows
   // (tmdbId = ANIME_ID_OFFSET + mal_id) are also positive and would
   // otherwise throw the page-counting math off and get "enriched" against
-  // TMDB with a bogus id.
+  // TMDB with a bogus id. Also scoped to this call's own release-year range
+  // (e.g. 1990-1999 for the "classic" stream) -- otherwise a second import
+  // stream sharing the same Title table would inflate the other stream's
+  // count and corrupt its page-resume math. For the unbounded modern stream
+  // (toDate undefined) every title in the DB already satisfies `releaseYear
+  // >= fromYear` today, so adding this bound doesn't change its behavior at
+  // all -- it's just future-proofing against the classic stream's inserts.
+  const fromYear = Number(range.fromDate.slice(0, 4));
+  const toYear = range.toDate ? Number(range.toDate.slice(0, 4)) : undefined;
+  const yearFilter = { gte: fromYear, ...(toYear !== undefined ? { lte: toYear } : {}) };
   const [movieCount, seriesCount, maxRankRow] = await Promise.all([
-    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET } } }),
-    prisma.title.count({ where: { type: "SERIES", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET } } }),
+    prisma.title.count({ where: { type: "MOVIE", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, releaseYear: yearFilter } }),
+    prisma.title.count({
+      where: { type: "SERIES", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, releaseYear: yearFilter },
+    }),
     prisma.title.aggregate({ _max: { onboardingRank: true } }),
   ]);
 
@@ -245,7 +265,7 @@ async function seedFromTmdb(): Promise<SeedResult> {
       moviesExhausted = true;
       break;
     }
-    const res = await tmdb.discoverMovies(page, FROM_DATE);
+    const res = await tmdb.discoverMovies(page, range.fromDate, range.toDate);
     movies.push(...res.results);
     await sleep(80);
     if (page >= res.total_pages || page >= TMDB_MAX_DISCOVER_PAGE) {
@@ -262,7 +282,7 @@ async function seedFromTmdb(): Promise<SeedResult> {
       seriesExhausted = true;
       break;
     }
-    const res = await tmdb.discoverTv(page, FROM_DATE);
+    const res = await tmdb.discoverTv(page, range.fromDate, range.toDate);
     series.push(...res.results);
     await sleep(80);
     if (page >= res.total_pages || page >= TMDB_MAX_DISCOVER_PAGE) {

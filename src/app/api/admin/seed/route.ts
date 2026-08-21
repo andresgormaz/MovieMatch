@@ -14,7 +14,9 @@ import { seedCatalog } from "@/lib/seedCatalog";
 // from Jikan/MyAnimeList instead (also resumable the same way). Add
 // &source=votes to run the one-time voteCount backfill (also resumable).
 // Add &source=attributes to run the one-time runtime/collection/budget
-// backfill (also resumable).
+// backfill (also resumable). Add &source=classic to import 1990-1999
+// instead of the default 2000-present range (also resumable, independently
+// of the main range).
 //
 // 270s (not the old 60s) -- Vercel's Fluid Compute raised the Hobby-plan
 // serverless timeout to 300s; this leaves a margin. If the Vercel project
@@ -47,7 +49,9 @@ export async function GET(request: Request) {
         ? "votes"
         : sourceParam === "attributes"
           ? "attributes"
-          : "auto";
+          : sourceParam === "classic"
+            ? "classic"
+            : "auto";
 
   try {
     const result = await seedCatalog({ force, source });
@@ -55,6 +59,10 @@ export async function GET(request: Request) {
     let message: string;
     if (result.skipped) {
       message = `Ya había ${result.titles} títulos cargados, no se tocó nada. Agrega &force=1 a la URL para forzar una recarga.`;
+    } else if (result.mode === "tmdb" && source === "classic") {
+      message = result.done
+        ? `Listo, no quedan más páginas de 1990-1999: ${result.moviesTotal} películas y ${result.seriesTotal} series en total (catálogo completo, todas las épocas).`
+        : `Sumamos ${result.titles} títulos más de 1990-1999 (${result.moviesTotal} películas / ${result.seriesTotal} series en total, catálogo completo). Vuelve a visitar esta misma URL (con &source=classic) para seguir cargando más.`;
     } else if (result.mode === "tmdb") {
       message = result.done
         ? `Listo, no quedan más páginas: ${result.moviesTotal} películas y ${result.seriesTotal} series en total.`
