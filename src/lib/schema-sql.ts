@@ -34,6 +34,11 @@ export const TABLE_STATEMENTS = [
     "voteCount" INTEGER,
     "budget" INTEGER,
     "runtime" INTEGER,
+    "seasonsCount" INTEGER,
+    "episodesCount" INTEGER,
+    "status" TEXT,
+    "inProduction" BOOLEAN,
+    "lastAirDate" DATETIME,
     "collectionId" INTEGER,
     "originCountry" TEXT,
     "onboardingRank" INTEGER,
@@ -285,6 +290,11 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Person" ADD COLUMN "placeOfBirth" TEXT`,
   `ALTER TABLE "Person" ADD COLUMN "detailsFetchedAt" DATETIME`,
   `ALTER TABLE "User" ADD COLUMN "tourSeenAt" DATETIME`,
+  `ALTER TABLE "Title" ADD COLUMN "seasonsCount" INTEGER`,
+  `ALTER TABLE "Title" ADD COLUMN "episodesCount" INTEGER`,
+  `ALTER TABLE "Title" ADD COLUMN "status" TEXT`,
+  `ALTER TABLE "Title" ADD COLUMN "inProduction" BOOLEAN`,
+  `ALTER TABLE "Title" ADD COLUMN "lastAirDate" DATETIME`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

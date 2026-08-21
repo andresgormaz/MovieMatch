@@ -7,6 +7,7 @@ import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating, StarDisplay } from "@/components/StarRating";
 import { formatScore, formatSignedScore } from "@/lib/format";
+import { seasonsLabel, seriesStatusLabel } from "@/lib/seriesStatus";
 
 interface CastMember {
   id: string;
@@ -41,6 +42,11 @@ interface TitleDetail {
   voteAverage: number | null;
   voteCount: number | null;
   budget: number | null;
+  seasonsCount: number | null;
+  episodesCount: number | null;
+  status: string | null;
+  inProduction: boolean | null;
+  lastAirDate: string | null;
   originCountry: string | null;
   originCountryName: string | null;
   genres: string[];
@@ -255,6 +261,40 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 <dd className="inline text-neutral-200">{formatBudget(title.budget)}</dd>
               </div>
             ) : null}
+            {title.type === "SERIES" && seasonsLabel(title.seasonsCount) && (
+              <div>
+                <dt className="inline text-muted">Temporadas: </dt>
+                <dd className="inline text-neutral-200">{seasonsLabel(title.seasonsCount)}</dd>
+              </div>
+            )}
+            {title.type === "SERIES" && Boolean(title.episodesCount) && (
+              <div>
+                <dt className="inline text-muted">Episodios: </dt>
+                <dd className="inline text-neutral-200">{title.episodesCount}</dd>
+              </div>
+            )}
+            {title.type === "SERIES" && seriesStatusLabel(title.status) && (
+              <div>
+                <dt className="inline text-muted">Estado: </dt>
+                <dd className="inline text-neutral-200">
+                  {seriesStatusLabel(title.status)}
+                  {title.inProduction ? " (en producción)" : ""}
+                </dd>
+              </div>
+            )}
+            {title.type === "SERIES" && title.lastAirDate && (
+              <div>
+                <dt className="inline text-muted">Último episodio: </dt>
+                <dd className="inline text-neutral-200">
+                  {new Date(title.lastAirDate).toLocaleDateString("es", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    timeZone: "UTC",
+                  })}
+                </dd>
+              </div>
+            )}
           </dl>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-type Source = "auto" | "anime" | "votes" | "attributes" | "range";
+type Source = "auto" | "anime" | "votes" | "attributes" | "seriesStatus" | "range";
 
 const SOURCES: { value: Source; label: string; hint: string }[] = [
   { value: "auto", label: "Catálogo (2000 en adelante)", hint: "El import principal desde TMDB." },
@@ -14,6 +14,11 @@ const SOURCES: { value: Source; label: string; hint: string }[] = [
   { value: "anime", label: "Anime", hint: "Importa anime desde Jikan/MyAnimeList." },
   { value: "votes", label: "Votos faltantes", hint: "Rellena puntaje/cantidad de votos en títulos que quedaron sin eso." },
   { value: "attributes", label: "Duración/colección faltante", hint: "Rellena duración, presupuesto y colección en títulos que quedaron sin eso." },
+  {
+    value: "seriesStatus",
+    label: "Temporadas/estado faltante",
+    hint: "Rellena cantidad de temporadas, episodios y si la serie sigue en emisión, terminó o fue cancelada.",
+  },
 ];
 
 // Between calls, not for rate-limiting TMDB/Jikan (seedCatalog.ts already

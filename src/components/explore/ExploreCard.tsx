@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating, StarDisplay } from "@/components/StarRating";
+import { seasonsSummary } from "@/lib/seriesStatus";
 
 export interface ExploreTitle {
   id: string;
@@ -15,6 +16,8 @@ export interface ExploreTitle {
   voteAverage: number | null;
   voteCount: number | null;
   budget: number | null;
+  seasonsCount: number | null;
+  status: string | null;
   genres: string[];
   directors: string[];
   providers: ProviderBadge[];
@@ -93,6 +96,9 @@ export function ExploreCard({
         </p>
         {title.genres.length > 0 && <p className="truncate text-[11px] text-muted">{title.genres.join(" · ")}</p>}
         {title.budget ? <p className="text-[11px] text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}
+        {title.type === "SERIES" && seasonsSummary(title.seasonsCount, title.status) && (
+          <p className="text-[11px] text-muted">{seasonsSummary(title.seasonsCount, title.status)}</p>
+        )}
         <ProviderBadges providers={title.providers} />
         {error && <p className="text-[11px] text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
       </div>

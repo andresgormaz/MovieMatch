@@ -10,7 +10,7 @@ import {
 } from "../../prisma/seed-data/fallback";
 
 export interface SeedResult {
-  mode: "tmdb" | "fallback" | "anime" | "votes" | "attributes";
+  mode: "tmdb" | "fallback" | "anime" | "votes" | "attributes" | "seriesStatus";
   skipped: boolean;
   titles: number;
   people: number;
@@ -19,7 +19,8 @@ export interface SeedResult {
   animeTotal?: number;
   votesRemaining?: number; // votes mode only: titles still missing voteCount after this batch
   attributesRemaining?: number; // attributes mode only: titles still missing runtime after this batch
-  done?: boolean; // tmdb/anime/votes/attributes mode only: true once there's nothing left to do
+  seriesStatusRemaining?: number; // seriesStatus mode only: series still missing seasons/status after this batch
+  done?: boolean; // tmdb/anime/votes/attributes/seriesStatus mode only: true once there's nothing left to do
 }
 
 // Creates the schema if it doesn't exist yet, and applies any column
@@ -54,7 +55,7 @@ export async function ensureSchema() {
 export async function seedCatalog(
   opts: {
     force?: boolean;
-    source?: "auto" | "anime" | "votes" | "attributes" | "range";
+    source?: "auto" | "anime" | "votes" | "attributes" | "seriesStatus" | "range";
     fromYear?: number;
     toYear?: number;
   } = {},
@@ -73,6 +74,12 @@ export async function seedCatalog(
     // Same idea as votes, for runtime/collection/budget -- titles imported
     // before those columns existed (or before this backfill existed).
     return backfillAttributes();
+  }
+
+  if (opts.source === "seriesStatus") {
+    // Same idea again, for seasons/status/last air date on series imported
+    // before those columns existed.
+    return backfillSeriesStatus();
   }
 
   if (opts.source === "anime") {
@@ -431,6 +438,11 @@ async function enrichTitles(
   const countryByTitleId = new Map<string, string>();
   const budgetByTitleId = new Map<string, number>();
   const runtimeByTitleId = new Map<string, number>();
+  const seasonsCountByTitleId = new Map<string, number>();
+  const episodesCountByTitleId = new Map<string, number>();
+  const statusByTitleId = new Map<string, string>();
+  const inProductionByTitleId = new Map<string, boolean>();
+  const lastAirDateByTitleId = new Map<string, Date>();
   const collectionIdByTitleId = new Map<string, number>();
   const nameByTitleId = new Map<string, string>();
   const overviewByTitleId = new Map<string, string>();
@@ -463,8 +475,20 @@ async function enrichTitles(
     } else {
       // TMDB reports episode runtime as an array (can vary by episode/season);
       // the first entry is a reasonable single representative value.
-      const episodeRunTime = (details as { episode_run_time: number[] }).episode_run_time;
-      if (episodeRunTime?.[0]) runtimeByTitleId.set(t.id, episodeRunTime[0]);
+      const tvDetails = details as {
+        episode_run_time: number[];
+        number_of_seasons: number;
+        number_of_episodes: number;
+        status: string;
+        in_production: boolean;
+        last_air_date: string | null;
+      };
+      if (tvDetails.episode_run_time?.[0]) runtimeByTitleId.set(t.id, tvDetails.episode_run_time[0]);
+      if (tvDetails.number_of_seasons != null) seasonsCountByTitleId.set(t.id, tvDetails.number_of_seasons);
+      if (tvDetails.number_of_episodes != null) episodesCountByTitleId.set(t.id, tvDetails.number_of_episodes);
+      if (tvDetails.status) statusByTitleId.set(t.id, tvDetails.status);
+      if (tvDetails.in_production != null) inProductionByTitleId.set(t.id, tvDetails.in_production);
+      if (tvDetails.last_air_date) lastAirDateByTitleId.set(t.id, new Date(tvDetails.last_air_date));
     }
 
     // Refreshes the locale-translated name/overview on every re-enrichment
@@ -676,6 +700,11 @@ async function enrichTitles(
     ...countryByTitleId.keys(),
     ...budgetByTitleId.keys(),
     ...runtimeByTitleId.keys(),
+    ...seasonsCountByTitleId.keys(),
+    ...episodesCountByTitleId.keys(),
+    ...statusByTitleId.keys(),
+    ...inProductionByTitleId.keys(),
+    ...lastAirDateByTitleId.keys(),
     ...collectionIdByTitleId.keys(),
     ...nameByTitleId.keys(),
     ...overviewByTitleId.keys(),
@@ -690,6 +719,11 @@ async function enrichTitles(
         originCountry: countryByTitleId.get(titleId),
         budget: budgetByTitleId.get(titleId),
         runtime: runtimeByTitleId.get(titleId),
+        seasonsCount: seasonsCountByTitleId.get(titleId),
+        episodesCount: episodesCountByTitleId.get(titleId),
+        status: statusByTitleId.get(titleId),
+        inProduction: inProductionByTitleId.get(titleId),
+        lastAirDate: lastAirDateByTitleId.get(titleId),
         collectionId: collectionIdByTitleId.get(titleId),
         name: nameByTitleId.get(titleId),
         overview: overviewByTitleId.get(titleId),
@@ -778,9 +812,17 @@ async function backfillAttributes(): Promise<SeedResult> {
       // 0 (not null) when TMDB has no episode runtime for this show -- marks
       // it as "checked, nothing there" so it isn't re-queried by `runtime:
       // null` forever; classifyRuntimeBucket treats 0 the same as unknown.
+      // Same bare call also carries seasons/status -- free to save alongside.
       await prisma.title.update({
         where: { id: t.id },
-        data: { runtime: attrs.episode_run_time?.[0] || 0 },
+        data: {
+          runtime: attrs.episode_run_time?.[0] || 0,
+          seasonsCount: attrs.number_of_seasons,
+          episodesCount: attrs.number_of_episodes,
+          status: attrs.status || null,
+          inProduction: attrs.in_production,
+          lastAirDate: attrs.last_air_date ? new Date(attrs.last_air_date) : null,
+        },
       });
     }
   }
@@ -796,6 +838,51 @@ async function backfillAttributes(): Promise<SeedResult> {
     people: 0,
     attributesRemaining,
     done: attributesRemaining === 0,
+  };
+}
+
+// One-time bulk fill for series whose seasons/status is still null --
+// distinct from backfillAttributes because most series already have
+// `runtime` set (from that earlier backfill or from regular enrichment),
+// so `runtime: null` wouldn't catch them; `seasonsCount: null` does. Same
+// bare `/tv/{id}` call as tvAttributes elsewhere, movies excluded (TMDB has
+// no seasons/status concept for them). Resumable the same way as the rest.
+async function backfillSeriesStatus(): Promise<SeedResult> {
+  const titles = await prisma.title.findMany({
+    where: { type: "SERIES", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, seasonsCount: null },
+    orderBy: { popularity: "desc" },
+    take: ATTRIBUTES_BACKFILL_PER_CALL,
+    select: { id: true, tmdbId: true },
+  });
+
+  for (const t of titles) {
+    const attrs = await tmdb.tvAttributes(t.tmdbId);
+    await sleep(80);
+    await prisma.title.update({
+      where: { id: t.id },
+      data: {
+        // 0 (not null) when TMDB reports no seasons -- "checked, nothing
+        // there" so it isn't re-queried by `seasonsCount: null` forever.
+        seasonsCount: attrs.number_of_seasons || 0,
+        episodesCount: attrs.number_of_episodes || 0,
+        status: attrs.status || null,
+        inProduction: attrs.in_production,
+        lastAirDate: attrs.last_air_date ? new Date(attrs.last_air_date) : null,
+      },
+    });
+  }
+
+  const seriesStatusRemaining = await prisma.title.count({
+    where: { type: "SERIES", tmdbId: { gt: 0, lt: ANIME_ID_OFFSET }, seasonsCount: null },
+  });
+
+  return {
+    mode: "seriesStatus",
+    skipped: false,
+    titles: titles.length,
+    people: 0,
+    seriesStatusRemaining,
+    done: seriesStatusRemaining === 0,
   };
 }
 

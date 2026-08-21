@@ -146,6 +146,12 @@ export interface TmdbTvDetails extends TmdbListItem {
   origin_country: string[];
   created_by: TmdbCreatedBy[];
   episode_run_time: number[]; // minutes; empty/varies for some shows
+  number_of_seasons: number;
+  number_of_episodes: number;
+  // "Returning Series" | "Planned" | "In Production" | "Ended" | "Canceled" | "Pilot"
+  status: string;
+  in_production: boolean;
+  last_air_date: string | null; // "YYYY-MM-DD"
   credits: TmdbCredits;
   "watch/providers": TmdbWatchProviders;
   recommendations: TmdbRecommendations;
@@ -204,7 +210,13 @@ export const tmdb = {
   // (titles imported before those fields existed).
   movieAttributes: (id: number) =>
     tmdbFetch<Pick<TmdbMovieDetails, "budget" | "runtime" | "belongs_to_collection">>(`/movie/${id}`),
-  tvAttributes: (id: number) => tmdbFetch<Pick<TmdbTvDetails, "episode_run_time">>(`/tv/${id}`),
+  tvAttributes: (id: number) =>
+    tmdbFetch<
+      Pick<
+        TmdbTvDetails,
+        "episode_run_time" | "number_of_seasons" | "number_of_episodes" | "status" | "in_production" | "last_air_date"
+      >
+    >(`/tv/${id}`),
   // Fetched lazily, once, the first time a person's detail page is opened
   // (see /api/people/[id]) -- not part of the catalog import, so there's no
   // batch backfill for it and no rate-limit budget spent on people nobody

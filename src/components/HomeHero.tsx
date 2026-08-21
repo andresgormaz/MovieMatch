@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
 import { formatScore } from "@/lib/format";
+import { seasonsSummary } from "@/lib/seriesStatus";
 
 interface TodayPick {
   id: string;
@@ -14,6 +15,8 @@ interface TodayPick {
   backdropUrl: string | null;
   genres: string[];
   voteAverage: number | null;
+  seasonsCount: number | null;
+  status: string | null;
   score: number;
   reasons: string[];
   providers: ProviderBadge[];
@@ -152,6 +155,9 @@ export function HomeHero() {
             {pick.voteAverage != null ? ` · ★ ${pick.voteAverage.toFixed(1)} TMDB` : ""}
             {pick.genres.length ? ` · ${pick.genres.slice(0, 3).join(", ")}` : ""}
           </p>
+          {pick.type === "SERIES" && seasonsSummary(pick.seasonsCount, pick.status) && (
+            <p className="mt-0.5 text-sm text-muted">{seasonsSummary(pick.seasonsCount, pick.status)}</p>
+          )}
           {pick.reasons[0] && <p className="mt-1 text-sm text-neutral-300">{pick.reasons[0]}</p>}
         </div>
 

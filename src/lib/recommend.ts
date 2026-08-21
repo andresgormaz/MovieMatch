@@ -86,6 +86,8 @@ export interface RecommendationResult {
   voteAverage: number | null;
   voteCount: number | null;
   inTheaters: boolean;
+  seasonsCount: number | null; // series only
+  status: string | null; // series only -- raw TMDB status, see seriesStatus.ts for display labels
   providers: RecommendationProvider[];
   score: number;
   reasons: string[];
@@ -338,6 +340,8 @@ function scoreCandidates(
       voteAverage: title.voteAverage,
       voteCount: title.voteCount,
       inTheaters: isInTheaters(title.type, title.releaseDate),
+      seasonsCount: title.seasonsCount,
+      status: title.status,
       providers: title.providers.map((p) => ({
         id: p.provider.id,
         name: p.provider.name,

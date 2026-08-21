@@ -6,6 +6,7 @@ import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
 import { formatScore } from "@/lib/format";
+import { seasonsSummary } from "@/lib/seriesStatus";
 
 export interface Recommendation {
   id: string;
@@ -19,6 +20,8 @@ export interface Recommendation {
   voteAverage: number | null;
   voteCount: number | null;
   inTheaters: boolean;
+  seasonsCount: number | null;
+  status: string | null;
   providers: ProviderBadge[];
   score: number;
   reasons: string[];
@@ -120,6 +123,9 @@ export function RecommendationCard({
                 ? ` · ${rec.directors.join(", ")}`
                 : ""}
           </p>
+          {rec.type === "SERIES" && seasonsSummary(rec.seasonsCount, rec.status) && (
+            <p className="mt-0.5 text-xs text-muted">{seasonsSummary(rec.seasonsCount, rec.status)}</p>
+          )}
           <ProviderBadges providers={rec.providers} />
           {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
         </div>

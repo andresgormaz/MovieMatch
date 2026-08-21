@@ -140,6 +140,11 @@ model Title {
   voteCount      Int? // TMDB vote count -- used as the "masividad" filter
   budget         Int? // USD, movies only (TMDB doesn't report it for series)
   runtime        Int? // minutes -- movie runtime, or a representative episode runtime for series
+  seasonsCount   Int? // series only -- total number of seasons
+  episodesCount  Int? // series only -- total number of episodes across all seasons
+  status         String? // series only -- raw TMDB status: "Returning Series", "Planned", "In Production", "Ended", "Canceled", "Pilot"
+  inProduction   Boolean? // series only -- actively producing new episodes right now
+  lastAirDate    DateTime? // series only -- most recently aired episode's date
   collectionId   Int? // TMDB "belongs_to_collection" id, movies only -- lets sequels/trilogies
   // (Lord of the Rings 1-2-3, the Harry Potter films...) count as one unit of
   // evidence instead of N when inferring an actor/director preference, so a

@@ -69,6 +69,8 @@ export async function GET(request: Request) {
       voteAverage: t.voteAverage,
       voteCount: t.voteCount,
       budget: t.budget,
+      seasonsCount: t.seasonsCount,
+      status: t.status,
       genres: t.genres.map((g) => g.genre.name),
       directors: t.crew.map((c) => c.person.name),
       providers: t.providers.map((p) => ({

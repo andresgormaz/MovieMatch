@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
+import { seasonsSummary } from "@/lib/seriesStatus";
 
 export interface WishlistItem {
   id: string;
@@ -15,6 +16,8 @@ export interface WishlistItem {
   posterUrl: string | null;
   voteAverage: number | null;
   voteCount: number | null;
+  seasonsCount: number | null;
+  status: string | null;
   genres: string[];
   directors: string[];
   providers: ProviderBadge[];
@@ -98,6 +101,9 @@ export function WishlistCard({
             {item.directors.length ? ` · ${item.directors.join(", ")}` : ""}
           </p>
           <p className="mt-1 text-xs text-muted">{item.genres.join(" · ")}</p>
+          {item.type === "SERIES" && seasonsSummary(item.seasonsCount, item.status) && (
+            <p className="mt-0.5 text-xs text-muted">{seasonsSummary(item.seasonsCount, item.status)}</p>
+          )}
           <ProviderBadges providers={item.providers} />
           {item.overview && <p className="mt-2 line-clamp-2 text-xs text-muted">{item.overview}</p>}
           {error && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
