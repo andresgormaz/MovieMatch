@@ -195,6 +195,9 @@ function scoreTitle(
   // one with 1) over a tightly-genred title the user might like just as
   // much. Only the title's 2 best-scoring genres count now, averaged --
   // a title with just 1 genre counts at that genre's own value, unchanged.
+  // Each genre's own value is already normalized to a fixed 0-10 scale (see
+  // normalizeGenreScores in preferenceCounts.ts) rather than an open-ended
+  // sum, so this average is always between 0 and 10 too.
   const genreWeights = title.genres
     .map((tg) => ({ name: tg.genre.name, w: prefs.genre.get(tg.genreId) ?? 0 }))
     .sort((a, b) => b.w - a.w);

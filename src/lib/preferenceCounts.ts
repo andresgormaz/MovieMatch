@@ -318,6 +318,33 @@ function mergeManual<K>(derived: Map<K, number>, manual: Map<K, number>): Map<K,
   return merged;
 }
 
+// Rescales every genre's merged (derived + manual) score onto a fixed 0-10
+// range via standard min-max normalization: (x - min) / (max - min) * 10
+// (2026-08-27 request). The favorite genre always reads as exactly 10, the
+// least-favorite as exactly 0, everything else proportional between --
+// unlike the other direct-sum dimensions, genre scores are meant to be
+// compared against each other on a fixed scale, not accumulate without
+// bound. Computed over every genre in the catalog, not just ones with some
+// evidence, so a genre the user has never interacted with is treated as a
+// raw 0 and lands wherever that falls in their actual spread, rather than
+// being silently excluded from the scale entirely. When every genre ties
+// (typically a brand-new user with zero evidence) there's no spread to
+// normalize -- every genre maps to 0 instead of dividing by zero.
+function normalizeGenreScores(merged: Map<number, number>, allGenreIds: number[]): Map<number, number> {
+  const values = allGenreIds.map((id) => merged.get(id) ?? 0);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const result = new Map<number, number>();
+  if (max === min) {
+    for (const id of allGenreIds) result.set(id, 0);
+    return result;
+  }
+  for (const id of allGenreIds) {
+    result.set(id, ((merged.get(id) ?? 0) - min) * (10 / (max - min)));
+  }
+  return result;
+}
+
 function sumInto<K>(target: Map<K, number>, source: Map<K, number>) {
   for (const [key, value] of source) target.set(key, (target.get(key) ?? 0) + value);
 }
@@ -327,7 +354,7 @@ function sumInto<K>(target: Map<K, number>, source: Map<K, number>) {
 // manual-edit UI (a per-candidate-title boost, not a nameable preference),
 // so it's always the raw derived value.
 export async function computeMergedPreferences(userId: string, useOriginalTitles = false): Promise<DerivedPreferences> {
-  const [derived, typePrefs, genrePrefs, audiencePrefs, budgetPrefs, runtimePrefs, countryPrefs, popularityPrefs, personPrefs] =
+  const [derived, typePrefs, genrePrefs, audiencePrefs, budgetPrefs, runtimePrefs, countryPrefs, popularityPrefs, personPrefs, allGenres] =
     await Promise.all([
       computeDerivedPreferences(userId, useOriginalTitles),
       prisma.userTypePreference.findMany({ where: { userId } }),
@@ -338,13 +365,15 @@ export async function computeMergedPreferences(userId: string, useOriginalTitles
       prisma.userCountryPreference.findMany({ where: { userId } }),
       prisma.userPopularityPreference.findMany({ where: { userId } }),
       prisma.userPersonRating.findMany({ where: { userId } }),
+      prisma.genre.findMany({ select: { id: true } }),
     ]);
 
   const manualPerson = new Map(personPrefs.map((p) => [p.personId, p.score]));
+  const mergedGenre = mergeManual(derived.genre, new Map(genrePrefs.map((g) => [g.genreId, g.weight])));
 
   return {
     type: mergeManual(derived.type, new Map(typePrefs.map((t) => [t.type, t.weight]))),
-    genre: mergeManual(derived.genre, new Map(genrePrefs.map((g) => [g.genreId, g.weight]))),
+    genre: normalizeGenreScores(mergedGenre, allGenres.map((g) => g.id)),
     // Same manual value applies to both roles -- someone who's both an
     // actor and director for this user's evidence shares one adjustment,
     // rather than needing two separate manual entries for the same person.

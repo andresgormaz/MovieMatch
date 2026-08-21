@@ -73,8 +73,10 @@ export async function GET() {
     },
     {
       category: "genre",
-      title: "Género",
-      items: genres.map((g) => ({ key: String(g.id), label: g.name, score: prefs.genre.get(g.id) ?? 0 })).sort(byScoreDesc),
+      title: "Género (0-10)",
+      items: genres
+        .map((g) => ({ key: String(g.id), label: g.name, score: Math.round((prefs.genre.get(g.id) ?? 0) * 10) / 10 }))
+        .sort(byScoreDesc),
     },
     {
       category: "audience",
