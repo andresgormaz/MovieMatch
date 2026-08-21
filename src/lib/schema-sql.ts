@@ -253,6 +253,14 @@ export const INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserPopularityPreference_userId_range_key" ON "UserPopularityPreference"("userId", "range")`,
   `CREATE INDEX IF NOT EXISTS "SavedFilter_userId_idx" ON "SavedFilter"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "SavedFilter_userId_name_key" ON "SavedFilter"("userId", "name")`,
+  // `orderBy: popularity desc` is the most common query shape in the app
+  // (recommendations, search, import/backfill, onboarding) -- without this
+  // it sorts the whole catalog from scratch on every request.
+  `CREATE INDEX IF NOT EXISTS "Title_popularity_idx" ON "Title"("popularity")`,
+  // TitleGenre's composite primary key (titleId, genreId) only serves
+  // "titleId -> its genres" lookups -- filtering "titles with genre X"
+  // needs genreId as its own leading column.
+  `CREATE INDEX IF NOT EXISTS "TitleGenre_genreId_idx" ON "TitleGenre"("genreId")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through

@@ -163,6 +163,12 @@ model Title {
   @@index([releaseYear])
   @@index([voteAverage])
   @@index([voteCount])
+  // `orderBy: popularity desc` is the single most common query shape in the
+  // app -- the recommendation candidate pool, search, the import/backfill
+  // batches, onboarding's popularity fallback -- all of it, on every
+  // request. Without this the catalog gets sorted from scratch every time,
+  // getting slower as more titles get imported.
+  @@index([popularity])
 }
 
 // A streaming service (Netflix, HBO Max, etc) per TMDB/JustWatch.
@@ -233,6 +239,11 @@ model TitleGenre {
   genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
   @@id([titleId, genreId])
+  // The composite primary key above only serves "titleId -> its genres"
+  // lookups (titleId leads it) -- filtering "titles that have genre X"
+  // (explore/recommendations/wishlist's genre filter) needs genreId as its
+  // own leading column, which nothing else here provides.
+  @@index([genreId])
 }
 
 model Person {
