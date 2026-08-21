@@ -80,7 +80,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     originCountryName: title.originCountry ? countryName(title.originCountry) : null,
     genres: title.genres.map((g) => g.genre.name),
     cast: title.cast.map((c) => ({ id: c.person.id, name: c.person.name, photoUrl: tmdbProfileUrl(c.person.profilePath) })),
-    crew: title.crew.map((c) => ({ id: c.person.id, name: c.person.name, job: c.job })),
+    crew: title.crew.map((c) => ({
+      id: c.person.id,
+      name: c.person.name,
+      job: c.job,
+      photoUrl: tmdbProfileUrl(c.person.profilePath),
+    })),
     providers: title.providers.map((p) => ({
       id: p.provider.id,
       name: p.provider.name,

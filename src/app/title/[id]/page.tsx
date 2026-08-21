@@ -18,6 +18,7 @@ interface CrewMember {
   id: string;
   name: string;
   job: string;
+  photoUrl: string | null;
 }
 
 interface SimilarTitle {
@@ -298,6 +299,33 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                   {formatSignedScore(entry.points)}
                 </p>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {director.length > 0 && (
+        <div className="mx-auto w-full max-w-4xl px-4 pb-6">
+          <h2 className="mb-3 text-lg font-bold text-white">{title.type === "MOVIE" ? "Dirección" : "Creación"}</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {director.map((d) => (
+              <Link
+                key={d.id}
+                href={`/person/${d.id}`}
+                className="flex w-20 flex-shrink-0 flex-col items-center gap-1.5 text-center"
+              >
+                <div className="h-20 w-20 overflow-hidden rounded-full bg-white/10">
+                  {d.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={d.photoUrl} alt={d.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-lg text-neutral-500">
+                      {d.name.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <p className="line-clamp-2 text-[11px] text-neutral-300 hover:underline">{d.name}</p>
+              </Link>
             ))}
           </div>
         </div>
