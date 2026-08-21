@@ -14,9 +14,10 @@ import { seedCatalog } from "@/lib/seedCatalog";
 // from Jikan/MyAnimeList instead (also resumable the same way). Add
 // &source=votes to run the one-time voteCount backfill (also resumable).
 // Add &source=attributes to run the one-time runtime/collection/budget
-// backfill (also resumable). Add &source=classic to import 1990-1999
-// instead of the default 2000-present range (also resumable, independently
-// of the main range).
+// backfill (also resumable). Add &source=range&from=1980&to=1989 to import
+// any other year range instead of the default 2000-present one (also
+// resumable, independently of every other range already loaded) -- `to` is
+// optional (open-ended, like the default range).
 //
 // 270s (not the old 60s) -- Vercel's Fluid Compute raised the Hobby-plan
 // serverless timeout to 300s; this leaves a margin. If the Vercel project
@@ -49,20 +50,23 @@ export async function GET(request: Request) {
         ? "votes"
         : sourceParam === "attributes"
           ? "attributes"
-          : sourceParam === "classic"
-            ? "classic"
+          : sourceParam === "range"
+            ? "range"
             : "auto";
+  const fromYear = Number(searchParams.get("from")) || undefined;
+  const toYear = Number(searchParams.get("to")) || undefined;
 
   try {
-    const result = await seedCatalog({ force, source });
+    const result = await seedCatalog({ force, source, fromYear, toYear });
 
     let message: string;
+    const rangeLabel = toYear ? `${fromYear}-${toYear}` : `${fromYear} en adelante`;
     if (result.skipped) {
       message = `Ya había ${result.titles} títulos cargados, no se tocó nada. Agrega &force=1 a la URL para forzar una recarga.`;
-    } else if (result.mode === "tmdb" && source === "classic") {
+    } else if (result.mode === "tmdb" && source === "range") {
       message = result.done
-        ? `Listo, no quedan más páginas de 1990-1999: ${result.moviesTotal} películas y ${result.seriesTotal} series en total (catálogo completo, todas las épocas).`
-        : `Sumamos ${result.titles} títulos más de 1990-1999 (${result.moviesTotal} películas / ${result.seriesTotal} series en total, catálogo completo). Vuelve a visitar esta misma URL (con &source=classic) para seguir cargando más.`;
+        ? `Listo, no quedan más páginas de ${rangeLabel}: ${result.moviesTotal} películas y ${result.seriesTotal} series en total (catálogo completo, todas las épocas).`
+        : `Sumamos ${result.titles} títulos más de ${rangeLabel} (${result.moviesTotal} películas / ${result.seriesTotal} series en total, catálogo completo). Vuelve a visitar esta misma URL (con &source=range&from=${fromYear}${toYear ? `&to=${toYear}` : ""}) para seguir cargando más.`;
     } else if (result.mode === "tmdb") {
       message = result.done
         ? `Listo, no quedan más páginas: ${result.moviesTotal} películas y ${result.seriesTotal} series en total.`

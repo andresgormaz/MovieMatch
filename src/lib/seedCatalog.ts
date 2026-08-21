@@ -52,7 +52,12 @@ export async function ensureSchema() {
 }
 
 export async function seedCatalog(
-  opts: { force?: boolean; source?: "auto" | "anime" | "votes" | "attributes" | "classic" } = {},
+  opts: {
+    force?: boolean;
+    source?: "auto" | "anime" | "votes" | "attributes" | "range";
+    fromYear?: number;
+    toYear?: number;
+  } = {},
 ): Promise<SeedResult> {
   await ensureSchema();
 
@@ -74,13 +79,17 @@ export async function seedCatalog(
     return seedAnimeFromJikan();
   }
 
-  if (opts.source === "classic") {
-    // A second, independent import stream for 1990-1999 -- bounded on both
-    // ends so it never re-walks the 2000-present range the main stream
-    // already covers. Its own resumable page counter is scoped to this era
-    // (see seedFromTmdb's releaseYear-bounded counts) so the two streams
-    // can't step on each other's pagination.
-    return seedFromTmdb({ fromDate: "1990-01-01", toDate: "1999-12-31" });
+  if (opts.source === "range") {
+    // A second (third, fourth, ...), independent import stream for any
+    // year range the caller asks for (e.g. 1980-1989) -- bounded on both
+    // ends so it never re-walks whatever range(s) are already covered.
+    // Each range's own resumable page counter is scoped to its own years
+    // (see seedFromTmdb's releaseYear-bounded counts), so multiple ranges
+    // sharing the same Title table can't step on each other's pagination.
+    if (!opts.fromYear) throw new Error("Falta el año de inicio.");
+    const fromDate = `${opts.fromYear}-01-01`;
+    const toDate = opts.toYear ? `${opts.toYear}-12-31` : undefined;
+    return seedFromTmdb({ fromDate, toDate });
   }
 
   if (hasTmdbKey()) {

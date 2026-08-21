@@ -2,11 +2,15 @@
 
 import { useRef, useState } from "react";
 
-type Source = "auto" | "anime" | "votes" | "attributes" | "classic";
+type Source = "auto" | "anime" | "votes" | "attributes" | "range";
 
 const SOURCES: { value: Source; label: string; hint: string }[] = [
   { value: "auto", label: "Catálogo (2000 en adelante)", hint: "El import principal desde TMDB." },
-  { value: "classic", label: "Clásicas (1990-1999)", hint: "Complementa el catálogo con películas y series de los 90, sin repetir lo del 2000+." },
+  {
+    value: "range",
+    label: "Otro rango de años",
+    hint: "Complementa el catálogo con películas y series de cualquier época, sin repetir lo que ya tienes.",
+  },
   { value: "anime", label: "Anime", hint: "Importa anime desde Jikan/MyAnimeList." },
   { value: "votes", label: "Votos faltantes", hint: "Rellena puntaje/cantidad de votos en títulos que quedaron sin eso." },
   { value: "attributes", label: "Duración/colección faltante", hint: "Rellena duración, presupuesto y colección en títulos que quedaron sin eso." },
@@ -32,6 +36,8 @@ interface LogEntry {
 export default function AdminImportPage() {
   const [secret, setSecret] = useState("");
   const [source, setSource] = useState<Source>("auto");
+  const [fromYear, setFromYear] = useState("");
+  const [toYear, setToYear] = useState("");
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [callCount, setCallCount] = useState(0);
@@ -46,10 +52,18 @@ export default function AdminImportPage() {
       appendLog("Escribe el SEED_SECRET antes de iniciar.", true);
       return;
     }
+    if (source === "range" && !fromYear.trim()) {
+      appendLog("Escribe al menos el año de inicio para el rango.", true);
+      return;
+    }
     stopRequested.current = false;
     setRunning(true);
     setCallCount(0);
-    appendLog(`Iniciando (${SOURCES.find((s) => s.value === source)?.label})…`);
+    const label =
+      source === "range"
+        ? `${fromYear}${toYear ? `-${toYear}` : " en adelante"}`
+        : SOURCES.find((s) => s.value === source)?.label;
+    appendLog(`Iniciando (${label})…`);
 
     let done = false;
     let calls = 0;
@@ -57,6 +71,10 @@ export default function AdminImportPage() {
       try {
         const params = new URLSearchParams({ secret: secret.trim() });
         if (source !== "auto") params.set("source", source);
+        if (source === "range") {
+          params.set("from", fromYear.trim());
+          if (toYear.trim()) params.set("to", toYear.trim());
+        }
         const res = await fetch(`/api/admin/seed?${params.toString()}`);
         const data = await res.json();
         calls += 1;
@@ -139,6 +157,31 @@ export default function AdminImportPage() {
             ))}
           </div>
         </div>
+
+        {source === "range" && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs text-muted">Rango de años</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={fromYear}
+                onChange={(e) => setFromYear(e.target.value)}
+                disabled={running}
+                placeholder="Desde (ej: 1980)"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
+              />
+              <span className="text-muted">a</span>
+              <input
+                type="number"
+                value={toYear}
+                onChange={(e) => setToYear(e.target.value)}
+                disabled={running}
+                placeholder="Hasta (opcional)"
+                className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-2">
           {!running ? (
