@@ -62,8 +62,8 @@ const POPULARITY_LABELS: Record<PopularityRange, string> = {
 //    person like it" are related but not the same thing.
 // The two pools are merged (deduped by id) before scoring, so a title only
 // needs to earn its way in through either door.
-const POPULARITY_POOL_SIZE = 400;
-const TARGETED_POOL_SIZE = 400;
+const POPULARITY_POOL_SIZE = 600;
+const TARGETED_POOL_SIZE = 600;
 const MAX_TARGETED_GENRES = 10;
 const MAX_TARGETED_PEOPLE = 30;
 
