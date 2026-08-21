@@ -181,6 +181,12 @@ function hashString(str: string): number {
 
 const FROM_DATE = "2000-01-01"; // "principales películas/series del 2000 a la fecha"
 const PAGE_SIZE = 20; // fixed by the TMDB API
+// TMDB's own hard ceiling on /discover -- it 400s on page 501+ regardless
+// of how many results the filters actually match (its `total_pages` field
+// can claim more than this and can't be trusted to stop the loop early
+// enough). With vote_count.gte=50 sorted by popularity, hitting this cap
+// means every reasonably-known movie/series since FROM_DATE is already in.
+const TMDB_MAX_DISCOVER_PAGE = 500;
 // Sized against the route's maxDuration=270s (see api/admin/seed/route.ts) --
 // enrichTitles is the dominant cost (one full details+credits+providers
 // call per title, ~80ms sleep between each), so ENRICH_PER_CALL is the
@@ -235,10 +241,14 @@ async function seedFromTmdb(): Promise<SeedResult> {
   let moviesExhausted = false;
   for (let i = 0; i < MOVIE_PAGES_PER_CALL; i++) {
     const page = startMoviePage + i;
+    if (page > TMDB_MAX_DISCOVER_PAGE) {
+      moviesExhausted = true;
+      break;
+    }
     const res = await tmdb.discoverMovies(page, FROM_DATE);
     movies.push(...res.results);
     await sleep(80);
-    if (page >= res.total_pages) {
+    if (page >= res.total_pages || page >= TMDB_MAX_DISCOVER_PAGE) {
       moviesExhausted = true;
       break;
     }
@@ -248,10 +258,14 @@ async function seedFromTmdb(): Promise<SeedResult> {
   let seriesExhausted = false;
   for (let i = 0; i < TV_PAGES_PER_CALL; i++) {
     const page = startTvPage + i;
+    if (page > TMDB_MAX_DISCOVER_PAGE) {
+      seriesExhausted = true;
+      break;
+    }
     const res = await tmdb.discoverTv(page, FROM_DATE);
     series.push(...res.results);
     await sleep(80);
-    if (page >= res.total_pages) {
+    if (page >= res.total_pages || page >= TMDB_MAX_DISCOVER_PAGE) {
       seriesExhausted = true;
       break;
     }
