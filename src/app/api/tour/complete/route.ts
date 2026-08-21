@@ -15,3 +15,17 @@ export async function POST() {
 
   return NextResponse.json({ ok: true });
 }
+
+// Clears the "seen" flag so the tutorial shows again on the next home visit
+// -- lets a user replay it (e.g. from Perfil) without needing a fresh account.
+export async function DELETE() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { tourSeenAt: null },
+  });
+
+  return NextResponse.json({ ok: true });
+}

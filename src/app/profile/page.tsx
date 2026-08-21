@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { CountrySelector } from "@/components/CountrySelector";
 import { TitleLanguageToggle } from "@/components/TitleLanguageToggle";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
+import { ReplayTourButton } from "@/components/ReplayTourButton";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -76,6 +77,7 @@ export default async function ProfilePage() {
           <QuickLink href="/onboarding/actors" label="Seguir calificando actores y directores" />
           <QuickLink href="/tastes" label="Ver y editar mis gustos" />
           <QuickLink href="/groups" label="Vincular cuentas y ver recomendaciones en grupo" />
+          <ReplayTourButton />
         </div>
       </div>
     </div>
