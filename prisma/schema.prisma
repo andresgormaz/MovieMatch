@@ -59,6 +59,7 @@ model User {
   createdAt             DateTime  @default(now())
   onboardingCompletedAt DateTime?
   homeVisitedAt         DateTime? // last time the home screen was opened -- used for the "new since your last visit" count
+  tourSeenAt            DateTime? // set once the home coach-mark tutorial has been shown/skipped -- null means show it on next home visit
 
   titleRatings       UserTitleRating[]
   personRatings      UserPersonRating[]

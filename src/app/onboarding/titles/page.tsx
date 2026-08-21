@@ -55,7 +55,7 @@ export default function OnboardingTitlesPage() {
   async function finishOnboarding() {
     setPhase("finishing");
     await fetch("/api/onboarding/complete", { method: "POST" });
-    router.push("/recommendations");
+    router.push("/dashboard");
   }
 
   if (phase === "loading" || phase === "finishing") {

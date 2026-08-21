@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getRecommendations } from "@/lib/recommend";
 import { HomeHero } from "@/components/HomeHero";
+import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
 
 export default async function DashboardPage() {
@@ -11,10 +12,18 @@ export default async function DashboardPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { name: true, country: true, originalTitles: true, onboardingCompletedAt: true, homeVisitedAt: true },
+    select: {
+      name: true,
+      country: true,
+      originalTitles: true,
+      onboardingCompletedAt: true,
+      homeVisitedAt: true,
+      tourSeenAt: true,
+    },
   });
   const onboardingDone = Boolean(user?.onboardingCompletedAt);
   const previousVisit = user?.homeVisitedAt ?? null;
+  const showTour = onboardingDone && !user?.tourSeenAt;
 
   const pendingRatings = onboardingDone
     ? await prisma.userTitleRating.count({ where: { userId, seen: true, score: null } })
@@ -37,6 +46,7 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <VisitBeacon />
+      {showTour && <HomeTour />}
       <div>
         <h1 className="text-2xl font-bold">Hola{user?.name ? `, ${user.name}` : ""} 👋</h1>
         {newSinceLastVisit > 0 && (
@@ -49,7 +59,9 @@ export default async function DashboardPage() {
       </div>
 
       {onboardingDone ? (
-        <HomeHero />
+        <div data-tour="tour-hero">
+          <HomeHero />
+        </div>
       ) : (
         <Link
           href="/onboarding/titles"
@@ -63,6 +75,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <Link
             href="/vs"
+            data-tour="tour-vs"
             className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
           >
             Seguir con &quot;¿cuál te gusta más?&quot;
@@ -72,6 +85,7 @@ export default async function DashboardPage() {
           </Link>
           <Link
             href="/rate"
+            data-tour="tour-rate"
             className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
           >
             Calificar lo que ya viste
@@ -82,7 +96,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div data-tour="tour-quicklinks" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <QuickLink href="/recommendations" label="Todas mis recomendaciones" />
         <QuickLink href="/diary" label="Mi diario" />
         <QuickLink href="/wishlist" label="Mi lista" />

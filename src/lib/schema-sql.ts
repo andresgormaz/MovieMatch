@@ -15,7 +15,8 @@ export const TABLE_STATEMENTS = [
     "originalTitles" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "onboardingCompletedAt" DATETIME,
-    "homeVisitedAt" DATETIME
+    "homeVisitedAt" DATETIME,
+    "tourSeenAt" DATETIME
   )`,
   `CREATE TABLE IF NOT EXISTS "Title" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -283,6 +284,7 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Person" ADD COLUMN "deathday" DATETIME`,
   `ALTER TABLE "Person" ADD COLUMN "placeOfBirth" TEXT`,
   `ALTER TABLE "Person" ADD COLUMN "detailsFetchedAt" DATETIME`,
+  `ALTER TABLE "User" ADD COLUMN "tourSeenAt" DATETIME`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

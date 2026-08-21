@@ -285,9 +285,9 @@ function PairOption({
         <button
           onClick={onNotSeen}
           disabled={disabled}
-          className="border-t border-border py-1.5 text-center text-xs text-muted transition-colors hover:text-white disabled:opacity-50"
+          className="flex items-center justify-center gap-1.5 border-t border-border bg-white/[0.04] py-3 text-center text-sm font-semibold text-neutral-200 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
         >
-          No la he visto
+          <span aria-hidden>🔄</span> No la he visto, cambiar
         </button>
       </div>
       {loading && (

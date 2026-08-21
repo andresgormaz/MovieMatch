@@ -71,7 +71,7 @@ export function TitleSearch() {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-xs">
+    <div ref={containerRef} data-tour="tour-search" className="relative w-full max-w-xs">
       <form onSubmit={handleSubmit}>
         <input
           type="search"

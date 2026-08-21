@@ -20,6 +20,10 @@ export default function VsPage() {
         <p className="mt-1 text-sm text-muted">
           Sigue completando tus gustos. Elige entre las que ya viste{round > 0 ? ` · llevas ${round}` : ""}.
         </p>
+        <p className="mt-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-neutral-300">
+          Si no has visto alguna de las dos, usa &quot;No la he visto, cambiar&quot; para reemplazarla. Eso no
+          perjudica el puntaje de la película o serie que no elegiste.
+        </p>
       </div>
 
       {exhausted ? (
