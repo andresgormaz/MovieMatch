@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { StarRating } from "@/components/StarRating";
+import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
+import type { WatchProgress } from "@/lib/seriesStatus";
 
 export interface SeenUnratedItem {
   id: string;
@@ -23,8 +25,12 @@ export function RateSeenList({ initialItems }: { initialItems: SeenUnratedItem[]
   // card disappears -- confirms the right number of stars registered
   // instead of the card vanishing the instant you tap.
   const [confirmedScore, setConfirmedScore] = useState<{ id: string; score: number } | null>(null);
+  // Series-only, keyed by titleId: must be picked before that series can be
+  // marked seen. A "vs" win records seen=true without asking this, so it's
+  // always unset here -- this is exactly where it gets backfilled.
+  const [watchProgressById, setWatchProgressById] = useState<Record<string, WatchProgress>>({});
 
-  async function rate(titleId: string, score: number) {
+  async function rate(titleId: string, score: number, watchProgress: WatchProgress | null) {
     if (submittingId) return;
     setSubmittingId(titleId);
     setErrorId(null);
@@ -33,7 +39,7 @@ export function RateSeenList({ initialItems }: { initialItems: SeenUnratedItem[]
       const res = await fetch("/api/titles/rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titleId, seen: true, score }),
+        body: JSON.stringify({ titleId, seen: true, score, watchProgress }),
       });
       if (!res.ok) throw new Error("rate failed");
       await new Promise((resolve) => setTimeout(resolve, 550));
@@ -71,12 +77,19 @@ export function RateSeenList({ initialItems }: { initialItems: SeenUnratedItem[]
             </p>
             {errorId === item.id && <p className="mt-1 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
             <div className="mt-2">
-              <StarRating
-                size="sm"
-                disabled={submittingId === item.id}
-                selected={confirmedScore?.id === item.id ? confirmedScore.score : undefined}
-                onRate={(s) => rate(item.id, s)}
-              />
+              {item.type === "SERIES" && !watchProgressById[item.id] ? (
+                <SeriesWatchProgressPicker
+                  disabled={submittingId === item.id}
+                  onPick={(v) => setWatchProgressById((prev) => ({ ...prev, [item.id]: v }))}
+                />
+              ) : (
+                <StarRating
+                  size="sm"
+                  disabled={submittingId === item.id}
+                  selected={confirmedScore?.id === item.id ? confirmedScore.score : undefined}
+                  onRate={(s) => rate(item.id, s, watchProgressById[item.id] ?? null)}
+                />
+              )}
             </div>
           </div>
         </div>

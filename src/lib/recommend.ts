@@ -372,7 +372,12 @@ export async function getRecommendations(
 
   const candidates = await fetchCandidates(
     {
-      ratings: { none: { userId } },
+      // Excludes anything already watched or explicitly rejected ("no me
+      // interesa"). A neutral "no la he visto" (seen=false,
+      // notInterested=false -- a VS swap-out, or Explore's "No la vi")
+      // stays eligible: not having seen something yet is exactly what a
+      // recommendation is for.
+      ratings: { none: { userId, OR: [{ seen: true }, { notInterested: true }] } },
       wishlist: { none: { userId } },
       ...(opts.filters ?? {}),
     },
@@ -408,7 +413,10 @@ export async function getGroupRecommendations(
 
   const candidates = await fetchCandidates(
     {
-      ratings: { none: { userId: { in: memberIds }, seen: true } },
+      // Same reasoning as getRecommendations: anything any member watched
+      // or explicitly rejected is out; a member's neutral "no la he visto"
+      // doesn't disqualify a title for the group.
+      ratings: { none: { userId: { in: memberIds }, OR: [{ seen: true }, { notInterested: true }] } },
       wishlist: { none: { userId: { in: memberIds } } },
       ...(opts.filters ?? {}),
     },

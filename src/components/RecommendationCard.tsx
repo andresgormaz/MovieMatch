@@ -5,8 +5,9 @@ import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
+import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
 import { formatScore } from "@/lib/format";
-import { seasonsSummary } from "@/lib/seriesStatus";
+import { seasonsSummary, type WatchProgress } from "@/lib/seriesStatus";
 
 export interface Recommendation {
   id: string;
@@ -41,8 +42,10 @@ export function RecommendationCard({
   // card disappears -- same confirmation as "Calificar lo que ya viste",
   // so tapping N stars visibly confirms N stars registered.
   const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
+  // Series-only: must be picked before a series can be marked seen.
+  const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
 
-  async function rate(seen: boolean, score: number | null) {
+  async function rate(seen: boolean, score: number | null, notInterested = false) {
     if (submitting) return;
     setSubmitting(true);
     setError(false);
@@ -51,7 +54,7 @@ export function RecommendationCard({
       const res = await fetch("/api/titles/rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titleId: rec.id, seen, score }),
+        body: JSON.stringify({ titleId: rec.id, seen, score, notInterested, watchProgress }),
       });
       if (!res.ok) throw new Error("rate failed");
       if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
@@ -135,7 +138,7 @@ export function RecommendationCard({
         <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
           <button
             disabled={submitting}
-            onClick={() => rate(false, null)}
+            onClick={() => rate(false, null, true)}
             className="py-2.5 text-sm font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
             No me interesa
@@ -154,6 +157,10 @@ export function RecommendationCard({
           >
             Ya la vi
           </button>
+        </div>
+      ) : rec.type === "SERIES" && !watchProgress ? (
+        <div className="border-t border-border p-3">
+          <SeriesWatchProgressPicker disabled={submitting} onPick={setWatchProgress} />
         </div>
       ) : (
         <div className="flex justify-center border-t border-border p-3">

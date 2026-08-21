@@ -49,7 +49,10 @@ export async function GET(request: Request) {
       include: {
         genres: { include: { genre: true } },
         crew: { where: { job: { in: ["Director", "Creator"] } }, include: { person: true } },
-        ratings: { where: { userId: session.user.id }, select: { seen: true, score: true } },
+        ratings: {
+          where: { userId: session.user.id },
+          select: { seen: true, score: true, notInterested: true, watchProgress: true },
+        },
         providers: { where: { countryCode: userCountry ?? "" }, include: { provider: true } },
       },
     }),

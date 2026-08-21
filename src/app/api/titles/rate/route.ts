@@ -13,18 +13,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos" }, { status: 400 });
   }
 
-  const { titleId, seen, score } = parsed.data;
+  const { titleId, seen, score, notInterested, watchProgress } = parsed.data;
   const userId = session.user.id;
+
+  // A series being marked seen must say how far it got -- the UI always
+  // asks before calling this, but re-check here too rather than trust the
+  // client. Movies have no such concept, and seen=false never needs it.
+  if (seen && !watchProgress) {
+    const title = await prisma.title.findUnique({ where: { id: titleId }, select: { type: true } });
+    if (title?.type === "SERIES") {
+      return NextResponse.json({ error: "Falta indicar si la estás viendo, la terminaste o la abandonaste." }, { status: 400 });
+    }
+  }
 
   // Once rated (watched or "not interested"), it no longer belongs in the
   // wishlist -- covers both the wishlist page's own "already watched"
   // button and rating something from Explore/Recommendations that happened
-  // to be on the list.
+  // to be on the list. notInterested/watchProgress are mutually exclusive
+  // with each other by construction: a seen title can't be "not interested"
+  // (you already watched it), and an unseen one has no watch progress.
   const [rating] = await prisma.$transaction([
     prisma.userTitleRating.upsert({
       where: { userId_titleId: { userId, titleId } },
-      update: { seen, score: seen ? score : null },
-      create: { userId, titleId, seen, score: seen ? score : null },
+      update: {
+        seen,
+        score: seen ? score : null,
+        notInterested: seen ? false : Boolean(notInterested),
+        watchProgress: seen ? (watchProgress ?? null) : null,
+      },
+      create: {
+        userId,
+        titleId,
+        seen,
+        score: seen ? score : null,
+        notInterested: seen ? false : Boolean(notInterested),
+        watchProgress: seen ? (watchProgress ?? null) : null,
+      },
     }),
     prisma.wishlist.deleteMany({ where: { userId, titleId } }),
   ]);

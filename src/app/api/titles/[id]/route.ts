@@ -103,7 +103,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       releaseYear: t.releaseYear,
       posterUrl: tmdbPosterUrl(t.posterPath),
     })),
-    myRating: myRating ? { seen: myRating.seen, score: myRating.score } : null,
+    myRating: myRating
+      ? { seen: myRating.seen, score: myRating.score, notInterested: myRating.notInterested, watchProgress: myRating.watchProgress }
+      : null,
     inWishlist: Boolean(wishlistEntry),
     score: scoreBreakdown?.score ?? 0,
     scoreBreakdown: scoreBreakdown?.breakdown ?? [],

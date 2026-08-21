@@ -5,6 +5,7 @@ import { tmdbPosterUrl } from "@/lib/tmdb";
 import { Poster } from "@/components/Poster";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 import { StarDisplay } from "@/components/StarRating";
+import { watchProgressLabel } from "@/lib/seriesStatus";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("es", { month: "long", year: "numeric" });
 const DAY_LABEL = new Intl.DateTimeFormat("es", { day: "numeric", month: "short" });
@@ -69,12 +70,17 @@ export default async function DiaryPage() {
                   </p>
                 </div>
                 {r.seen ? (
-                  <span className="flex-shrink-0 rounded bg-accent/20 px-2 py-1 text-xs font-bold text-accent">
-                    {r.score != null ? <StarDisplay score={r.score} /> : "Vista"}
+                  <span className="flex flex-shrink-0 flex-col items-end gap-0.5">
+                    <span className="rounded bg-accent/20 px-2 py-1 text-xs font-bold text-accent">
+                      {r.score != null ? <StarDisplay score={r.score} /> : "Vista"}
+                    </span>
+                    {watchProgressLabel(r.watchProgress) && (
+                      <span className="text-[10px] text-muted">{watchProgressLabel(r.watchProgress)}</span>
+                    )}
                   </span>
                 ) : (
                   <span className="flex-shrink-0 rounded bg-white/10 px-2 py-1 text-xs font-medium text-neutral-400">
-                    No vista
+                    {r.notInterested ? "No me interesa" : "No la he visto"}
                   </span>
                 )}
               </Link>

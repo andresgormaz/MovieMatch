@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating, StarDisplay } from "@/components/StarRating";
-import { seasonsSummary } from "@/lib/seriesStatus";
+import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
+import { seasonsSummary, watchProgressLabel, type WatchProgress } from "@/lib/seriesStatus";
 
 export interface ExploreTitle {
   id: string;
@@ -21,7 +22,7 @@ export interface ExploreTitle {
   genres: string[];
   directors: string[];
   providers: ProviderBadge[];
-  myRating: { seen: boolean; score: number | null } | null;
+  myRating: { seen: boolean; score: number | null; notInterested: boolean; watchProgress: string | null } | null;
 }
 
 function formatBudget(n: number) {
@@ -48,8 +49,10 @@ export function ExploreCard({
   // Which score was just tapped, kept lit in gold for a beat before the
   // picker collapses back into the summary button.
   const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
+  // Series-only: must be picked before a series can be marked seen.
+  const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
 
-  async function rate(seen: boolean, score: number | null) {
+  async function rate(seen: boolean, score: number | null, notInterested = false) {
     if (submitting) return;
     setSubmitting(true);
     setError(false);
@@ -58,14 +61,14 @@ export function ExploreCard({
       const res = await fetch("/api/titles/rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titleId: title.id, seen, score }),
+        body: JSON.stringify({ titleId: title.id, seen, score, notInterested, watchProgress }),
       });
       if (!res.ok) throw new Error("rate failed");
       if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
       if (onRated) {
         onRated(title.id);
       } else {
-        setRating({ seen, score });
+        setRating({ seen, score, notInterested, watchProgress: seen ? watchProgress : null });
         setEditing(false);
       }
       setConfirmedScore(null);
@@ -105,14 +108,21 @@ export function ExploreCard({
 
       {rating && !editing ? (
         <button
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            // Re-opening to change an existing rating shouldn't force
+            // re-picking watch progress if it's already known.
+            setWatchProgress((rating.watchProgress as WatchProgress) ?? null);
+            setEditing(true);
+          }}
           className="flex items-center justify-center gap-1.5 border-t border-border py-2 text-center text-xs text-muted hover:bg-surface-hover transition-colors"
         >
           {!rating.seen ? (
-            "No vista · cambiar"
+            rating.notInterested ? "No me interesa · cambiar" : "No la vi · cambiar"
           ) : rating.score ? (
             <>
-              <StarDisplay score={rating.score} className="text-xs" /> · cambiar
+              <StarDisplay score={rating.score} className="text-xs" />
+              {watchProgressLabel(rating.watchProgress) && ` · ${watchProgressLabel(rating.watchProgress)}`}
+              {" · cambiar"}
             </>
           ) : (
             "Vista, sin calificar · calificar"
@@ -122,7 +132,7 @@ export function ExploreCard({
         <div className="grid grid-cols-2 divide-x divide-border border-t border-border">
           <button
             disabled={submitting}
-            onClick={() => rate(false, null)}
+            onClick={() => rate(false, null, false)}
             className="py-2 text-xs font-medium text-neutral-300 hover:bg-surface-hover transition-colors disabled:opacity-50"
           >
             No la vi
@@ -134,6 +144,10 @@ export function ExploreCard({
           >
             La vi
           </button>
+        </div>
+      ) : title.type === "SERIES" && !watchProgress ? (
+        <div className="border-t border-border p-2">
+          <SeriesWatchProgressPicker disabled={submitting} onPick={setWatchProgress} />
         </div>
       ) : (
         <div className="flex justify-center border-t border-border p-2">

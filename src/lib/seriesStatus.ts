@@ -29,3 +29,26 @@ export function seasonsSummary(seasonsCount: number | null, status: string | nul
   if (seasons && statusText) return `${seasons} · ${statusText}`;
   return seasons ?? statusText;
 }
+
+// A user's own progress watching a series -- distinct from the series'
+// own TMDB `status` above (a show can be "Ended" while the user is still
+// "WATCHING" through it, or "Returning Series" while they've "ABANDONED"
+// partway through an old season).
+export type WatchProgress = "WATCHING" | "FINISHED" | "ABANDONED";
+
+export const WATCH_PROGRESS_OPTIONS: { value: WatchProgress; label: string }[] = [
+  { value: "WATCHING", label: "La estoy viendo" },
+  { value: "FINISHED", label: "La terminé" },
+  { value: "ABANDONED", label: "La abandoné" },
+];
+
+const WATCH_PROGRESS_LABELS: Record<WatchProgress, string> = {
+  WATCHING: "La estoy viendo",
+  FINISHED: "La terminé",
+  ABANDONED: "La abandoné",
+};
+
+export function watchProgressLabel(value: string | null): string | null {
+  if (!value) return null;
+  return WATCH_PROGRESS_LABELS[value as WatchProgress] ?? null;
+}

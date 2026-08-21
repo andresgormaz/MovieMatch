@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
+import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
 import { formatScore } from "@/lib/format";
-import { seasonsSummary } from "@/lib/seriesStatus";
+import { seasonsSummary, type WatchProgress } from "@/lib/seriesStatus";
 
 interface TodayPick {
   id: string;
@@ -37,6 +38,9 @@ export function HomeHero() {
   // "Calificar lo que ya viste", so tapping N stars visibly confirms N
   // stars registered instead of the card vanishing the instant you tap.
   const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
+  // Series-only: must be picked before a series can be marked seen (see the
+  // render branch below) -- movies skip this state entirely.
+  const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
 
   async function load() {
     setError(false);
@@ -56,7 +60,7 @@ export function HomeHero() {
     load();
   }, []);
 
-  async function rate(seen: boolean, score: number | null) {
+  async function rate(seen: boolean, score: number | null, notInterested = false) {
     if (!pick || submitting) return;
     setSubmitting(true);
     if (score !== null) setConfirmedScore(score);
@@ -64,7 +68,7 @@ export function HomeHero() {
       const res = await fetch("/api/titles/rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titleId: pick.id, seen, score }),
+        body: JSON.stringify({ titleId: pick.id, seen, score, notInterested, watchProgress }),
       });
       if (!res.ok) throw new Error("rate failed");
       if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
@@ -170,7 +174,7 @@ export function HomeHero() {
             <div className="flex flex-1 gap-1.5">
               <button
                 disabled={submitting}
-                onClick={() => rate(false, null)}
+                onClick={() => rate(false, null, true)}
                 className="flex-1 rounded-md border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
               >
                 No me interesa
@@ -194,6 +198,8 @@ export function HomeHero() {
               Ver más →
             </Link>
           </div>
+        ) : pick.type === "SERIES" && !watchProgress ? (
+          <SeriesWatchProgressPicker disabled={submitting} onPick={setWatchProgress} />
         ) : (
           <div className="mt-1 flex justify-center">
             <StarRating disabled={submitting} selected={confirmedScore ?? undefined} onRate={(s) => rate(true, s)} />

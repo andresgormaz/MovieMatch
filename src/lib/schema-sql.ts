@@ -86,6 +86,8 @@ export const TABLE_STATEMENTS = [
     "titleId" TEXT NOT NULL,
     "seen" BOOLEAN NOT NULL DEFAULT true,
     "score" INTEGER,
+    "notInterested" BOOLEAN NOT NULL DEFAULT false,
+    "watchProgress" TEXT,
     "ratedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "UserTitleRating_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "UserTitleRating_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -295,6 +297,8 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "status" TEXT`,
   `ALTER TABLE "Title" ADD COLUMN "inProduction" BOOLEAN`,
   `ALTER TABLE "Title" ADD COLUMN "lastAirDate" DATETIME`,
+  `ALTER TABLE "UserTitleRating" ADD COLUMN "notInterested" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "UserTitleRating" ADD COLUMN "watchProgress" TEXT`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

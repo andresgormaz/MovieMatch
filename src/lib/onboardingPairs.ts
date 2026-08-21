@@ -57,8 +57,8 @@ type TitleWithCredits = {
 export async function recordFavorite(userId: string, titleId: string) {
   await prisma.userTitleRating.upsert({
     where: { userId_titleId: { userId, titleId } },
-    update: { seen: true, score: 5 },
-    create: { userId, titleId, seen: true, score: 5 },
+    update: { seen: true, score: 5, notInterested: false },
+    create: { userId, titleId, seen: true, score: 5, notInterested: false },
   });
 }
 
@@ -77,26 +77,29 @@ export async function recordPairWinner(userId: string, titleAId: string, titleBI
     prisma.onboardingChoice.create({ data: { userId, titleAId, titleBId, winnerId } }),
     prisma.userTitleRating.upsert({
       where: { userId_titleId: { userId, titleId: titleAId } },
-      update: { seen: true },
-      create: { userId, titleId: titleAId, seen: true, score: null },
+      update: { seen: true, notInterested: false },
+      create: { userId, titleId: titleAId, seen: true, score: null, notInterested: false },
     }),
     prisma.userTitleRating.upsert({
       where: { userId_titleId: { userId, titleId: titleBId } },
-      update: { seen: true },
-      create: { userId, titleId: titleBId, seen: true, score: null },
+      update: { seen: true, notInterested: false },
+      create: { userId, titleId: titleBId, seen: true, score: null, notInterested: false },
     }),
   ]);
 }
 
 // "No la he visto": the swapped-out title is recorded as explicitly unseen
 // (no score -- if it had one somehow, saying "I haven't seen this" now
-// contradicts that, so it's cleared) and never shown again. Doesn't touch
+// contradicts that, so it's cleared) and never shown again in a pair.
+// Neutral, not a rejection -- notInterested stays false, so it's still a
+// perfectly good recommendation candidate (unlike the explicit "No me
+// interesa" button, which sets notInterested: true). Doesn't touch
 // OnboardingChoice: the round isn't finished, just one slot getting refilled.
 export async function recordNotSeen(userId: string, titleId: string) {
   await prisma.userTitleRating.upsert({
     where: { userId_titleId: { userId, titleId } },
-    update: { seen: false, score: null },
-    create: { userId, titleId, seen: false, score: null },
+    update: { seen: false, score: null, notInterested: false, watchProgress: null },
+    create: { userId, titleId, seen: false, score: null, notInterested: false },
   });
 }
 

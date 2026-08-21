@@ -305,6 +305,17 @@ model UserTitleRating {
   titleId String
   seen    Boolean  @default(true)
   score   Int? // 1-5 stars, null when seen=false or seen but not yet rated
+  // Only meaningful when seen=false: true = "no me interesa" (explicit
+  // rejection, excluded from future recommendations for good), false =
+  // neutral "no la he visto" (e.g. a VS swap-out, or Explore's "No la vi")
+  // -- still a perfectly good recommendation candidate. Always false when
+  // seen=true (can't reject something you've watched).
+  notInterested Boolean @default(false)
+  // Series only ("WATCHING" | "FINISHED" | "ABANDONED"), only meaningful
+  // when seen=true -- captured alongside marking a series as seen. Null for
+  // movies, and for series marked seen without going through a UI flow that
+  // asks (e.g. a "vs" win records seen=true but doesn't ask this).
+  watchProgress String?
   ratedAt DateTime @default(now())
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating } from "@/components/StarRating";
-import { seasonsSummary } from "@/lib/seriesStatus";
+import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
+import { seasonsSummary, type WatchProgress } from "@/lib/seriesStatus";
 
 export interface WishlistItem {
   id: string;
@@ -36,6 +37,8 @@ export function WishlistCard({
   // Which score was just tapped, kept lit in gold for a beat before the
   // card disappears -- same confirmation as "Calificar lo que ya viste".
   const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
+  // Series-only: must be picked before a series can be marked seen.
+  const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
 
   async function markSeen(score: number) {
     if (submitting) return;
@@ -46,7 +49,7 @@ export function WishlistCard({
       const res = await fetch("/api/titles/rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titleId: item.id, seen: true, score }),
+        body: JSON.stringify({ titleId: item.id, seen: true, score, watchProgress }),
       });
       if (!res.ok) throw new Error("rate failed");
       await new Promise((resolve) => setTimeout(resolve, 550));
@@ -126,6 +129,10 @@ export function WishlistCard({
           >
             Ya la vi
           </button>
+        </div>
+      ) : item.type === "SERIES" && !watchProgress ? (
+        <div className="border-t border-border p-3">
+          <SeriesWatchProgressPicker disabled={submitting} onPick={setWatchProgress} />
         </div>
       ) : (
         <div className="flex justify-center border-t border-border p-3">

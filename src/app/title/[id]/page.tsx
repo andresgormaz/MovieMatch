@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating, StarDisplay } from "@/components/StarRating";
+import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
 import { formatScore, formatSignedScore } from "@/lib/format";
-import { seasonsLabel, seriesStatusLabel } from "@/lib/seriesStatus";
+import { seasonsLabel, seriesStatusLabel, watchProgressLabel, type WatchProgress } from "@/lib/seriesStatus";
 
 interface CastMember {
   id: string;
@@ -54,7 +55,7 @@ interface TitleDetail {
   crew: CrewMember[];
   providers: ProviderBadge[];
   similar: SimilarTitle[];
-  myRating: { seen: boolean; score: number | null } | null;
+  myRating: { seen: boolean; score: number | null; notInterested: boolean; watchProgress: string | null } | null;
   inWishlist: boolean;
   score: number;
   scoreBreakdown: { label: string; points: number }[];
@@ -79,6 +80,8 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
   // picker collapses back into the summary button -- same confirmation as
   // "Calificar lo que ya viste".
   const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
+  // Series-only: must be picked before a series can be marked seen.
+  const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -96,7 +99,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
     })();
   }, [id]);
 
-  async function rate(seen: boolean, score: number | null) {
+  async function rate(seen: boolean, score: number | null, notInterested = false) {
     if (submitting || !title) return;
     setSubmitting(true);
     setActionError(false);
@@ -105,11 +108,15 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
       const res = await fetch("/api/titles/rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titleId: title.id, seen, score }),
+        body: JSON.stringify({ titleId: title.id, seen, score, notInterested, watchProgress }),
       });
       if (!res.ok) throw new Error("rate failed");
       if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
-      setTitle({ ...title, myRating: { seen, score }, inWishlist: false });
+      setTitle({
+        ...title,
+        myRating: { seen, score, notInterested: seen ? false : notInterested, watchProgress: seen ? watchProgress : null },
+        inWishlist: false,
+      });
       setShowScores(false);
       setConfirmedScore(null);
     } catch {
@@ -135,6 +142,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
       if (!res.ok) throw new Error("unrate failed");
       setTitle({ ...title, myRating: null });
       setShowScores(false);
+      setWatchProgress(null);
     } catch {
       setActionError(true);
     } finally {
@@ -302,14 +310,14 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
               <>
                 <button
                   disabled={submitting}
-                  onClick={() => rate(false, null)}
+                  onClick={() => rate(false, null, true)}
                   className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-                    title.myRating && !title.myRating.seen
+                    title.myRating?.notInterested
                       ? "border-accent bg-accent/20 text-white"
                       : "border-white/15 text-neutral-300 hover:border-white/30"
                   }`}
                 >
-                  {title.myRating && !title.myRating.seen ? "No te interesa ✓" : "No me interesa"}
+                  {title.myRating?.notInterested ? "No te interesa ✓" : "No me interesa"}
                 </button>
                 <button
                   disabled={submitting}
@@ -324,7 +332,12 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
                 <button
                   disabled={submitting}
-                  onClick={() => setShowScores(true)}
+                  onClick={() => {
+                    // Re-opening to change an existing rating shouldn't force
+                    // re-picking watch progress if it's already known.
+                    setWatchProgress((title.myRating?.watchProgress as WatchProgress) ?? null);
+                    setShowScores(true);
+                  }}
                   className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
                     title.myRating?.seen
                       ? "border-accent bg-accent/20 text-white"
@@ -334,7 +347,11 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                   {title.myRating?.seen ? (
                     title.myRating.score ? (
                       <span className="flex items-center gap-1.5">
-                        <StarDisplay score={title.myRating.score} /> · cambiar
+                        <StarDisplay score={title.myRating.score} />
+                        {watchProgressLabel(title.myRating.watchProgress) && (
+                          <span> · {watchProgressLabel(title.myRating.watchProgress)}</span>
+                        )}
+                        {" · cambiar"}
                       </span>
                     ) : (
                       "Vista, sin calificar · calificar"
@@ -344,6 +361,8 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                   )}
                 </button>
               </>
+            ) : title.type === "SERIES" && !watchProgress ? (
+              <SeriesWatchProgressPicker disabled={submitting} onPick={setWatchProgress} />
             ) : (
               <StarRating disabled={submitting} selected={confirmedScore ?? undefined} onRate={(s) => rate(true, s)} />
             )}

@@ -14,6 +14,12 @@ export const titleRatingSchema = z.object({
   titleId: z.string().min(1),
   seen: z.boolean(),
   score: z.number().int().min(1).max(5).nullable(),
+  // Only meaningful when seen=false -- true = "no me interesa" (explicit
+  // rejection), omitted/false = neutral "no la he visto". Ignored when
+  // seen=true (can't reject something you've watched).
+  notInterested: z.boolean().optional(),
+  // Series only, only meaningful when seen=true.
+  watchProgress: z.enum(["WATCHING", "FINISHED", "ABANDONED"]).nullable().optional(),
 });
 
 export const titleUnrateSchema = z.object({
