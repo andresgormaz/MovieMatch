@@ -46,3 +46,46 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* Star-rating confirmation pops -- played once when a star lights up gold
+   (see StarRating.tsx's glowClass). 4 stars gets a small pop, 5 stars a
+   bigger one, so a great rating visibly feels like one. */
+@keyframes star-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  65% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes star-pop-big {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.45) rotate(-8deg);
+  }
+  55% {
+    transform: scale(1.1) rotate(6deg);
+  }
+  80% {
+    transform: scale(1.25) rotate(-3deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.star-pop {
+  animation: star-pop 0.45s ease-out;
+}
+.star-pop-big {
+  animation: star-pop-big 0.65s ease-out;
+}

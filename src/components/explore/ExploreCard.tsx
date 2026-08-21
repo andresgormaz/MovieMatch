@@ -32,11 +32,15 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
+  // Which score was just tapped, kept lit in gold for a beat before the
+  // picker collapses back into the summary button.
+  const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
 
   async function rate(seen: boolean, score: number | null) {
     if (submitting) return;
     setSubmitting(true);
     setError(false);
+    if (score !== null) setConfirmedScore(score);
     try {
       const res = await fetch("/api/titles/rate", {
         method: "POST",
@@ -44,10 +48,13 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
         body: JSON.stringify({ titleId: title.id, seen, score }),
       });
       if (!res.ok) throw new Error("rate failed");
+      if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
       setRating({ seen, score });
       setEditing(false);
+      setConfirmedScore(null);
     } catch {
       setError(true);
+      setConfirmedScore(null);
     } finally {
       setSubmitting(false);
     }
@@ -110,7 +117,12 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
         </div>
       ) : (
         <div className="flex justify-center border-t border-border p-2">
-          <StarRating disabled={submitting} onRate={(s) => rate(true, s)} size="sm" />
+          <StarRating
+            disabled={submitting}
+            selected={confirmedScore ?? undefined}
+            onRate={(s) => rate(true, s)}
+            size="sm"
+          />
         </div>
       )}
     </div>

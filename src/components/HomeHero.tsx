@@ -29,6 +29,11 @@ export function HomeHero() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
   const [done, setDone] = useState(false);
+  // Which score was just tapped, kept lit in gold for a beat before the
+  // card switches to the "gracias" state -- same confirmation as
+  // "Calificar lo que ya viste", so tapping N stars visibly confirms N
+  // stars registered instead of the card vanishing the instant you tap.
+  const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
 
   async function load() {
     setError(false);
@@ -51,6 +56,7 @@ export function HomeHero() {
   async function rate(seen: boolean, score: number | null) {
     if (!pick || submitting) return;
     setSubmitting(true);
+    if (score !== null) setConfirmedScore(score);
     try {
       const res = await fetch("/api/titles/rate", {
         method: "POST",
@@ -58,10 +64,12 @@ export function HomeHero() {
         body: JSON.stringify({ titleId: pick.id, seen, score }),
       });
       if (!res.ok) throw new Error("rate failed");
+      if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
       setDone(true);
     } catch {
       setError(true);
       setSubmitting(false);
+      setConfirmedScore(null);
     }
   }
 
@@ -182,7 +190,7 @@ export function HomeHero() {
           </div>
         ) : (
           <div className="mt-1 flex justify-center">
-            <StarRating disabled={submitting} onRate={(s) => rate(true, s)} />
+            <StarRating disabled={submitting} selected={confirmedScore ?? undefined} onRate={(s) => rate(true, s)} />
           </div>
         )}
       </div>

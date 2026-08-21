@@ -30,11 +30,15 @@ export function WishlistCard({
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(false);
+  // Which score was just tapped, kept lit in gold for a beat before the
+  // card disappears -- same confirmation as "Calificar lo que ya viste".
+  const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
 
   async function markSeen(score: number) {
     if (submitting) return;
     setSubmitting(true);
     setError(false);
+    setConfirmedScore(score);
     try {
       const res = await fetch("/api/titles/rate", {
         method: "POST",
@@ -42,10 +46,12 @@ export function WishlistCard({
         body: JSON.stringify({ titleId: item.id, seen: true, score }),
       });
       if (!res.ok) throw new Error("rate failed");
+      await new Promise((resolve) => setTimeout(resolve, 550));
       onRemoved(item.id);
     } catch {
       setError(true);
       setSubmitting(false);
+      setConfirmedScore(null);
     }
   }
 
@@ -117,7 +123,7 @@ export function WishlistCard({
         </div>
       ) : (
         <div className="flex justify-center border-t border-border p-3">
-          <StarRating disabled={submitting} onRate={markSeen} />
+          <StarRating disabled={submitting} selected={confirmedScore ?? undefined} onRate={markSeen} />
         </div>
       )}
     </div>

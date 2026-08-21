@@ -69,6 +69,10 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
   const [showScores, setShowScores] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState(false);
+  // Which score was just tapped, kept lit in gold for a beat before the
+  // picker collapses back into the summary button -- same confirmation as
+  // "Calificar lo que ya viste".
+  const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -90,6 +94,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
     if (submitting || !title) return;
     setSubmitting(true);
     setActionError(false);
+    if (score !== null) setConfirmedScore(score);
     try {
       const res = await fetch("/api/titles/rate", {
         method: "POST",
@@ -97,10 +102,13 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
         body: JSON.stringify({ titleId: title.id, seen, score }),
       });
       if (!res.ok) throw new Error("rate failed");
+      if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
       setTitle({ ...title, myRating: { seen, score }, inWishlist: false });
       setShowScores(false);
+      setConfirmedScore(null);
     } catch {
       setActionError(true);
+      setConfirmedScore(null);
     } finally {
       setSubmitting(false);
     }
@@ -297,7 +305,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 </button>
               </>
             ) : (
-              <StarRating disabled={submitting} onRate={(s) => rate(true, s)} />
+              <StarRating disabled={submitting} selected={confirmedScore ?? undefined} onRate={(s) => rate(true, s)} />
             )}
           </div>
           {title.myRating && !showScores && (
