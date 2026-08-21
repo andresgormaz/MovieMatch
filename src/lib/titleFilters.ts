@@ -1,5 +1,12 @@
 import type { Prisma } from "@/generated/prisma/client";
 
+// "Alta probabilidad de haber sido vistas" for "Calificar populares" -- a
+// high TMDB vote count is the simplest proxy for mainstream-enough-that-
+// you-probably-saw-it, without needing a separate curated list. Shared
+// between the popular-rating page (query param) and the dashboard's
+// pending-count badge, so the two never drift out of sync.
+export const POPULAR_RATING_MIN_VOTES = 300;
+
 export interface TitleFilterParams {
   q?: string;
   type?: "MOVIE" | "SERIES";

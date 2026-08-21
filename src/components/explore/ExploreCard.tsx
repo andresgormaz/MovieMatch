@@ -27,7 +27,17 @@ function formatBudget(n: number) {
   return `$${n}`;
 }
 
-export function ExploreCard({ title }: { title: ExploreTitle }) {
+export function ExploreCard({
+  title,
+  onRated,
+}: {
+  title: ExploreTitle;
+  // When provided (e.g. "Calificar populares"), the card is removed from
+  // the caller's list once rated instead of collapsing into the "cambiar"
+  // summary -- keeps a rate-many-quickly feed moving instead of leaving
+  // already-closed cards sitting in the grid.
+  onRated?: (titleId: string) => void;
+}) {
   const [rating, setRating] = useState(title.myRating);
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -49,8 +59,12 @@ export function ExploreCard({ title }: { title: ExploreTitle }) {
       });
       if (!res.ok) throw new Error("rate failed");
       if (score !== null) await new Promise((resolve) => setTimeout(resolve, 550));
-      setRating({ seen, score });
-      setEditing(false);
+      if (onRated) {
+        onRated(title.id);
+      } else {
+        setRating({ seen, score });
+        setEditing(false);
+      }
       setConfirmedScore(null);
     } catch {
       setError(true);

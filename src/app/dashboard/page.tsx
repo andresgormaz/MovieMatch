@@ -5,6 +5,7 @@ import { getRecommendations } from "@/lib/recommend";
 import { HomeHero } from "@/components/HomeHero";
 import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
+import { POPULAR_RATING_MIN_VOTES } from "@/lib/titleFilters";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -25,9 +26,14 @@ export default async function DashboardPage() {
   const previousVisit = user?.homeVisitedAt ?? null;
   const showTour = onboardingDone && !user?.tourSeenAt;
 
-  const pendingRatings = onboardingDone
-    ? await prisma.userTitleRating.count({ where: { userId, seen: true, score: null } })
-    : 0;
+  const [pendingRatings, pendingPopular] = onboardingDone
+    ? await Promise.all([
+        prisma.userTitleRating.count({ where: { userId, seen: true, score: null } }),
+        prisma.title.count({
+          where: { voteCount: { gte: POPULAR_RATING_MIN_VOTES }, ratings: { none: { userId } } },
+        }),
+      ])
+    : [0, 0];
 
   // "New since your last visit" only means something once there's a previous
   // visit to compare against, and once onboarding is done (before that,
@@ -72,27 +78,43 @@ export default async function DashboardPage() {
       )}
 
       {onboardingDone && (
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          <Link
-            href="/vs"
-            data-tour="tour-vs"
-            className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
-          >
-            Seguir con &quot;¿cuál te gusta más?&quot;
-            <span aria-hidden className="text-muted">
-              →
-            </span>
-          </Link>
-          <Link
-            href="/rate"
-            data-tour="tour-rate"
-            className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
-          >
-            Calificar lo que ya viste
-            {pendingRatings > 0 && (
-              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">{pendingRatings}</span>
-            )}
-          </Link>
+        <div className="rounded-2xl border border-border/70 bg-surface/40 p-4">
+          <h2 className="mb-3 text-sm font-semibold text-white">Cuéntanos tu gusto</h2>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            <Link
+              href="/vs"
+              data-tour="tour-vs"
+              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
+            >
+              Seguir con &quot;¿cuál te gusta más?&quot;
+              <span aria-hidden className="text-muted">
+                →
+              </span>
+            </Link>
+            <Link
+              href="/rate"
+              data-tour="tour-rate"
+              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
+            >
+              Calificar lo que ya viste
+              {pendingRatings > 0 && (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">
+                  {pendingRatings}
+                </span>
+              )}
+            </Link>
+            <Link
+              href="/rate/popular"
+              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
+            >
+              Calificar populares
+              {pendingPopular > 0 && (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">
+                  {pendingPopular > 99 ? "99+" : pendingPopular}
+                </span>
+              )}
+            </Link>
+          </div>
         </div>
       )}
 

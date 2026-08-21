@@ -20,7 +20,13 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const filterParams = parseTitleFilterParams(searchParams);
-  const where = buildTitleWhere(filterParams, userCountry);
+  const unratedOnly = searchParams.get("unrated") === "1";
+  const where: Prisma.TitleWhereInput = {
+    ...buildTitleWhere(filterParams, userCountry),
+    // Used by "Calificar populares" -- only show titles this user hasn't
+    // rated yet, so every card in that feed is still actionable.
+    ...(unratedOnly ? { ratings: { none: { userId: session.user.id } } } : {}),
+  };
   const sort = searchParams.get("sort") ?? "popularity";
   const pageParam = Number(searchParams.get("page"));
   const page = Math.max(1, Number.isFinite(pageParam) ? pageParam : 1);
