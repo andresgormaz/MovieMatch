@@ -106,6 +106,28 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  // Fully undoes having rated/marked this title -- back to "never
+  // interacted with it" (eligible for recommendations again).
+  async function removeRating() {
+    if (submitting || !title) return;
+    setSubmitting(true);
+    setActionError(false);
+    try {
+      const res = await fetch("/api/titles/rate", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titleId: title.id }),
+      });
+      if (!res.ok) throw new Error("unrate failed");
+      setTitle({ ...title, myRating: null });
+      setShowScores(false);
+    } catch {
+      setActionError(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function toggleWishlist() {
     if (submitting || !title) return;
     setSubmitting(true);
@@ -233,9 +255,13 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 <button
                   disabled={submitting}
                   onClick={() => rate(false, null)}
-                  className="rounded-md border border-white/15 px-4 py-2 text-sm font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
+                  className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                    title.myRating && !title.myRating.seen
+                      ? "border-accent bg-accent/20 text-white"
+                      : "border-white/15 text-neutral-300 hover:border-white/30"
+                  }`}
                 >
-                  No me interesa
+                  {title.myRating && !title.myRating.seen ? "No te interesa ✓" : "No me interesa"}
                 </button>
                 <button
                   disabled={submitting}
@@ -274,6 +300,15 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
               <StarRating disabled={submitting} onRate={(s) => rate(true, s)} />
             )}
           </div>
+          {title.myRating && !showScores && (
+            <button
+              disabled={submitting}
+              onClick={removeRating}
+              className="mt-2 text-xs text-muted underline-offset-2 hover:text-red-400 hover:underline disabled:opacity-50"
+            >
+              Quitar calificación (volver a sin ver)
+            </button>
+          )}
           {actionError && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
         </div>
       </div>

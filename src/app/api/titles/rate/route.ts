@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { titleRatingSchema } from "@/lib/validation";
+import { titleRatingSchema, titleUnrateSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -30,4 +30,24 @@ export async function POST(request: Request) {
   ]);
 
   return NextResponse.json({ rating });
+}
+
+// Lets a user fully undo having rated/marked a title -- "pasar de vista a
+// no vista" (2026-08-27 request) -- back to the same clean-slate state as
+// never having interacted with it (eligible for recommendations again,
+// no leftover "vs"/rating evidence for it either since there's no row left
+// to derive from).
+export async function DELETE(request: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const body = await request.json().catch(() => null);
+  const parsed = titleUnrateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos" }, { status: 400 });
+  }
+
+  await prisma.userTitleRating.deleteMany({ where: { userId: session.user.id, titleId: parsed.data.titleId } });
+
+  return NextResponse.json({ ok: true });
 }

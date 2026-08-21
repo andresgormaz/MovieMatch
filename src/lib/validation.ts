@@ -16,6 +16,10 @@ export const titleRatingSchema = z.object({
   score: z.number().int().min(1).max(5).nullable(),
 });
 
+export const titleUnrateSchema = z.object({
+  titleId: z.string().min(1),
+});
+
 export const personRatingSchema = z.object({
   personId: z.string().min(1),
   score: z.union([z.literal(-1), z.literal(0), z.literal(1)]),

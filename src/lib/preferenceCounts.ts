@@ -16,9 +16,13 @@ import {
 // Replaces the old "bump a stored running weight on every vs win/favorite"
 // model for every preference dimension: the *derived* half of each score is
 // recomputed fresh, directly from the two raw sources of truth -- "vs" wins
-// (OnboardingChoice) and 4-5-star ratings (UserTitleRating) -- instead of an
+// (OnboardingChoice) and star ratings (UserTitleRating) -- instead of an
 // incrementally-updated column. Nothing to drift, nothing to migrate when
-// the formula changes.
+// the formula changes. Most dimensions (genre, type, audience, budget,
+// runtime, country, popularity) still only treat a 4-5-star rating as
+// positive evidence; actor/director and the "similar" boost read the full
+// 1-5 star range now (see DIRECTOR_STAR_VALUE/ACTOR_STAR_VALUE/
+// SIMILAR_TOP5_VALUE below).
 //
 // On top of that, "Mis gustos" lets the user manually nudge any preference
 // by +1/-1, repeatedly -- that manual total is ADDED to the derived score
@@ -85,16 +89,23 @@ function emptyPreferences(): DerivedPreferences {
   };
 }
 
-// A person needs 3 corroborating instances (a "vs" win or a 4-5-star
-// rating featuring them, counted together) before a preference forms --
-// "an initial trend" -- and each instance past that adds one more full
-// point: the 4th instance already totals 2, the 5th totals 3, and so on.
-// Applied separately to "appeared as cast" vs "appeared as director/
-// creator" -- someone who's both gets independent actor and director
-// scores, one per capacity.
-function personScoreFromCount(count: number): number {
-  return count >= 3 ? count - 2 : 0;
-}
+// Direct per-instance point value for actor/director, keyed by star score --
+// no corroboration threshold anymore, every rated title contributes
+// immediately (2026-08-27 request). 5 stars counts for more than 4; 2 and 1
+// stars subtract, 1 more sharply than 2; 3 stars is neutral (the "saw it,
+// no strong feeling" score). A plain "vs" win with no star rating for that
+// title is treated as a 4-star equivalent -- the flat/baseline positive
+// signal, same tier "similar" boosts use it at below.
+const DIRECTOR_STAR_VALUE: Record<number, number> = { 1: -3, 2: -1, 3: 0, 4: 1.5, 5: 2.5 };
+const ACTOR_STAR_VALUE: Record<number, number> = { 1: -2, 2: -1, 3: 0, 4: 1, 5: 2 };
+const VS_WIN_DIRECTOR_VALUE = DIRECTOR_STAR_VALUE[4];
+const VS_WIN_ACTOR_VALUE = ACTOR_STAR_VALUE[4];
+
+// "similar" boost per top-5-ranked related title for a given evidence
+// source; 6th-10th place gets half. Only a "vs" win, a 4-star, or a 5-star
+// rating generates this boost (5 stars amplified to 3x) -- 1-3 stars don't
+// contribute at all, same as they never did before this dimension existed.
+const SIMILAR_TOP5_VALUE: Partial<Record<"vs" | 4 | 5, number>> = { vs: 1, 4: 1, 5: 3 };
 
 // Winner-takes-all for a fixed set of buckets (type/budget/runtime/country/
 // popularity): whichever bucket has the strictly-highest combined count of
@@ -132,29 +143,40 @@ function audiencePreferenceFromCounts(counts: Map<AudienceTier, number>): Map<Au
   return result;
 }
 
-// The core derivation: gathers every "vs" win and every 4-5-star rating,
-// tallies each qualifying title's attributes into raw counts, then applies
-// each dimension's own rule above. A title that both won a "vs" round and
-// was later rated highly counts toward both events independently -- no
-// deduping across the two sources, and (unlike the old actor/director
-// model) no franchise/collection deduping either. `useOriginalTitles` only
-// affects the display name attached to a "similar" reason.
+// The core derivation: gathers every "vs" win and every star rating (1-5),
+// tallies each qualifying title's attributes, then applies each dimension's
+// own rule above. A title that both won a "vs" round and was later rated
+// with stars only counts once -- the rating supersedes the "vs" result for
+// that same title (2026-08-27 request: rating something removes whatever
+// score its "vs" win had granted, instead of both stacking). No franchise/
+// collection deduping. `useOriginalTitles` only affects the display name
+// attached to a "similar" reason.
 export async function computeDerivedPreferences(userId: string, useOriginalTitles = false): Promise<DerivedPreferences> {
-  const [wins, highRatings] = await Promise.all([
+  const [wins, ratings] = await Promise.all([
     prisma.onboardingChoice.findMany({ where: { userId, skipped: false }, select: { winnerId: true } }),
-    prisma.userTitleRating.findMany({ where: { userId, seen: true, score: { gte: 4 } }, select: { titleId: true } }),
+    prisma.userTitleRating.findMany({
+      where: { userId, seen: true, score: { not: null } },
+      select: { titleId: true, score: true },
+    }),
   ]);
 
-  const evidenceIds = [...new Set([...wins.map((w) => w.winnerId), ...highRatings.map((r) => r.titleId)])];
+  const ratedTitleIds = new Set(ratings.map((r) => r.titleId));
+  // A "vs" win only still counts as its own piece of evidence if that title
+  // was never subsequently rated -- once rated, the star score below is the
+  // sole source of truth for that title.
+  const effectiveWins = wins.filter((w) => !ratedTitleIds.has(w.winnerId));
+
+  const evidenceIds = [...new Set([...effectiveWins.map((w) => w.winnerId), ...ratings.map((r) => r.titleId)])];
   if (evidenceIds.length === 0) return emptyPreferences();
 
   const titles = await prisma.title.findMany({ where: { id: { in: evidenceIds } }, select: EVIDENCE_SELECT });
   const titleById = new Map(titles.map((t) => [t.id, t]));
+  type EvidenceTitle = NonNullable<ReturnType<typeof titleById.get>>;
 
   const typeCounts = new Map<TitleType, number>();
   const genreCounts = new Map<number, number>();
-  const actorCounts = new Map<string, number>();
-  const directorCounts = new Map<string, number>();
+  const actor = new Map<string, number>();
+  const director = new Map<string, number>();
   const audienceCounts = new Map<AudienceTier, number>();
   const budgetCounts = new Map<BudgetTier, number>();
   const runtimeCounts = new Map<RuntimeBucket, number>();
@@ -163,16 +185,12 @@ export async function computeDerivedPreferences(userId: string, useOriginalTitle
   const similarCounts = new Map<string, number>();
   const similarReasons = new Map<string, SimilarReason>();
 
-  function tally(titleId: string) {
-    const t = titleById.get(titleId);
-    if (!t) return;
-
+  // type/genre/audience/budget/runtime/country/popularity -- unchanged +1
+  // counting, from "vs" wins (not superseded by a rating) and 4-5-star
+  // ratings only. 1-3-star ratings never fed these dimensions, still don't.
+  function tallyGeneral(t: EvidenceTitle) {
     typeCounts.set(t.type, (typeCounts.get(t.type) ?? 0) + 1);
-
     for (const g of t.genres) genreCounts.set(g.genreId, (genreCounts.get(g.genreId) ?? 0) + 1);
-
-    for (const c of t.cast) actorCounts.set(c.personId, (actorCounts.get(c.personId) ?? 0) + 1);
-    for (const c of t.crew) directorCounts.set(c.personId, (directorCounts.get(c.personId) ?? 0) + 1);
 
     const audience = classifyAudienceTier(t);
     if (audience) audienceCounts.set(audience, (audienceCounts.get(audience) ?? 0) + 1);
@@ -187,11 +205,26 @@ export async function computeDerivedPreferences(userId: string, useOriginalTitle
 
     const popularity = classifyPopularityRange(t);
     popularityCounts.set(popularity, (popularityCounts.get(popularity) ?? 0) + 1);
+  }
 
-    // rank is 0-indexed and only ever 0-9 (SIMILAR_PER_TITLE caps storage at
-    // 10 per title on import) -- 0-4 is "top 5", 5-9 is "6th through 10th".
+  // Direct-sum, immediate -- every rated (or "vs"-won) title's top-3 cast
+  // and director/creator get `directorValue`/`actorValue` added right away,
+  // positive or negative, no corroboration threshold.
+  function tallyPerson(t: EvidenceTitle, directorValue: number, actorValue: number) {
+    if (directorValue !== 0) {
+      for (const c of t.crew) director.set(c.personId, (director.get(c.personId) ?? 0) + directorValue);
+    }
+    if (actorValue !== 0) {
+      for (const c of t.cast) actor.set(c.personId, (actor.get(c.personId) ?? 0) + actorValue);
+    }
+  }
+
+  // rank is 0-indexed and only ever 0-9 (SIMILAR_PER_TITLE caps storage at
+  // 10 per title on import) -- 0-4 is "top 5", 5-9 is "6th through 10th"
+  // (half of the top-5 value).
+  function tallySimilar(t: EvidenceTitle, top5Value: number) {
     for (const row of t.similar) {
-      const contribution = row.rank < 5 ? 1 : 0.5;
+      const contribution = row.rank < 5 ? top5Value : top5Value / 2;
       const key = `${row.relatedTmdbId}:${row.relatedType}`;
       similarCounts.set(key, (similarCounts.get(key) ?? 0) + contribution);
       const existing = similarReasons.get(key);
@@ -201,19 +234,29 @@ export async function computeDerivedPreferences(userId: string, useOriginalTitle
     }
   }
 
-  for (const w of wins) tally(w.winnerId);
-  for (const r of highRatings) tally(r.titleId);
+  for (const w of effectiveWins) {
+    const t = titleById.get(w.winnerId);
+    if (!t) continue;
+    tallyGeneral(t);
+    tallyPerson(t, VS_WIN_DIRECTOR_VALUE, VS_WIN_ACTOR_VALUE);
+    tallySimilar(t, SIMILAR_TOP5_VALUE.vs!);
+  }
 
-  const actor = new Map<string, number>();
-  for (const [personId, count] of actorCounts) {
-    const score = personScoreFromCount(count);
-    if (score > 0) actor.set(personId, score);
+  for (const r of ratings) {
+    const t = titleById.get(r.titleId);
+    if (!t) continue;
+    const score = r.score!;
+    if (score >= 4) tallyGeneral(t);
+    tallyPerson(t, DIRECTOR_STAR_VALUE[score] ?? 0, ACTOR_STAR_VALUE[score] ?? 0);
+    const similarValue = SIMILAR_TOP5_VALUE[score as 4 | 5];
+    if (similarValue !== undefined) tallySimilar(t, similarValue);
   }
-  const director = new Map<string, number>();
-  for (const [personId, count] of directorCounts) {
-    const score = personScoreFromCount(count);
-    if (score > 0) director.set(personId, score);
-  }
+
+  // Zero-valued entries (e.g. a person whose only evidence cancelled out to
+  // exactly 0) are dropped -- same "nothing to say" meaning as never having
+  // set the key at all.
+  for (const [personId, score] of [...actor]) if (score === 0) actor.delete(personId);
+  for (const [personId, score] of [...director]) if (score === 0) director.delete(personId);
 
   return {
     type: winnerTakesAll(typeCounts),
