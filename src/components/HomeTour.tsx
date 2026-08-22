@@ -45,22 +45,39 @@ const STEPS: TourStep[] = [
 
 // Skippable, step-by-step coach-mark tutorial shown once on the home screen
 // right after onboarding (see dashboard/page.tsx's `showTour`, gated on
-// User.tourSeenAt).
-export function HomeTour() {
-  const [dismissed, setDismissed] = useState(false);
+// User.tourSeenAt). Also renders its own small "Ver tutorial" trigger so it
+// can be replayed on demand -- dashboard/page.tsx always mounts this now,
+// passing `startOpen` for whether it should auto-open on this load.
+export function HomeTour({ startOpen }: { startOpen: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   const finishing = useRef(false);
 
   async function finish() {
     if (finishing.current) return;
     finishing.current = true;
-    setDismissed(true);
+    setOpen(false);
     try {
       await fetch("/api/tour/complete", { method: "POST" });
     } catch {
       // Best effort -- worst case the tour shows again on the next visit.
+    } finally {
+      finishing.current = false;
     }
   }
 
-  if (dismissed) return null;
-  return <TourOverlay steps={STEPS} onFinish={finish} />;
+  return (
+    <>
+      {open && <TourOverlay steps={STEPS} onFinish={finish} />}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          aria-label="Ver el tutorial de inicio"
+          title="Ver tutorial"
+          className="fixed bottom-4 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-sm font-bold text-neutral-300 shadow-lg transition-colors hover:border-accent hover:text-white"
+        >
+          ?
+        </button>
+      )}
+    </>
+  );
 }
