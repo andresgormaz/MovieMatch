@@ -5,7 +5,7 @@ import { getRecommendations } from "@/lib/recommend";
 import { HomeHero } from "@/components/HomeHero";
 import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
-import { POPULAR_RATING_MIN_VOTES } from "@/lib/titleFilters";
+import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -26,14 +26,23 @@ export default async function DashboardPage() {
   const previousVisit = user?.homeVisitedAt ?? null;
   const showTour = onboardingDone && !user?.tourSeenAt;
 
-  const [pendingRatings, pendingPopular] = onboardingDone
-    ? await Promise.all([
-        prisma.userTitleRating.count({ where: { userId, seen: true, score: null } }),
-        prisma.title.count({
-          where: { voteCount: { gte: POPULAR_RATING_MIN_VOTES }, ratings: { none: { userId } } },
-        }),
-      ])
-    : [0, 0];
+  let pendingRatings = 0;
+  let pendingPopular = 0;
+  if (onboardingDone) {
+    const [ratingsCount, popularPool] = await Promise.all([
+      prisma.userTitleRating.count({ where: { userId, seen: true, score: null } }),
+      // Same top-N-by-votes pool "Calificar populares" itself shows -- see
+      // POPULAR_POOL_SIZE -- so the badge always matches what's on the page.
+      prisma.title.findMany({ orderBy: { voteCount: "desc" }, take: POPULAR_POOL_SIZE, select: { id: true } }),
+    ]);
+    pendingRatings = ratingsCount;
+    const popularIds = popularPool.map((t) => t.id);
+    const ratedPopularCount =
+      popularIds.length > 0
+        ? await prisma.userTitleRating.count({ where: { userId, titleId: { in: popularIds } } })
+        : 0;
+    pendingPopular = popularIds.length - ratedPopularCount;
+  }
 
   // "New since your last visit" only means something once there's a previous
   // visit to compare against, and once onboarding is done (before that,

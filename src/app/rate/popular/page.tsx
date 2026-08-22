@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ExploreCard, type ExploreTitle } from "@/components/explore/ExploreCard";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
-import { POPULAR_RATING_MIN_VOTES } from "@/lib/titleFilters";
+import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
 
 export default function RatePopularPage() {
   const [titles, setTitles] = useState<ExploreTitle[]>([]);
@@ -17,16 +17,21 @@ export default function RatePopularPage() {
     setError(null);
     try {
       const params = new URLSearchParams({
-        sort: "popularity",
+        sort: "votes",
         unrated: "1",
-        votesMin: String(POPULAR_RATING_MIN_VOTES),
         page: String(p),
       });
       const res = await fetch(`/api/catalog?${params.toString()}`);
       if (!res.ok) throw new Error("failed");
       const data = await res.json();
-      setTitles((prev) => (append ? [...prev, ...data.titles] : data.titles));
-      setTotalPages(data.totalPages);
+      setTitles((prev) => {
+        const next = append ? [...prev, ...data.titles] : data.titles;
+        // Cap the pool at POPULAR_POOL_SIZE regardless of how much more the
+        // (unfiltered) catalog actually has -- "populares" means the top N
+        // by votes, not the whole thing.
+        return next.slice(0, POPULAR_POOL_SIZE);
+      });
+      setTotalPages(Math.min(data.totalPages, Math.ceil(POPULAR_POOL_SIZE / data.pageSize)));
       setPage(p);
     } catch {
       setError("No se pudo cargar la lista. Inténtalo de nuevo en un momento.");
