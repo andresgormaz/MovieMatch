@@ -16,6 +16,21 @@ import {
 } from "@/components/explore/FilterPanel";
 import { loadStoredFilters, storeFilters, clearStoredFilters } from "@/lib/filterStorage";
 import { useSavedFilters } from "@/lib/useSavedFilters";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-explore-filters"]',
+    title: "Filtra el catálogo completo",
+    body: "Por género, plataforma, año, puntaje, actor o director. También puedes ordenar los resultados.",
+  },
+  {
+    selector: '[data-tour="tour-explore-list"]',
+    title: "Califica desde aquí también",
+    body: "No hace falta esperar una recomendación -- puedes marcar cualquier título como visto o no visto.",
+  },
+];
 
 export default function ExplorePage() {
   return (
@@ -116,8 +131,9 @@ function ExplorePageInner() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8">
       <BackToHomeLink />
+      <PageTour pageKey="explore" steps={TOUR_STEPS} />
       <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="flex-shrink-0 lg:w-72">
+        <aside data-tour="tour-explore-filters" className="flex-shrink-0 lg:w-72">
           <div className="lg:sticky lg:top-20">
             <FilterPanel
               filters={filters}
@@ -151,7 +167,7 @@ function ExplorePageInner() {
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div data-tour="tour-explore-list" className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
             {titles.map((t) => (
               <ExploreCard key={t.id} title={t} />
             ))}

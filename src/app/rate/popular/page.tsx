@@ -4,6 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { ExploreCard, type ExploreTitle } from "@/components/explore/ExploreCard";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-rate-popular-list"]',
+    title: "Califica rápido, en lote",
+    body: "No la vi o La vi -- son los títulos más populares del catálogo, así que suele haber varios que ya viste.",
+  },
+];
 
 export default function RatePopularPage() {
   const [titles, setTitles] = useState<ExploreTitle[]>([]);
@@ -52,6 +62,7 @@ export default function RatePopularPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8">
       <BackToHomeLink />
+      <PageTour pageKey="ratePopular" steps={TOUR_STEPS} />
       <div>
         <h1 className="text-2xl font-bold">Calificar populares</h1>
         <p className="mt-1 text-sm text-muted">
@@ -71,7 +82,7 @@ export default function RatePopularPage() {
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+      <div data-tour="tour-rate-popular-list" className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {titles.map((t) => (
           <ExploreCard key={t.id} title={t} onRated={handleRated} />
         ))}

@@ -75,6 +75,23 @@ model User {
   ownedGroups        Group[]       @relation("GroupOwner")
   groupMemberships   GroupMember[]
   savedFilters       SavedFilter[]
+  pageToursSeen      UserPageTourSeen[]
+}
+
+// Per-page coach-mark tutorials (recomendaciones, ficha de título, ficha de
+// persona, catálogo, novedades, mi lista, vs, calificar vistas, calificar
+// populares) -- separate from the home tour above (User.tourSeenAt), which
+// predates this and works fine as-is. One row per page a user has already
+// seen the tutorial for; absence of a row means "show it".
+model UserPageTourSeen {
+  id      String   @id @default(cuid())
+  userId  String
+  pageKey String
+  seenAt  DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pageKey])
+  @@index([userId])
 }
 
 // One "which do you like more" round from onboarding -- titleAId/titleBId

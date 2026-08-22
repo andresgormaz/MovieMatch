@@ -4,6 +4,16 @@ import { useState } from "react";
 import Link from "next/link";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 import { PairCompare } from "@/components/onboarding/PairCompare";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-vs-page"]',
+    title: "Elige la que más te gusta",
+    body: '¿No has visto una? Usa "No la he visto, cambiar" -- no perjudica el puntaje de la que no elegiste.',
+  },
+];
 
 // The same "which do you like more" mechanic from onboarding, but with no
 // fixed round count -- a standing way to keep filling in genre/format/actor
@@ -15,6 +25,7 @@ export default function VsPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-10">
       <BackToHomeLink />
+      <PageTour pageKey="vs" steps={TOUR_STEPS} />
       <div>
         <h1 className="text-2xl font-bold">¿Cuál te gusta más?</h1>
         <p className="mt-1 text-sm text-muted">
@@ -38,7 +49,9 @@ export default function VsPage() {
           </Link>
         </div>
       ) : (
-        <PairCompare unlimited onRoundComplete={setRound} onExhausted={() => setExhausted(true)} />
+        <div data-tour="tour-vs-page">
+          <PairCompare unlimited onRoundComplete={setRound} onExhausted={() => setExhausted(true)} />
+        </div>
       )}
     </div>
   );

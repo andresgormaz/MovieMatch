@@ -114,6 +114,7 @@ export default async function DashboardPage() {
             </Link>
             <Link
               href="/rate/popular"
+              data-tour="tour-populares"
               className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
             >
               Calificar populares
@@ -130,6 +131,7 @@ export default async function DashboardPage() {
       {onboardingDone && (
         <Link
           href="/whats-new"
+          data-tour="tour-novedades"
           className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
         >
           Novedades para ti

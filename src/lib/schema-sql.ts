@@ -214,6 +214,13 @@ export const TABLE_STATEMENTS = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "SavedFilter_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "UserPageTourSeen" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "pageKey" TEXT NOT NULL,
+    "seenAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "UserPageTourSeen_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -270,6 +277,8 @@ export const INDEX_STATEMENTS = [
   // "titleId -> its genres" lookups -- filtering "titles with genre X"
   // needs genreId as its own leading column.
   `CREATE INDEX IF NOT EXISTS "TitleGenre_genreId_idx" ON "TitleGenre"("genreId")`,
+  `CREATE INDEX IF NOT EXISTS "UserPageTourSeen_userId_idx" ON "UserPageTourSeen"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "UserPageTourSeen_userId_pageKey_key" ON "UserPageTourSeen"("userId", "pageKey")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through

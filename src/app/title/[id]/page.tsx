@@ -9,6 +9,21 @@ import { StarRating, StarDisplay } from "@/components/StarRating";
 import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
 import { formatScore, formatSignedScore } from "@/lib/format";
 import { seasonsLabel, seriesStatusLabel, watchProgressLabel, type WatchProgress } from "@/lib/seriesStatus";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-title-status"]',
+    title: "Ajusta el estado cuando quieras",
+    body: "Puedes cambiar de un estado a otro en cualquier momento -- por ejemplo, si marcaste \"ya la vi\" por error.",
+  },
+  {
+    selector: '[data-tour="tour-title-cast"]',
+    title: "Reparto y dirección",
+    body: "Toca a cualquier actor o director para ver su ficha y todo lo que tenemos de esa persona.",
+  },
+];
 
 interface CastMember {
   id: string;
@@ -194,6 +209,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="flex flex-col">
+      <PageTour pageKey="titleDetail" steps={TOUR_STEPS} />
       <div className="relative w-full overflow-hidden">
         {title.backdropUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -309,7 +325,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
             )}
           </dl>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2">
+          <div data-tour="tour-title-status" className="mt-5 flex flex-wrap items-center gap-2">
             {!showScores ? (
               <>
                 <button
@@ -451,7 +467,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
       )}
 
       {title.cast.length > 0 && (
-        <div className="mx-auto w-full max-w-4xl px-4 pb-10">
+        <div data-tour="tour-title-cast" className="mx-auto w-full max-w-4xl px-4 pb-10">
           <h2 className="mb-3 text-lg font-bold text-white">Reparto</h2>
           <div className="flex gap-3 overflow-x-auto pb-1">
             {title.cast.map((c) => (

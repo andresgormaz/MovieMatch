@@ -4,6 +4,16 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Poster } from "@/components/Poster";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-person-filmography"]',
+    title: "Su filmografía",
+    body: "Toca cualquier título para ir a su ficha -- así puedes navegar entre personas y títulos relacionados.",
+  },
+];
 
 interface FilmographyItem {
   id: string;
@@ -72,6 +82,7 @@ export default function PersonDetailPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
+      <PageTour pageKey="personDetail" steps={TOUR_STEPS} />
       <BackButton onClick={() => router.back()} />
 
       <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
@@ -110,7 +121,7 @@ export default function PersonDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       {person.filmography.length > 0 && (
-        <div>
+        <div data-tour="tour-person-filmography">
           <h2 className="mb-3 text-lg font-bold text-white">Filmografía</h2>
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
             {person.filmography.map((f) => (

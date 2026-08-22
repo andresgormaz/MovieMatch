@@ -15,6 +15,16 @@ import {
 } from "@/components/explore/FilterPanel";
 import { loadStoredFilters, storeFilters, clearStoredFilters } from "@/lib/filterStorage";
 import { useSavedFilters } from "@/lib/useSavedFilters";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-wishlist-list"]',
+    title: "Cuando la veas, márcala",
+    body: "Toca \"Ya la vi\" en cualquier título de tu lista para calificarlo y que deje de aparecer aquí.",
+  },
+];
 
 export default function WishlistPage() {
   const [items, setItems] = useState<WishlistItem[]>([]);
@@ -102,6 +112,7 @@ export default function WishlistPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8">
       <BackToHomeLink />
+      <PageTour pageKey="wishlist" steps={TOUR_STEPS} />
       <div className="flex flex-col gap-6 lg:flex-row">
         <aside className="flex-shrink-0 lg:w-72">
           <div className="lg:sticky lg:top-20">
@@ -132,7 +143,7 @@ export default function WishlistPage() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div data-tour="tour-wishlist-list" className="flex flex-col gap-3">
             {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
             {error && (
               <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">{error}</p>
