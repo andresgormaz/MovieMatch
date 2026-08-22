@@ -119,6 +119,10 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
       });
       setShowScores(false);
       setConfirmedScore(null);
+      // Moving away from "la vi" clears the locally-held watch progress too --
+      // otherwise a later "Ya la vi" would silently skip the picker, reusing
+      // a stale answer instead of asking again.
+      if (!seen) setWatchProgress(null);
     } catch {
       setActionError(true);
       setConfirmedScore(null);
@@ -308,6 +312,19 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
           <div className="mt-5 flex flex-wrap items-center gap-2">
             {!showScores ? (
               <>
+                <button
+                  disabled={submitting}
+                  onClick={() => rate(false, null, false)}
+                  className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                    title.myRating && !title.myRating.seen && !title.myRating.notInterested
+                      ? "border-accent bg-accent/20 text-white"
+                      : "border-white/15 text-neutral-300 hover:border-white/30"
+                  }`}
+                >
+                  {title.myRating && !title.myRating.seen && !title.myRating.notInterested
+                    ? "No la has visto ✓"
+                    : "No la he visto"}
+                </button>
                 <button
                   disabled={submitting}
                   onClick={() => rate(false, null, true)}
