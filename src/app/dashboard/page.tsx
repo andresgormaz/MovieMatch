@@ -5,7 +5,9 @@ import { getRecommendations } from "@/lib/recommend";
 import { HomeHero } from "@/components/HomeHero";
 import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
+import { UpcomingReleases } from "@/components/UpcomingReleases";
 import { POPULAR_RATING_MIN_VOTES } from "@/lib/titleFilters";
+import { getUpcomingReleases } from "@/lib/upcoming";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -48,6 +50,13 @@ export default async function DashboardPage() {
     });
     newSinceLastVisit = fresh.length;
   }
+
+  // Not personalized (same feed for everyone) -- shown regardless of
+  // onboarding status.
+  const upcoming = await getUpcomingReleases({
+    userCountry: user?.country ?? null,
+    useOriginalTitles: user?.originalTitles ?? false,
+  });
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
@@ -117,6 +126,8 @@ export default async function DashboardPage() {
           </div>
         </div>
       )}
+
+      <UpcomingReleases movies={upcoming.movies} series={upcoming.series} />
 
       <div data-tour="tour-quicklinks" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <QuickLink href="/recommendations" label="Todas mis recomendaciones" />

@@ -36,6 +36,7 @@ export const TABLE_STATEMENTS = [
     "runtime" INTEGER,
     "seasonsCount" INTEGER,
     "episodesCount" INTEGER,
+    "nextEpisodeAirDate" DATETIME,
     "status" TEXT,
     "inProduction" BOOLEAN,
     "lastAirDate" DATETIME,
@@ -299,6 +300,7 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "lastAirDate" DATETIME`,
   `ALTER TABLE "UserTitleRating" ADD COLUMN "notInterested" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "UserTitleRating" ADD COLUMN "watchProgress" TEXT`,
+  `ALTER TABLE "Title" ADD COLUMN "nextEpisodeAirDate" DATETIME`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

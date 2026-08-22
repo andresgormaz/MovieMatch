@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 
-type Source = "auto" | "anime" | "votes" | "attributes" | "seriesStatus" | "range";
+type Source = "auto" | "anime" | "votes" | "attributes" | "seriesStatus" | "upcoming" | "range";
 
 const SOURCES: { value: Source; label: string; hint: string }[] = [
   { value: "auto", label: "Catálogo (2000 en adelante)", hint: "El import principal desde TMDB." },
@@ -18,6 +18,11 @@ const SOURCES: { value: Source; label: string; hint: string }[] = [
     value: "seriesStatus",
     label: "Temporadas/estado faltante",
     hint: "Rellena cantidad de temporadas, episodios y si la serie sigue en emisión, terminó o fue cancelada.",
+  },
+  {
+    value: "upcoming",
+    label: "Próximos estrenos de cine",
+    hint: "Actualiza la lista de estrenos de cine próximos, para la sección del home.",
   },
 ];
 

@@ -152,6 +152,7 @@ export interface TmdbTvDetails extends TmdbListItem {
   status: string;
   in_production: boolean;
   last_air_date: string | null; // "YYYY-MM-DD"
+  next_episode_to_air: { air_date: string | null } | null;
   credits: TmdbCredits;
   "watch/providers": TmdbWatchProviders;
   recommendations: TmdbRecommendations;
@@ -214,9 +215,19 @@ export const tmdb = {
     tmdbFetch<
       Pick<
         TmdbTvDetails,
-        "episode_run_time" | "number_of_seasons" | "number_of_episodes" | "status" | "in_production" | "last_air_date"
+        | "episode_run_time"
+        | "number_of_seasons"
+        | "number_of_episodes"
+        | "status"
+        | "in_production"
+        | "last_air_date"
+        | "next_episode_to_air"
       >
     >(`/tv/${id}`),
+  // Upcoming theatrical releases, region-scoped (see UPCOMING_REGION in
+  // seedCatalog.ts) -- "Próximos estrenos" home section, cinema side.
+  upcomingMovies: (page: number, region: string) =>
+    tmdbFetch<TmdbDiscoverResponse>("/movie/upcoming", { page, region }),
   // Fetched lazily, once, the first time a person's detail page is opened
   // (see /api/people/[id]) -- not part of the catalog import, so there's no
   // batch backfill for it and no rate-limit budget spent on people nobody

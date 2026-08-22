@@ -10,7 +10,7 @@ import {
 } from "../../prisma/seed-data/fallback";
 
 export interface SeedResult {
-  mode: "tmdb" | "fallback" | "anime" | "votes" | "attributes" | "seriesStatus";
+  mode: "tmdb" | "fallback" | "anime" | "votes" | "attributes" | "seriesStatus" | "upcoming";
   skipped: boolean;
   titles: number;
   people: number;
@@ -55,7 +55,7 @@ export async function ensureSchema() {
 export async function seedCatalog(
   opts: {
     force?: boolean;
-    source?: "auto" | "anime" | "votes" | "attributes" | "seriesStatus" | "range";
+    source?: "auto" | "anime" | "votes" | "attributes" | "seriesStatus" | "upcoming" | "range";
     fromYear?: number;
     toYear?: number;
   } = {},
@@ -80,6 +80,11 @@ export async function seedCatalog(
     // Same idea again, for seasons/status/last air date on series imported
     // before those columns existed.
     return backfillSeriesStatus();
+  }
+
+  if (opts.source === "upcoming") {
+    // "Próximos estrenos" home section, cinema side -- see UPCOMING_REGION.
+    return seedUpcomingMovies();
   }
 
   if (opts.source === "anime") {
@@ -443,6 +448,7 @@ async function enrichTitles(
   const statusByTitleId = new Map<string, string>();
   const inProductionByTitleId = new Map<string, boolean>();
   const lastAirDateByTitleId = new Map<string, Date>();
+  const nextEpisodeAirDateByTitleId = new Map<string, Date>();
   const collectionIdByTitleId = new Map<string, number>();
   const nameByTitleId = new Map<string, string>();
   const overviewByTitleId = new Map<string, string>();
@@ -482,6 +488,7 @@ async function enrichTitles(
         status: string;
         in_production: boolean;
         last_air_date: string | null;
+        next_episode_to_air: { air_date: string | null } | null;
       };
       if (tvDetails.episode_run_time?.[0]) runtimeByTitleId.set(t.id, tvDetails.episode_run_time[0]);
       if (tvDetails.number_of_seasons != null) seasonsCountByTitleId.set(t.id, tvDetails.number_of_seasons);
@@ -489,6 +496,9 @@ async function enrichTitles(
       if (tvDetails.status) statusByTitleId.set(t.id, tvDetails.status);
       if (tvDetails.in_production != null) inProductionByTitleId.set(t.id, tvDetails.in_production);
       if (tvDetails.last_air_date) lastAirDateByTitleId.set(t.id, new Date(tvDetails.last_air_date));
+      if (tvDetails.next_episode_to_air?.air_date) {
+        nextEpisodeAirDateByTitleId.set(t.id, new Date(tvDetails.next_episode_to_air.air_date));
+      }
     }
 
     // Refreshes the locale-translated name/overview on every re-enrichment
@@ -705,6 +715,7 @@ async function enrichTitles(
     ...statusByTitleId.keys(),
     ...inProductionByTitleId.keys(),
     ...lastAirDateByTitleId.keys(),
+    ...nextEpisodeAirDateByTitleId.keys(),
     ...collectionIdByTitleId.keys(),
     ...nameByTitleId.keys(),
     ...overviewByTitleId.keys(),
@@ -724,6 +735,7 @@ async function enrichTitles(
         status: statusByTitleId.get(titleId),
         inProduction: inProductionByTitleId.get(titleId),
         lastAirDate: lastAirDateByTitleId.get(titleId),
+        nextEpisodeAirDate: nextEpisodeAirDateByTitleId.get(titleId),
         collectionId: collectionIdByTitleId.get(titleId),
         name: nameByTitleId.get(titleId),
         overview: overviewByTitleId.get(titleId),
@@ -822,6 +834,7 @@ async function backfillAttributes(): Promise<SeedResult> {
           status: attrs.status || null,
           inProduction: attrs.in_production,
           lastAirDate: attrs.last_air_date ? new Date(attrs.last_air_date) : null,
+          nextEpisodeAirDate: attrs.next_episode_to_air?.air_date ? new Date(attrs.next_episode_to_air.air_date) : null,
         },
       });
     }
@@ -868,6 +881,7 @@ async function backfillSeriesStatus(): Promise<SeedResult> {
         status: attrs.status || null,
         inProduction: attrs.in_production,
         lastAirDate: attrs.last_air_date ? new Date(attrs.last_air_date) : null,
+        nextEpisodeAirDate: attrs.next_episode_to_air?.air_date ? new Date(attrs.next_episode_to_air.air_date) : null,
       },
     });
   }
@@ -884,6 +898,79 @@ async function backfillSeriesStatus(): Promise<SeedResult> {
     seriesStatusRemaining,
     done: seriesStatusRemaining === 0,
   };
+}
+
+// Hardcoded rather than per-user: this import populates the shared catalog
+// (like the rest of seedCatalog.ts), and theatrical release dates genuinely
+// vary by country, so one region has to be picked for the whole household.
+// Revisit if MovieMatch ever serves users outside Chile.
+const UPCOMING_REGION = "CL";
+// TMDB's /movie/upcoming pool is small (a few hundred at most, unlike the
+// historical catalog) -- a handful of pages covers it in one call, no
+// resumable page-cursor needed.
+const UPCOMING_PAGES_PER_CALL = 5;
+
+// "Próximos estrenos" home section, cinema side. Deliberately lightweight:
+// upserts straight from the /discover-shaped list response (poster, name,
+// date, genres) without the full enrichTitles() cast/crew/providers pass --
+// an unreleased movie has no cast worth showing yet anyway, and once it's
+// out, the regular catalog import's enrich pass (toEnrich in seedFromTmdb)
+// picks it up like any other title missing cast/providers. Upsert (not
+// insert-only) so a movie already in the catalog from elsewhere gets its
+// release date refreshed instead of erroring on the unique constraint.
+async function seedUpcomingMovies(): Promise<SeedResult> {
+  const knownGenreIds = new Set((await prisma.genre.findMany({ select: { id: true } })).map((g) => g.id));
+
+  const movies: TmdbListItem[] = [];
+  for (let page = 1; page <= UPCOMING_PAGES_PER_CALL; page++) {
+    const res = await tmdb.upcomingMovies(page, UPCOMING_REGION);
+    movies.push(...res.results);
+    await sleep(80);
+    if (page >= res.total_pages) break;
+  }
+
+  for (const item of movies) {
+    const dateStr = item.release_date;
+    const title = await prisma.title.upsert({
+      where: { tmdbId_type: { tmdbId: item.id, type: "MOVIE" } },
+      update: {
+        name: item.title!,
+        overview: item.overview,
+        posterPath: item.poster_path,
+        backdropPath: item.backdrop_path,
+        popularity: item.popularity,
+        voteAverage: item.vote_average,
+        voteCount: item.vote_count,
+        releaseDate: dateStr ? new Date(dateStr) : null,
+        releaseYear: Number(dateStr?.slice(0, 4)) || null,
+      },
+      create: {
+        tmdbId: item.id,
+        type: "MOVIE",
+        name: item.title!,
+        originalName: item.original_title,
+        overview: item.overview,
+        releaseYear: Number(dateStr?.slice(0, 4)) || null,
+        releaseDate: dateStr ? new Date(dateStr) : null,
+        posterPath: item.poster_path,
+        backdropPath: item.backdrop_path,
+        popularity: item.popularity,
+        voteAverage: item.vote_average,
+        voteCount: item.vote_count,
+      },
+    });
+
+    for (const genreId of item.genre_ids ?? []) {
+      if (!knownGenreIds.has(genreId)) continue;
+      await prisma.titleGenre.upsert({
+        where: { titleId_genreId: { titleId: title.id, genreId } },
+        update: {},
+        create: { titleId: title.id, genreId },
+      });
+    }
+  }
+
+  return { mode: "upcoming", skipped: false, titles: movies.length, people: 0, done: true };
 }
 
 const ANIME_PAGES_PER_CALL = 25; // Jikan's 400ms rate-limit sleep dominates here, not the fetch itself -- no per-title enrichment call needed

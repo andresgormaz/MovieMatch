@@ -16,6 +16,8 @@ import { seedCatalog } from "@/lib/seedCatalog";
 // Add &source=attributes to run the one-time runtime/collection/budget
 // backfill (also resumable). Add &source=seriesStatus to run the one-time
 // seasons/status/last-air-date backfill for series (also resumable).
+// Add &source=upcoming to (re)pull upcoming theatrical releases for the
+// home "Próximos estrenos" section (small pool, one call is usually enough).
 // Add &source=range&from=1980&to=1989 to import
 // any other year range instead of the default 2000-present one (also
 // resumable, independently of every other range already loaded) -- `to` is
@@ -54,9 +56,11 @@ export async function GET(request: Request) {
           ? "attributes"
           : sourceParam === "seriesStatus"
             ? "seriesStatus"
-            : sourceParam === "range"
-              ? "range"
-              : "auto";
+            : sourceParam === "upcoming"
+              ? "upcoming"
+              : sourceParam === "range"
+                ? "range"
+                : "auto";
   const fromYear = Number(searchParams.get("from")) || undefined;
   const toYear = Number(searchParams.get("to")) || undefined;
 
@@ -91,6 +95,8 @@ export async function GET(request: Request) {
       message = result.done
         ? `Listo, ya no queda ninguna serie sin temporadas/estado.`
         : `Completamos temporadas/estado de ${result.titles} series más (quedan ${result.seriesStatusRemaining} pendientes). Vuelve a visitar esta misma URL (con &source=seriesStatus) para seguir completando.`;
+    } else if (result.mode === "upcoming") {
+      message = `Listo: ${result.titles} próximos estrenos de cine actualizados.`;
     } else {
       message = `Listo: se cargaron ${result.titles} títulos y ${result.people} personas (dataset local).`;
     }

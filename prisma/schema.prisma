@@ -142,6 +142,7 @@ model Title {
   runtime        Int? // minutes -- movie runtime, or a representative episode runtime for series
   seasonsCount   Int? // series only -- total number of seasons
   episodesCount  Int? // series only -- total number of episodes across all seasons
+  nextEpisodeAirDate DateTime? // series only -- next episode's scheduled air date, null if none scheduled
   status         String? // series only -- raw TMDB status: "Returning Series", "Planned", "In Production", "Ended", "Canceled", "Pilot"
   inProduction   Boolean? // series only -- actively producing new episodes right now
   lastAirDate    DateTime? // series only -- most recently aired episode's date
