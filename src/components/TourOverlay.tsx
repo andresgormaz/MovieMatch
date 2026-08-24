@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 export interface TourStep {
   selector: string;
   title: string;
   body: string;
 }
+
+// useLayoutEffect warns when it runs during SSR -- TourOverlay can end up
+// in the server-rendered HTML (HomeTour's `open` state starts from a
+// server-computed prop), so this falls back to useEffect there and only
+// upgrades to the synchronous, pre-paint version in the browser.
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 // Steps whose target isn't currently rendered/visible (e.g. a section that
 // only shows when there's data, or the desktop-only nav links on a phone)
@@ -35,7 +41,7 @@ export function TourOverlay({ steps, onFinish }: { steps: TourStep[]; onFinish: 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- steps is a stable literal per caller
   }, []);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (stepIndex === null) return;
     const el = document.querySelector(steps[stepIndex].selector) as HTMLElement | null;
     if (!el) {
@@ -45,15 +51,21 @@ export function TourOverlay({ steps, onFinish }: { steps: TourStep[]; onFinish: 
     function update() {
       setRect(el!.getBoundingClientRect());
     }
+    // Jump instantly rather than scrollIntoView's own "smooth" -- that fires
+    // a scroll event on nearly every frame of its animation, and each one
+    // re-triggers the spotlight's own CSS transition toward a slightly
+    // different mid-scroll target, so the two animations fight and the
+    // result looks like it jerks around instead of moving cleanly. Scrolling
+    // instantly and measuring once afterward leaves exactly one motion
+    // source: the spotlight's own eased transition to its settled position.
+    el.scrollIntoView({ block: "center", behavior: "instant" });
     update();
-    el.scrollIntoView({ block: "center", behavior: "smooth" });
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- goNext is stable enough for this effect's purpose
   }, [stepIndex]);
 
   function goNext() {
