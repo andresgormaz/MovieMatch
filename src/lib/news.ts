@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { prisma } from "@/lib/prisma";
-import { computeMergedPreferences } from "@/lib/preferenceCounts";
+import { getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
 
 // A handful of movie/series news RSS feeds -- mixes English trade press with
 // a Spanish-language outlet since our users read es-LatAm. Each entry is
@@ -189,37 +189,17 @@ export async function refreshNewsIfStale(): Promise<void> {
   });
 }
 
-interface NewsKeyword {
-  name: string;
-  weight: number;
-}
-
 const MIN_KEYWORD_LENGTH = 3;
-const TOP_PEOPLE_PER_ROLE = 15;
-const TOP_GENRES = 5;
 const TOP_LOVED_TITLES = 40;
 
 // This user's positive taste signal, reduced to a flat list of names to
-// match article text against: actors/directors they respond well to (per
-// computeMergedPreferences, the same derived+manual signal recommendations
-// use), their favorite genres, and titles they rated 4-5 stars by name (so
-// news about a sequel/spinoff of something they loved still surfaces).
-async function buildUserNewsKeywords(userId: string, useOriginalTitles: boolean): Promise<NewsKeyword[]> {
-  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
-
-  const topPersonIds = new Set([
-    ...[...prefs.actor.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]).slice(0, TOP_PEOPLE_PER_ROLE).map(([id]) => id),
-    ...[...prefs.director.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]).slice(0, TOP_PEOPLE_PER_ROLE).map(([id]) => id),
-  ]);
-  const topGenreIds = [...prefs.genre.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, TOP_GENRES)
-    .filter(([, w]) => w > 0)
-    .map(([id]) => id);
-
-  const [people, genres, lovedTitles] = await Promise.all([
-    topPersonIds.size > 0 ? prisma.person.findMany({ where: { id: { in: [...topPersonIds] } }, select: { id: true, name: true } }) : [],
-    topGenreIds.length > 0 ? prisma.genre.findMany({ where: { id: { in: topGenreIds } }, select: { id: true, name: true } }) : [],
+// match article text against: getTasteKeywords' actors/directors/genres,
+// plus titles they rated 4-5 stars by name (so news about a sequel/spinoff
+// of something they loved still surfaces) -- the title part only makes
+// sense here, not in the shared getTasteKeywords helper.
+async function buildUserNewsKeywords(userId: string, useOriginalTitles: boolean): Promise<TasteKeyword[]> {
+  const [tasteKeywords, lovedTitles] = await Promise.all([
+    getTasteKeywords(userId, useOriginalTitles),
     prisma.userTitleRating.findMany({
       where: { userId, seen: true, score: { gte: 4 } },
       include: { title: { select: { name: true, originalName: true } } },
@@ -228,15 +208,7 @@ async function buildUserNewsKeywords(userId: string, useOriginalTitles: boolean)
     }),
   ]);
 
-  const keywords: NewsKeyword[] = [];
-  for (const p of people) {
-    const weight = Math.max(prefs.actor.get(p.id) ?? 0, prefs.director.get(p.id) ?? 0);
-    keywords.push({ name: p.name, weight });
-  }
-  for (const g of genres) {
-    const genrePref = prefs.genre.get(g.id) ?? 0;
-    keywords.push({ name: g.name, weight: genrePref });
-  }
+  const keywords: TasteKeyword[] = [...tasteKeywords];
   for (const r of lovedTitles) {
     const name = useOriginalTitles && r.title.originalName ? r.title.originalName : r.title.name;
     keywords.push({ name, weight: r.score ?? 4 });
@@ -245,7 +217,7 @@ async function buildUserNewsKeywords(userId: string, useOriginalTitles: boolean)
   return keywords.filter((k) => k.name.trim().length >= MIN_KEYWORD_LENGTH && k.weight > 0);
 }
 
-function scoreArticleRelevance(text: string, keywords: NewsKeyword[]): { score: number; matched: string[] } {
+function scoreArticleRelevance(text: string, keywords: TasteKeyword[]): { score: number; matched: string[] } {
   const haystack = text.toLowerCase();
   let score = 0;
   const matched: string[] = [];

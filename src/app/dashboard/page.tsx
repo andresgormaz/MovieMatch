@@ -2,10 +2,12 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getRecommendations } from "@/lib/recommend";
-import { countUnseenReceived } from "@/lib/friends";
+import { getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
 import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
 import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
+
+const TASTE_CHIP_COUNT = 7;
 
 const ICON_PROPS = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
@@ -29,13 +31,19 @@ export default async function DashboardPage() {
   const showTour = onboardingDone && !user?.tourSeenAt;
 
   let pendingPopular = 0;
-  let pendingFriends = 0;
+  let tasteChips: TasteKeyword[] = [];
+  let friendsTotal = 0;
+  let groupsTotal = 0;
+  let recsTotal = 0;
   if (onboardingDone) {
-    const [popularPool, friendsCount] = await Promise.all([
+    const [popularPool, keywords, friendsCount, groupsCount, recsCount] = await Promise.all([
       // Same top-N-by-votes pool "Calificar populares" itself shows -- see
       // POPULAR_POOL_SIZE -- so the teaser count matches what's on the page.
       prisma.title.findMany({ orderBy: { voteCount: "desc" }, take: POPULAR_POOL_SIZE, select: { id: true } }),
-      countUnseenReceived(userId),
+      getTasteKeywords(userId, user?.originalTitles ?? false),
+      prisma.friendship.count({ where: { OR: [{ userAId: userId }, { userBId: userId }] } }),
+      prisma.groupMember.count({ where: { userId } }),
+      prisma.sentRecommendation.count({ where: { toUserId: userId } }),
     ]);
     const popularIds = popularPool.map((t) => t.id);
     const ratedPopularCount =
@@ -43,7 +51,10 @@ export default async function DashboardPage() {
         ? await prisma.userTitleRating.count({ where: { userId, titleId: { in: popularIds } } })
         : 0;
     pendingPopular = popularIds.length - ratedPopularCount;
-    pendingFriends = friendsCount;
+    tasteChips = [...keywords].sort((a, b) => b.weight - a.weight).slice(0, TASTE_CHIP_COUNT);
+    friendsTotal = friendsCount;
+    groupsTotal = groupsCount;
+    recsTotal = recsCount;
   }
 
   // "New since your last visit" only means something once there's a previous
@@ -65,14 +76,23 @@ export default async function DashboardPage() {
     newSinceLastVisit > 0
       ? `${newSinceLastVisit} recomendación${newSinceLastVisit === 1 ? "" : "es"} nueva${newSinceLastVisit === 1 ? "" : "s"} para ti`
       : "Recomendaciones a tu medida, catálogo completo y tu lista.";
+  // Populares-por-calificar takes priority as a call to action; once there's
+  // nothing pending there, the weighted taste chips (top actors/directores/
+  // géneros) take over as the more dynamic, always-changing teaser.
   const knowYouDescription =
-    pendingPopular > 0
-      ? `${pendingPopular} título${pendingPopular === 1 ? "" : "s"} popular${pendingPopular === 1 ? "" : "es"} por calificar`
-      : "Compara, califica y afina lo que te recomendamos.";
+    pendingPopular > 0 ? (
+      `${pendingPopular} título${pendingPopular === 1 ? "" : "s"} popular${pendingPopular === 1 ? "" : "es"} por calificar`
+    ) : tasteChips.length > 0 ? (
+      <TasteChipRow keywords={tasteChips} />
+    ) : (
+      "Compara, califica y afina lo que te recomendamos."
+    );
   const socialDescription =
-    pendingFriends > 0
-      ? `${pendingFriends} recomendación${pendingFriends === 1 ? "" : "es"} de tus amigos`
-      : "Amigos y grupos para compartir recomendaciones.";
+    friendsTotal + groupsTotal + recsTotal > 0 ? (
+      <SocialStatsRow friends={friendsTotal} groups={groupsTotal} recs={recsTotal} />
+    ) : (
+      "Amigos y grupos para compartir recomendaciones."
+    );
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
@@ -156,7 +176,7 @@ function HomeBlockLink({
   href: string;
   tourId: string;
   label: string;
-  description: string;
+  description: React.ReactNode;
   icon: React.ReactNode;
 }) {
   return (
@@ -176,6 +196,41 @@ function HomeBlockLink({
         →
       </span>
     </Link>
+  );
+}
+
+// Weighted chip row standing in for a "word cloud" -- sorted by relevance
+// (not scattered/rotated) and opacity-scaled by weight so it stays legible
+// in the compact teaser card, reusing the app's existing chip/pill language.
+function TasteChipRow({ keywords }: { keywords: TasteKeyword[] }) {
+  const max = keywords[0]?.weight ?? 0;
+  return (
+    <>
+      {keywords.map((k, i) => (
+        <span key={k.name} style={{ opacity: max > 0 ? 0.5 + (k.weight / max) * 0.5 : 1 }} className="font-semibold text-accent-hover">
+          {i > 0 && <span className="text-muted"> · </span>}
+          {k.name}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function SocialStatsRow({ friends, groups, recs }: { friends: number; groups: number; recs: number }) {
+  const stats = [
+    { n: friends, label: friends === 1 ? "amigo" : "amigos" },
+    { n: groups, label: groups === 1 ? "grupo" : "grupos" },
+    { n: recs, label: recs === 1 ? "recomendación" : "recomendaciones" },
+  ];
+  return (
+    <>
+      {stats.map((s, i) => (
+        <span key={s.label}>
+          {i > 0 && <span className="text-muted"> · </span>}
+          <span className="font-semibold text-neutral-200">{s.n}</span> {s.label}
+        </span>
+      ))}
+    </>
   );
 }
 

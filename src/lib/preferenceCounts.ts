@@ -389,6 +389,51 @@ export async function computeMergedPreferences(userId: string, useOriginalTitles
   };
 }
 
+export interface TasteKeyword {
+  name: string;
+  weight: number;
+}
+
+const TASTE_TOP_PEOPLE_PER_ROLE = 15;
+const TASTE_TOP_GENRES = 5;
+
+// This user's positive taste signal (per computeMergedPreferences, the same
+// derived+manual signal recommendations use), reduced to a flat list of
+// {name, weight} for the actors/directors/genres they respond well to --
+// no titles here, unlike lib/news.ts's buildUserNewsKeywords, which adds
+// loved-title names on top of this for its own (different) purpose of
+// matching news article text. Shared by that and the home "Tus gustos"
+// word cloud so the extraction logic only lives in one place.
+export async function getTasteKeywords(userId: string, useOriginalTitles: boolean): Promise<TasteKeyword[]> {
+  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
+
+  const topPersonIds = new Set([
+    ...[...prefs.actor.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]).slice(0, TASTE_TOP_PEOPLE_PER_ROLE).map(([id]) => id),
+    ...[...prefs.director.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]).slice(0, TASTE_TOP_PEOPLE_PER_ROLE).map(([id]) => id),
+  ]);
+  const topGenreIds = [...prefs.genre.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TASTE_TOP_GENRES)
+    .filter(([, w]) => w > 0)
+    .map(([id]) => id);
+
+  const [people, genres] = await Promise.all([
+    topPersonIds.size > 0 ? prisma.person.findMany({ where: { id: { in: [...topPersonIds] } }, select: { id: true, name: true } }) : [],
+    topGenreIds.length > 0 ? prisma.genre.findMany({ where: { id: { in: topGenreIds } }, select: { id: true, name: true } }) : [],
+  ]);
+
+  const keywords: TasteKeyword[] = [];
+  for (const p of people) {
+    const weight = Math.max(prefs.actor.get(p.id) ?? 0, prefs.director.get(p.id) ?? 0);
+    keywords.push({ name: p.name, weight });
+  }
+  for (const g of genres) {
+    keywords.push({ name: g.name, weight: prefs.genre.get(g.id) ?? 0 });
+  }
+
+  return keywords.filter((k) => k.name.trim().length >= 3 && k.weight > 0);
+}
+
 // Group version: each member's own manual-merged preferences are summed
 // across the group -- same "several members liking something outranks one"
 // reasoning the rest of group scoring uses. For the "similar" reason text
