@@ -16,7 +16,8 @@ export const TABLE_STATEMENTS = [
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "onboardingCompletedAt" DATETIME,
     "homeVisitedAt" DATETIME,
-    "tourSeenAt" DATETIME
+    "tourSeenAt" DATETIME,
+    "friendCode" TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS "Title" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -233,6 +234,25 @@ export const TABLE_STATEMENTS = [
     "publishedAt" DATETIME NOT NULL,
     "fetchedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  `CREATE TABLE IF NOT EXISTS "Friendship" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userAId" TEXT NOT NULL,
+    "userBId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Friendship_userAId_fkey" FOREIGN KEY ("userAId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "Friendship_userBId_fkey" FOREIGN KEY ("userBId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "SentRecommendation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "fromUserId" TEXT NOT NULL,
+    "toUserId" TEXT NOT NULL,
+    "titleId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "seenAt" DATETIME,
+    CONSTRAINT "SentRecommendation_fromUserId_fkey" FOREIGN KEY ("fromUserId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "SentRecommendation_toUserId_fkey" FOREIGN KEY ("toUserId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "SentRecommendation_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -293,6 +313,13 @@ export const INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserPageTourSeen_userId_pageKey_key" ON "UserPageTourSeen"("userId", "pageKey")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "NewsArticle_link_key" ON "NewsArticle"("link")`,
   `CREATE INDEX IF NOT EXISTS "NewsArticle_publishedAt_idx" ON "NewsArticle"("publishedAt")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "User_friendCode_key" ON "User"("friendCode")`,
+  `CREATE INDEX IF NOT EXISTS "Friendship_userAId_idx" ON "Friendship"("userAId")`,
+  `CREATE INDEX IF NOT EXISTS "Friendship_userBId_idx" ON "Friendship"("userBId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Friendship_userAId_userBId_key" ON "Friendship"("userAId", "userBId")`,
+  `CREATE INDEX IF NOT EXISTS "SentRecommendation_toUserId_idx" ON "SentRecommendation"("toUserId")`,
+  `CREATE INDEX IF NOT EXISTS "SentRecommendation_fromUserId_idx" ON "SentRecommendation"("fromUserId")`,
+  `CREATE INDEX IF NOT EXISTS "SentRecommendation_titleId_idx" ON "SentRecommendation"("titleId")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
@@ -326,6 +353,13 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "nextEpisodeAirDate" DATETIME`,
   `ALTER TABLE "Title" ADD COLUMN "trailerKey" TEXT`,
   `ALTER TABLE "Title" ADD COLUMN "trailerFetchedAt" DATETIME`,
+  `ALTER TABLE "User" ADD COLUMN "friendCode" TEXT`,
+  // Backfills any pre-existing row left NULL by the ALTER above -- needs to
+  // run every time (idempotent via the WHERE clause) since a plain ALTER
+  // can't give a unique per-row default to a table that already has rows,
+  // and the unique index on this column (see INDEX_STATEMENTS) needs every
+  // row to already hold a distinct value.
+  `UPDATE "User" SET "friendCode" = lower(hex(randomblob(12))) WHERE "friendCode" IS NULL`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

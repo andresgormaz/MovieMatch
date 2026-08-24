@@ -7,6 +7,7 @@ import { Poster } from "@/components/Poster";
 import { ProviderBadges, type ProviderBadge } from "@/components/ProviderBadges";
 import { StarRating, StarDisplay } from "@/components/StarRating";
 import { SeriesWatchProgressPicker } from "@/components/SeriesWatchProgressPicker";
+import { RecommendToFriend } from "@/components/RecommendToFriend";
 import { formatScore, formatSignedScore } from "@/lib/format";
 import { seasonsLabel, seriesStatusLabel, watchProgressLabel, type WatchProgress } from "@/lib/seriesStatus";
 import { PageTour } from "@/components/PageTour";
@@ -449,6 +450,9 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
             </button>
           )}
           {actionError && <p className="mt-2 text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
+          <div className="mt-3">
+            <RecommendToFriend titleId={title.id} />
+          </div>
         </div>
       </div>
 

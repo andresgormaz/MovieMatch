@@ -2,7 +2,8 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getRecommendations } from "@/lib/recommend";
-import { HomeHero } from "@/components/HomeHero";
+import { countUnseenReceived } from "@/lib/friends";
+import { HomeForYou } from "@/components/HomeForYou";
 import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
 import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
@@ -28,12 +29,14 @@ export default async function DashboardPage() {
 
   let pendingRatings = 0;
   let pendingPopular = 0;
+  let pendingFriends = 0;
   if (onboardingDone) {
-    const [ratingsCount, popularPool] = await Promise.all([
+    const [ratingsCount, popularPool, friendsCount] = await Promise.all([
       prisma.userTitleRating.count({ where: { userId, seen: true, score: null } }),
       // Same top-N-by-votes pool "Calificar populares" itself shows -- see
       // POPULAR_POOL_SIZE -- so the badge always matches what's on the page.
       prisma.title.findMany({ orderBy: { voteCount: "desc" }, take: POPULAR_POOL_SIZE, select: { id: true } }),
+      countUnseenReceived(userId),
     ]);
     pendingRatings = ratingsCount;
     const popularIds = popularPool.map((t) => t.id);
@@ -42,6 +45,7 @@ export default async function DashboardPage() {
         ? await prisma.userTitleRating.count({ where: { userId, titleId: { in: popularIds } } })
         : 0;
     pendingPopular = popularIds.length - ratedPopularCount;
+    pendingFriends = friendsCount;
   }
 
   // "New since your last visit" only means something once there's a previous
@@ -59,7 +63,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+    <div className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-8">
       <VisitBeacon />
       {onboardingDone && <HomeTour startOpen={showTour} />}
       <div>
@@ -73,11 +77,7 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {onboardingDone ? (
-        <div data-tour="tour-hero">
-          <HomeHero />
-        </div>
-      ) : (
+      {!onboardingDone && (
         <Link
           href="/onboarding/titles"
           className="rounded-xl bg-accent px-6 py-4 text-center font-bold text-white hover:bg-accent-hover transition-colors"
@@ -87,30 +87,39 @@ export default async function DashboardPage() {
       )}
 
       {onboardingDone && (
-        <div className="rounded-2xl border border-border/70 bg-surface/40 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-white">Cuéntanos tu gusto</h2>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        <section data-tour="tour-foryou" className="flex flex-col gap-3">
+          <h2 className="text-lg font-bold text-white">Para ti</h2>
+          <HomeForYou />
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+            <Link href="/recommendations" className="text-center text-muted hover:text-white transition-colors">
+              Ver todas →
+            </Link>
+            <Link href="/explore" className="text-center text-muted hover:text-white transition-colors">
+              Explorar catálogo
+            </Link>
+            <Link href="/wishlist" className="text-center text-muted hover:text-white transition-colors">
+              Mi lista
+            </Link>
+            <Link href="/whats-new" className="text-center text-muted hover:text-white transition-colors">
+              Novedades para ti
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {onboardingDone && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-bold text-white">Conócete</h2>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <Link
               href="/vs"
               data-tour="tour-vs"
               className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
             >
-              Seguir con &quot;¿cuál te gusta más?&quot;
+              &quot;¿Cuál te gusta más?&quot;
               <span aria-hidden className="text-muted">
                 →
               </span>
-            </Link>
-            <Link
-              href="/rate"
-              data-tour="tour-rate"
-              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
-            >
-              Calificar lo que ya viste
-              {pendingRatings > 0 && (
-                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">
-                  {pendingRatings}
-                </span>
-              )}
             </Link>
             <Link
               href="/rate/popular"
@@ -125,29 +134,54 @@ export default async function DashboardPage() {
               )}
             </Link>
           </div>
-        </div>
+          {/* Lower relevance -- mostly fed by "vs" swaps, so it only matters
+              once there's actually something pending here. */}
+          <Link
+            href="/rate"
+            data-tour="tour-rate"
+            className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-surface/40 px-3.5 py-2.5 text-xs font-medium text-neutral-300 transition-colors hover:border-white/30"
+          >
+            Calificar lo que ya viste
+            {pendingRatings > 0 && (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">
+                {pendingRatings}
+              </span>
+            )}
+          </Link>
+        </section>
       )}
 
       {onboardingDone && (
-        <Link
-          href="/whats-new"
-          data-tour="tour-novedades"
-          className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
-        >
-          Novedades para ti
-          <span aria-hidden className="text-muted">
-            →
-          </span>
-        </Link>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-bold text-white">Social</h2>
+          <div data-tour="tour-social" className="grid grid-cols-2 gap-2.5">
+            <Link
+              href="/friends"
+              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
+            >
+              Amigos
+              {pendingFriends > 0 && (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">
+                  {pendingFriends > 99 ? "99+" : pendingFriends}
+                </span>
+              )}
+            </Link>
+            <Link
+              href="/groups"
+              className="flex items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:border-accent"
+            >
+              Grupos
+              <span aria-hidden className="text-muted">
+                →
+              </span>
+            </Link>
+          </div>
+        </section>
       )}
 
       <div data-tour="tour-quicklinks" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <QuickLink href="/recommendations" label="Todas mis recomendaciones" />
         <QuickLink href="/diary" label="Mi diario" />
-        <QuickLink href="/wishlist" label="Mi lista" />
-        <QuickLink href="/explore" label="Explorar catálogo" />
         <QuickLink href="/news" label="Noticias" />
-        <QuickLink href="/groups" label="Grupos" />
         <QuickLink href="/top" label="Tu top 5" />
         <QuickLink href="/tastes" label="Mis gustos" />
         <QuickLink href="/profile" label="Perfil y estadísticas" />

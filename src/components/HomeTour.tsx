@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { TourOverlay, type TourStep } from "@/components/TourOverlay";
 
 // Selectors match `data-tour="..."` attributes sprinkled on the real
-// buttons/cards elsewhere (Navbar, HomeHero, dashboard).
+// buttons/cards elsewhere (Navbar, dashboard's 3 home sections: Para ti,
+// Conócete, Social).
 const STEPS: TourStep[] = [
   {
     selector: '[data-tour="tour-search"]',
@@ -12,9 +13,9 @@ const STEPS: TourStep[] = [
     body: "Escribe el nombre de una película o serie para ir directo a su ficha.",
   },
   {
-    selector: '[data-tour="tour-hero"]',
-    title: "Tu recomendación del día",
-    body: 'Dinos si ya la viste, si "la vas a ver" o si no te interesa. Así seguimos aprendiendo tu gusto.',
+    selector: '[data-tour="tour-foryou"]',
+    title: "Para ti",
+    body: 'Varias recomendaciones a la vez, no solo una -- si calificas una, quedan las demás. También desde acá: catálogo completo, tu lista y las novedades.',
   },
   {
     selector: '[data-tour="tour-vs"]',
@@ -22,24 +23,19 @@ const STEPS: TourStep[] = [
     body: "Compara pares de títulos que ya viste. Entre más compares, mejores serán tus recomendaciones.",
   },
   {
-    selector: '[data-tour="tour-rate"]',
-    title: "Calificar lo que ya viste",
-    body: "Ponle estrellas a todo lo que hayas visto, aunque no haya salido como recomendación.",
-  },
-  {
     selector: '[data-tour="tour-populares"]',
     title: "Calificar populares",
     body: "Títulos muy populares que probablemente ya viste -- calificarlos es de lo más rápido para afinar tus recomendaciones.",
   },
   {
-    selector: '[data-tour="tour-novedades"]',
-    title: "Novedades para ti",
-    body: "Estrenos recientes, series que retomar y sagas por completar, elegidos según tu gusto.",
+    selector: '[data-tour="tour-social"]',
+    title: "Amigos y grupos",
+    body: "Agrega amigos para mandarles recomendaciones puntuales, o vincula cuentas en un grupo para recomendaciones conjuntas.",
   },
   {
     selector: '[data-tour="tour-quicklinks"]',
     title: "El resto de la app",
-    body: "Desde aquí entras a todas tus recomendaciones, tu lista, tu diario, tus grupos y tus gustos.",
+    body: "Tu diario, noticias, tu top 5, tus gustos y tu perfil.",
   },
 ];
 

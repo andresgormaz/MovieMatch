@@ -60,6 +60,10 @@ model User {
   onboardingCompletedAt DateTime?
   homeVisitedAt         DateTime? // last time the home screen was opened -- used for the "new since your last visit" count
   tourSeenAt            DateTime? // set once the home coach-mark tutorial has been shown/skipped -- null means show it on next home visit
+  // Personal, stable invite code for "agregar como amigo" -- shared via link,
+  // same idea as Group.inviteCode but per-user instead of per-group since a
+  // friendship isn't scoped to any one group.
+  friendCode            String    @unique @default(cuid())
 
   titleRatings       UserTitleRating[]
   personRatings      UserPersonRating[]
@@ -76,6 +80,47 @@ model User {
   groupMemberships   GroupMember[]
   savedFilters       SavedFilter[]
   pageToursSeen      UserPageTourSeen[]
+  friendshipsAsA        Friendship[]         @relation("FriendshipA")
+  friendshipsAsB        Friendship[]         @relation("FriendshipB")
+  sentRecommendations     SentRecommendation[] @relation("SentRecFrom")
+  receivedRecommendations SentRecommendation[] @relation("SentRecTo")
+}
+
+// A friendship is one row per pair, regardless of who sent the invite --
+// userAId is always the lexicographically smaller id (see lib/friends.ts),
+// so there's exactly one row per pair and no risk of a mirrored duplicate.
+model Friendship {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+  userA     User     @relation("FriendshipA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+// "Te recomendaron X" -- a friend pushing one specific title at you, not the
+// joint/pooled recommendations Group already does. seenAt is set in bulk the
+// first time the recipient opens /friends (not per-item), just enough to
+// drive an unread-count badge without over-engineering read tracking.
+model SentRecommendation {
+  id         String    @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  titleId    String
+  createdAt  DateTime  @default(now())
+  seenAt     DateTime?
+
+  fromUser User  @relation("SentRecFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User  @relation("SentRecTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  title    Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId])
+  @@index([fromUserId])
+  @@index([titleId])
 }
 
 // Per-page coach-mark tutorials (recomendaciones, ficha de título, ficha de
@@ -186,6 +231,7 @@ model Title {
   providers TitleProvider[]
   similar   TitleSimilar[]
   wishlist  Wishlist[]
+  sentRecommendations SentRecommendation[]
 
   @@unique([tmdbId, type])
   @@index([tmdbId])
