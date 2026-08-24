@@ -58,15 +58,39 @@ function textOf(node: unknown): string {
   return "";
 }
 
+// Named entities beyond the XML-standard 5 (those plus &#NNNN;/&#xNNNN; are
+// handled generically below) -- curly quotes, dashes, and ellipses show up
+// constantly in real headlines ("It’s", em dashes, "...") and were rendering
+// as literal "&#8217;" etc. before this decoded them.
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  rsquo: "’",
+  lsquo: "‘",
+  rdquo: "”",
+  ldquo: "“",
+  mdash: "—",
+  ndash: "–",
+  hellip: "…",
+};
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);/g, (match, code: string) => {
+    if (code[0] === "#") {
+      const isHex = code[1] === "x" || code[1] === "X";
+      const num = parseInt(code.slice(isHex ? 2 : 1), isHex ? 16 : 10);
+      return Number.isNaN(num) ? match : String.fromCodePoint(num);
+    }
+    return NAMED_ENTITIES[code] ?? match;
+  });
+}
+
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;/g, "'")
+  return decodeEntities(html.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }
