@@ -223,6 +223,16 @@ export const TABLE_STATEMENTS = [
     "seenAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "UserPageTourSeen_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "NewsArticle" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "source" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "link" TEXT NOT NULL,
+    "summary" TEXT,
+    "imageUrl" TEXT,
+    "publishedAt" DATETIME NOT NULL,
+    "fetchedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -281,6 +291,8 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "TitleGenre_genreId_idx" ON "TitleGenre"("genreId")`,
   `CREATE INDEX IF NOT EXISTS "UserPageTourSeen_userId_idx" ON "UserPageTourSeen"("userId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "UserPageTourSeen_userId_pageKey_key" ON "UserPageTourSeen"("userId", "pageKey")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "NewsArticle_link_key" ON "NewsArticle"("link")`,
+  `CREATE INDEX IF NOT EXISTS "NewsArticle_publishedAt_idx" ON "NewsArticle"("publishedAt")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through

@@ -473,3 +473,25 @@ model SavedFilter {
   @@unique([userId, name])
   @@index([userId])
 }
+
+// Cached items from a handful of movie/series news RSS feeds (see
+// lib/news.ts) -- shared across every user, not per-account, since the
+// articles themselves aren't personal. Refreshed on-demand (whoever opens
+// /news first after the cache goes stale triggers the refetch) rather than
+// on a schedule, the same lazy-refresh idea used elsewhere in this app
+// (Person.detailsFetchedAt, Title.trailerFetchedAt) since there's no
+// standalone cron worker here. "Relevant to your taste" is computed at
+// request time by matching title/summary against the user's preferred
+// actors/directors/genres/titles -- not stored here, so it can't go stale.
+model NewsArticle {
+  id          String   @id @default(cuid())
+  source      String // feed display name, e.g. "Variety"
+  title       String
+  link        String   @unique
+  summary     String?
+  imageUrl    String?
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+
+  @@index([publishedAt])
+}
