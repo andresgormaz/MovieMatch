@@ -83,7 +83,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="relative flex min-h-[calc(100vh-57px)] items-center justify-center overflow-hidden px-4 py-16">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-red-950/30 via-background to-background" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/25 via-background to-background" />
       <div className="relative flex w-full max-w-sm flex-col items-center gap-6 rounded-2xl border border-border bg-surface/90 p-8 backdrop-blur">
         <h1 className="text-2xl font-bold">Iniciar sesión</h1>
         <GoogleSignInButton label="Continuar con Google" />

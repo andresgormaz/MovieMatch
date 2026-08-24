@@ -18,10 +18,13 @@ export const metadata: Metadata = {
   description: "Encuentra películas y series que realmente te van a gustar.",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "MovieMatch" },
+  // iOS ignores the SVG in manifest.webmanifest for home-screen icons --
+  // needs its own PNG, or it falls back to a screenshot of the page.
+  icons: { apple: "/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: "#090909",
   width: "device-width",
   initialScale: 1,
 };

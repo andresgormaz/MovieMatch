@@ -227,7 +227,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
           // eslint-disable-next-line @next/next/no-img-element
           <img src={title.backdropUrl} alt="" className="h-56 w-full object-cover sm:h-80" />
         ) : (
-          <div className="h-40 w-full bg-gradient-to-br from-red-950/40 to-black" />
+          <div className="h-40 w-full bg-gradient-to-br from-accent/30 to-black" />
         )}
         {!trailerOpen && (
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
