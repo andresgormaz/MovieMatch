@@ -27,7 +27,7 @@ export function PosterRow({ title, items }: { title?: string; items: PosterRowIt
             <p className="truncate text-xs font-medium text-white" title={item.name}>
               {item.name}
             </p>
-            {item.subtitle && <p className="text-[11px] text-muted">{item.subtitle}</p>}
+            {item.subtitle && <p className="text-xs text-muted">{item.subtitle}</p>}
           </Link>
         ))}
       </div>

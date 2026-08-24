@@ -91,19 +91,19 @@ export function ExploreCard({
             {title.name}
           </Link>
         </h3>
-        <p className="text-[11px] text-muted">
+        <p className="text-xs text-muted">
           {title.releaseYear ?? "—"}{" "}
           {title.voteAverage
             ? `· ⭐ ${title.voteAverage.toFixed(1)} (TMDB${title.voteCount != null ? `, ${title.voteCount.toLocaleString("es")} votos` : ""})`
             : ""}
         </p>
-        {title.genres.length > 0 && <p className="truncate text-[11px] text-muted">{title.genres.join(" · ")}</p>}
-        {title.budget ? <p className="text-[11px] text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}
+        {title.genres.length > 0 && <p className="truncate text-xs text-muted">{title.genres.join(" · ")}</p>}
+        {title.budget ? <p className="text-xs text-muted">Presupuesto: {formatBudget(title.budget)}</p> : null}
         {title.type === "SERIES" && seasonsSummary(title.seasonsCount, title.status) && (
-          <p className="text-[11px] text-muted">{seasonsSummary(title.seasonsCount, title.status)}</p>
+          <p className="text-xs text-muted">{seasonsSummary(title.seasonsCount, title.status)}</p>
         )}
         <ProviderBadges providers={title.providers} />
-        {error && <p className="text-[11px] text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
+        {error && <p className="text-xs text-red-400">No se pudo guardar. Inténtalo de nuevo.</p>}
       </div>
 
       {rating && !editing ? (

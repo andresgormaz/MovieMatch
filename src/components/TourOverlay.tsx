@@ -126,7 +126,7 @@ export function TourOverlay({ steps, onFinish }: { steps: TourStep[]; onFinish: 
           </button>
           <button
             onClick={goNext}
-            className="rounded-md bg-accent px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-accent-hover"
+            className="rounded-lg bg-accent px-4 py-1.5 text-xs font-bold text-white transition-colors hover:bg-accent-hover"
           >
             {stepIndex + 1 === steps.length ? "Entendido" : "Siguiente →"}
           </button>

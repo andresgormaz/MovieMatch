@@ -53,7 +53,7 @@ export function PersonAutocomplete({
     return (
       <div className="flex flex-col gap-1.5">
         <label className="text-xs text-muted">{label}</label>
-        <div className="flex items-center justify-between rounded-md border border-white/15 bg-black/40 px-3 py-2">
+        <div className="flex items-center justify-between rounded-lg border border-white/15 bg-black/40 px-3 py-2">
           <span className="text-sm text-white">{selected.name}</span>
           <button
             onClick={() => {
@@ -77,10 +77,10 @@ export function PersonAutocomplete({
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
         placeholder={placeholder}
-        className="rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+        className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
       />
       {open && results.length > 0 && (
-        <ul className="absolute top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-surface shadow-xl">
+        <ul className="absolute top-full z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
           {results.map((p) => (
             <li key={p.id}>
               <button

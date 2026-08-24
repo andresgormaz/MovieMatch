@@ -189,7 +189,7 @@ export function PairCompare({
           <p className="whitespace-pre-wrap break-words text-left text-xs text-red-400">{error}</p>
           <button
             onClick={loadInitialPair}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
           >
             Reintentar
           </button>

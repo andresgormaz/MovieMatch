@@ -94,7 +94,7 @@ export default function RatePopularPage() {
         <div className="mt-2 flex justify-center">
           <button
             onClick={() => load(page + 1, true)}
-            className="rounded-md border border-white/15 px-6 py-2.5 text-sm font-medium text-white hover:border-white/30 transition-colors"
+            className="rounded-lg border border-white/15 px-6 py-2.5 text-sm font-medium text-white hover:border-white/30 transition-colors"
           >
             Cargar más
           </button>

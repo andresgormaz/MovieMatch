@@ -33,7 +33,7 @@ export function TitleLanguageToggle({ initialOriginal }: { initialOriginal: bool
         <button
           disabled={saving}
           onClick={() => handleChange(false)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
             !original ? "bg-accent text-white" : "border border-white/15 text-neutral-300 hover:border-white/30"
           }`}
         >
@@ -42,7 +42,7 @@ export function TitleLanguageToggle({ initialOriginal }: { initialOriginal: bool
         <button
           disabled={saving}
           onClick={() => handleChange(true)}
-          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
             original ? "bg-accent text-white" : "border border-white/15 text-neutral-300 hover:border-white/30"
           }`}
         >

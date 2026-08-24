@@ -47,7 +47,7 @@ export default function OnboardingCountryPage() {
           required
           value={country}
           onChange={(e) => setCountry(e.target.value)}
-          className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+          className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
         >
           <option value="" disabled>
             Selecciona tu país
@@ -62,7 +62,7 @@ export default function OnboardingCountryPage() {
         <button
           type="submit"
           disabled={loading || !country}
-          className="w-full rounded-md bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+          className="w-full rounded-lg bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
         >
           {loading ? "Guardando…" : "Continuar →"}
         </button>

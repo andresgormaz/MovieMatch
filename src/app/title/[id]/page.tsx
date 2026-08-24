@@ -370,7 +370,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 <button
                   disabled={submitting}
                   onClick={() => rate(false, null, false)}
-                  className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
                     title.myRating && !title.myRating.seen && !title.myRating.notInterested
                       ? "border-accent bg-accent/20 text-white"
                       : "border-white/15 text-neutral-300 hover:border-white/30"
@@ -383,7 +383,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 <button
                   disabled={submitting}
                   onClick={() => rate(false, null, true)}
-                  className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
                     title.myRating?.notInterested
                       ? "border-accent bg-accent/20 text-white"
                       : "border-white/15 text-neutral-300 hover:border-white/30"
@@ -394,7 +394,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                 <button
                   disabled={submitting}
                   onClick={toggleWishlist}
-                  className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
                     title.inWishlist
                       ? "border-accent bg-accent/20 text-white"
                       : "border-white/15 text-neutral-300 hover:border-white/30"
@@ -410,7 +410,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                     setWatchProgress((title.myRating?.watchProgress as WatchProgress) ?? null);
                     setShowScores(true);
                   }}
-                  className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
                     title.myRating?.seen
                       ? "border-accent bg-accent/20 text-white"
                       : "border-white/15 text-neutral-300 hover:border-white/30"
@@ -498,7 +498,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
                 </div>
-                <p className="line-clamp-2 text-[11px] text-neutral-300 hover:underline">{d.name}</p>
+                <p className="line-clamp-2 text-xs text-neutral-300 hover:underline">{d.name}</p>
               </Link>
             ))}
           </div>
@@ -525,7 +525,7 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
                 </div>
-                <p className="line-clamp-2 text-[11px] text-neutral-300 hover:underline">{c.name}</p>
+                <p className="line-clamp-2 text-xs text-neutral-300 hover:underline">{c.name}</p>
               </Link>
             ))}
           </div>

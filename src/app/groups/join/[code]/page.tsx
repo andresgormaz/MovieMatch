@@ -55,7 +55,7 @@ export default function JoinGroupPage({ params }: { params: Promise<{ code: stri
               <button
                 onClick={accept}
                 disabled={joining}
-                className="w-full rounded-md bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+                className="w-full rounded-lg bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
               >
                 {joining ? "Uniéndome…" : "Unirme al grupo"}
               </button>

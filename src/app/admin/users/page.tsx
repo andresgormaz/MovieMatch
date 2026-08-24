@@ -100,13 +100,13 @@ export default function AdminUsersPage() {
             disabled={loading}
             placeholder="El mismo secreto de siempre"
             onKeyDown={(e) => e.key === "Enter" && load()}
-            className="rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
+            className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
           />
         </div>
         <button
           onClick={load}
           disabled={loading}
-          className="rounded-md bg-accent px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className="rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {loading ? "Cargando…" : "Cargar"}
         </button>

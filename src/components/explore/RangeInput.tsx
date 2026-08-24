@@ -29,7 +29,7 @@ export function RangeInput({
           max={max}
           placeholder="Desde"
           onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value), to)}
-          className="w-full rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+          className="w-full rounded-lg border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
         />
         <span className="text-muted">–</span>
         <input
@@ -40,7 +40,7 @@ export function RangeInput({
           max={max}
           placeholder="Hasta"
           onChange={(e) => onChange(from, e.target.value === "" ? "" : Number(e.target.value))}
-          className="w-full rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+          className="w-full rounded-lg border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
         />
       </div>
     </div>

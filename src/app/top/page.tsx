@@ -99,14 +99,14 @@ function TopSection({ title, items }: { title: string; items: TopItem[] }) {
                   <span className="absolute top-1.5 left-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs font-bold text-white">
                     {i + 1}
                   </span>
-                  <span className="absolute top-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-green-400">
+                  <span className="absolute top-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-xs font-bold text-green-400">
                     {item.score}/5
                   </span>
                 </div>
                 <p className="truncate text-xs font-medium text-white group-hover:underline" title={item.name}>
                   {item.name}
                 </p>
-                <p className="text-[11px] text-muted">{item.releaseYear ?? ""}</p>
+                <p className="text-xs text-muted">{item.releaseYear ?? ""}</p>
               </Link>
             </li>
           ))}

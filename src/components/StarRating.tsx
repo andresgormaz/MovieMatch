@@ -47,7 +47,7 @@ export function StarRating({
             disabled={disabled}
             onClick={() => onRate(s)}
             aria-label={`${s} estrella${s > 1 ? "s" : ""}`}
-            className={`flex ${starClass} items-center justify-center rounded-md border transition-colors duration-150 disabled:opacity-50 ${
+            className={`flex ${starClass} items-center justify-center rounded-lg border transition-colors duration-150 disabled:opacity-50 ${
               filled
                 ? glowClass(selected!)
                 : "border-white/15 text-neutral-500 hover:border-accent hover:bg-accent hover:text-white"

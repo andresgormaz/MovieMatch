@@ -43,7 +43,7 @@ export default function VsPage() {
           <p className="mt-1 text-sm text-muted">Vuelve a intentarlo más adelante, a medida que el catálogo crezca.</p>
           <Link
             href="/dashboard"
-            className="mt-4 inline-block rounded-md bg-accent px-5 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
+            className="mt-4 inline-block rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
           >
             Volver al inicio →
           </Link>

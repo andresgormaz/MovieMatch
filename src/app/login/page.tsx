@@ -46,7 +46,7 @@ function LoginForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+          className="rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
         />
       </div>
       <div className="flex flex-col gap-1.5">
@@ -59,14 +59,14 @@ function LoginForm() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+          className="rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
         />
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
       <button
         type="submit"
         disabled={loading}
-        className="rounded-md bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+        className="rounded-lg bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
       >
         {loading ? "Entrando…" : "Iniciar sesión"}
       </button>

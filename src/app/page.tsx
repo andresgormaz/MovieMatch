@@ -39,13 +39,13 @@ export default async function Home() {
         <div className="flex flex-col gap-3 sm:flex-row">
           <Link
             href="/register"
-            className="rounded-md bg-accent px-8 py-3.5 text-lg font-bold text-white hover:bg-accent-hover transition-colors"
+            className="rounded-lg bg-accent px-8 py-3.5 text-lg font-bold text-white hover:bg-accent-hover transition-colors"
           >
             Empezar gratis
           </Link>
           <Link
             href="/login"
-            className="rounded-md border border-white/25 bg-white/5 px-8 py-3.5 text-lg font-semibold text-white backdrop-blur hover:bg-white/10 transition-colors"
+            className="rounded-lg border border-white/25 bg-white/5 px-8 py-3.5 text-lg font-semibold text-white backdrop-blur hover:bg-white/10 transition-colors"
           >
             Ya tengo cuenta
           </Link>

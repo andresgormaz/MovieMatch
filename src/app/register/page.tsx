@@ -65,7 +65,7 @@ export default function RegisterPage() {
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -78,7 +78,7 @@ export default function RegisterPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -92,7 +92,7 @@ export default function RegisterPage() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -104,7 +104,7 @@ export default function RegisterPage() {
               required
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 outline-none focus:border-accent transition-colors"
             >
               <option value="" disabled>
                 Selecciona tu país
@@ -123,7 +123,7 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-md bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+            className="rounded-lg bg-accent px-6 py-3 font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
             {loading ? "Creando…" : "Crear cuenta"}
           </button>

@@ -109,7 +109,7 @@ export function HomeHero() {
         </p>
         <Link
           href="/explore"
-          className="mt-4 inline-block rounded-md bg-accent px-5 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
+          className="mt-4 inline-block rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
         >
           Explorar catálogo →
         </Link>
@@ -123,7 +123,7 @@ export function HomeHero() {
         <p className="text-sm text-white">Listo, gracias por calificar 🎬</p>
         <Link
           href="/recommendations"
-          className="mt-4 inline-block rounded-md bg-accent px-5 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
+          className="mt-4 inline-block rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
         >
           Ver todas tus recomendaciones →
         </Link>
@@ -175,21 +175,21 @@ export function HomeHero() {
               <button
                 disabled={submitting}
                 onClick={() => rate(false, null, true)}
-                className="flex-1 rounded-md border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
+                className="flex-1 rounded-lg border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
               >
                 No me interesa
               </button>
               <button
                 disabled={submitting}
                 onClick={addToWishlist}
-                className="flex-1 rounded-md border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
+                className="flex-1 rounded-lg border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
               >
                 La voy a ver
               </button>
               <button
                 disabled={submitting}
                 onClick={() => setShowScores(true)}
-                className="flex-1 rounded-md border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
+                className="flex-1 rounded-lg border border-white/15 px-2 py-2 text-xs font-medium text-neutral-300 hover:border-white/30 transition-colors disabled:opacity-50"
               >
                 Ya la vi
               </button>

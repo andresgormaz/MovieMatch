@@ -81,12 +81,12 @@ export default function GroupsPage() {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           placeholder="Nombre del grupo (opcional, ej: Con Ana)"
-          className="flex-1 rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+          className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
         />
         <button
           type="submit"
           disabled={creating}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
         >
           Crear grupo
         </button>
@@ -101,7 +101,7 @@ export default function GroupsPage() {
               <h2 className="font-semibold text-white">{g.name || "Grupo sin nombre"}</h2>
               <Link
                 href={`/groups/${g.id}`}
-                className="rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover transition-colors"
+                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover transition-colors"
               >
                 Ver recomendaciones
               </Link>
@@ -112,13 +112,13 @@ export default function GroupsPage() {
             <div className="mt-3 flex items-center gap-2">
               <button
                 onClick={() => copyInvite(g)}
-                className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-neutral-300 hover:border-white/30 transition-colors"
+                className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-neutral-300 hover:border-white/30 transition-colors"
               >
                 {copiedId === g.id ? "¡Copiado! ✓" : "Copiar link de invitación"}
               </button>
               <button
                 onClick={() => leaveGroup(g.id)}
-                className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-neutral-400 hover:border-accent hover:text-white transition-colors"
+                className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-neutral-400 hover:border-accent hover:text-white transition-colors"
               >
                 Salir del grupo
               </button>

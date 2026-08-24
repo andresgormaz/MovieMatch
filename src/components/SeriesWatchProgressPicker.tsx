@@ -22,7 +22,7 @@ export function SeriesWatchProgressPicker({
             type="button"
             disabled={disabled}
             onClick={() => onPick(opt.value)}
-            className="rounded-md border border-white/15 px-3 py-2 text-xs font-medium text-neutral-300 transition-colors hover:border-accent hover:bg-accent hover:text-white disabled:opacity-50"
+            className="rounded-lg border border-white/15 px-3 py-2 text-xs font-medium text-neutral-300 transition-colors hover:border-accent hover:bg-accent hover:text-white disabled:opacity-50"
           >
             {opt.label}
           </button>

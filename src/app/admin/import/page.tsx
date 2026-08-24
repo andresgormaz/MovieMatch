@@ -139,7 +139,7 @@ export default function AdminImportPage() {
             onChange={(e) => setSecret(e.target.value)}
             disabled={running}
             placeholder="El mismo secreto de siempre"
-            className="rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
+            className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
           />
         </div>
 
@@ -149,7 +149,7 @@ export default function AdminImportPage() {
             {SOURCES.map((s) => (
               <label
                 key={s.value}
-                className="flex items-start gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-neutral-300"
+                className="flex items-start gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-neutral-300"
               >
                 <input
                   type="radio"
@@ -178,7 +178,7 @@ export default function AdminImportPage() {
                 onChange={(e) => setFromYear(e.target.value)}
                 disabled={running}
                 placeholder="Desde (ej: 1980)"
-                className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
+                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
               />
               <span className="text-muted">a</span>
               <input
@@ -187,7 +187,7 @@ export default function AdminImportPage() {
                 onChange={(e) => setToYear(e.target.value)}
                 disabled={running}
                 placeholder="Hasta (opcional)"
-                className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
+                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent disabled:opacity-50"
               />
             </div>
           </div>
@@ -197,14 +197,14 @@ export default function AdminImportPage() {
           {!running ? (
             <button
               onClick={start}
-              className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
+              className="flex-1 rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-accent-hover"
             >
               Iniciar
             </button>
           ) : (
             <button
               onClick={stop}
-              className="flex-1 rounded-md border border-white/15 px-4 py-2 text-sm font-bold text-white transition-colors hover:border-white/30"
+              className="flex-1 rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-white transition-colors hover:border-white/30"
             >
               Detener
             </button>

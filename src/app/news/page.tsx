@@ -84,7 +84,7 @@ function NewsCard({ item }: { item: NewsListItem }) {
         <p className="line-clamp-2 text-sm font-semibold text-white">{item.title}</p>
         {item.summary && <p className="line-clamp-2 text-xs text-muted">{item.summary}</p>}
         {item.matched.length > 0 && (
-          <p className="mt-0.5 text-[11px] text-accent-hover">Relacionado con: {item.matched.join(", ")}</p>
+          <p className="mt-0.5 text-xs font-medium text-accent-hover">Relacionado con: {item.matched.join(", ")}</p>
         )}
       </div>
     </a>

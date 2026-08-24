@@ -88,10 +88,10 @@ export function FavoritePicker({ label, type }: { label: string; type: "MOVIE" |
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
         placeholder="Buscar…"
-        className="rounded-md border border-white/15 bg-black/40 px-3 py-2.5 text-sm outline-none focus:border-accent"
+        className="rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-sm outline-none focus:border-accent"
       />
       {open && results.length > 0 && (
-        <ul className="absolute top-full z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-border bg-surface shadow-xl">
+        <ul className="absolute top-full z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-border bg-surface shadow-xl">
           {results.map((r) => (
             <li key={r.id}>
               <button

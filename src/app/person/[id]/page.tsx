@@ -132,7 +132,7 @@ export default function PersonDetailPage({ params }: { params: Promise<{ id: str
                 <p className="truncate text-xs text-white group-hover:underline" title={f.name}>
                   {f.name}
                 </p>
-                <p className="truncate text-[11px] text-muted">
+                <p className="truncate text-xs text-muted">
                   {f.releaseYear ?? ""} {f.releaseYear ? "· " : ""}
                   {f.roles.join(", ")}
                 </p>

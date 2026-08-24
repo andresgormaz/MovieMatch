@@ -153,7 +153,7 @@ export function FilterPanel({
           }}
           placeholder="Buscar por nombre…"
           aria-label="Buscar por nombre"
-          className="rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent"
+          className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none placeholder:text-neutral-500 focus:border-accent"
         />
       )}
 
@@ -206,7 +206,7 @@ export function FilterPanel({
             <button
               key={tab.value}
               onClick={() => onChange((f) => ({ ...f, type: tab.value }))}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
                 filters.type === tab.value
                   ? "bg-accent text-white"
                   : "border border-white/15 text-neutral-300 hover:border-white/30"
@@ -262,7 +262,7 @@ export function FilterPanel({
             onChange={(e) =>
               onChange((f) => ({ ...f, votesMin: e.target.value === "" ? "" : Number(e.target.value) }))
             }
-            className="rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+            className="rounded-lg border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
           />
         </div>
 
@@ -341,7 +341,7 @@ export function FilterPanel({
           <select
             value={filters.sort}
             onChange={(e) => onChange((f) => ({ ...f, sort: e.target.value as SortOption }))}
-            className="rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+            className="rounded-lg border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
           >
             <option value="popularity">Popularidad</option>
             <option value="year">Año (más nuevas primero)</option>
@@ -354,13 +354,13 @@ export function FilterPanel({
       <div className="flex gap-2">
         <button
           onClick={applyAndCollapse}
-          className="flex-1 rounded-md bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
+          className="flex-1 rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors"
         >
           Aplicar filtros
         </button>
         <button
           onClick={onClear}
-          className="rounded-md border border-white/15 px-3 py-2 text-sm text-neutral-300 hover:border-white/30 transition-colors"
+          className="rounded-lg border border-white/15 px-3 py-2 text-sm text-neutral-300 hover:border-white/30 transition-colors"
         >
           Limpiar
         </button>
@@ -390,14 +390,14 @@ export function FilterPanel({
                 placeholder="Nombre del filtro"
                 maxLength={60}
                 aria-label="Nombre del filtro guardado"
-                className="rounded-md border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
+                className="rounded-lg border border-white/15 bg-black/40 px-2.5 py-2 text-sm outline-none focus:border-accent"
               />
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={confirmSave}
                   disabled={!nameDraft.trim()}
-                  className="flex-1 rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+                  className="flex-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
                 >
                   Aplicar y guardar
                 </button>
@@ -407,7 +407,7 @@ export function FilterPanel({
                     setSavingName(false);
                     setNameDraft("");
                   }}
-                  className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:border-white/30"
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:border-white/30"
                 >
                   Cancelar
                 </button>

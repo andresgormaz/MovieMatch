@@ -46,7 +46,7 @@ export async function Navbar() {
               </Link>
               <Link
                 href="/register"
-                className="rounded-md bg-accent px-3.5 py-1.5 font-semibold text-white hover:bg-accent-hover transition-colors"
+                className="rounded-lg bg-accent px-3.5 py-1.5 font-semibold text-white hover:bg-accent-hover transition-colors"
               >
                 Registrarme
               </Link>
