@@ -43,6 +43,8 @@ export const TABLE_STATEMENTS = [
     "collectionId" INTEGER,
     "originCountry" TEXT,
     "onboardingRank" INTEGER,
+    "trailerKey" TEXT,
+    "trailerFetchedAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
   )`,
@@ -310,6 +312,8 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "UserTitleRating" ADD COLUMN "notInterested" BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE "UserTitleRating" ADD COLUMN "watchProgress" TEXT`,
   `ALTER TABLE "Title" ADD COLUMN "nextEpisodeAirDate" DATETIME`,
+  `ALTER TABLE "Title" ADD COLUMN "trailerKey" TEXT`,
+  `ALTER TABLE "Title" ADD COLUMN "trailerFetchedAt" DATETIME`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

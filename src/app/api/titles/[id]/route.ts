@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { tmdbPosterUrl, tmdbBackdropUrl, tmdbProfileUrl, tmdbLogoUrl } from "@/lib/tmdb";
+import { tmdbPosterUrl, tmdbBackdropUrl, tmdbProfileUrl, tmdbLogoUrl, tmdb, hasTmdbKey, pickTrailerKey } from "@/lib/tmdb";
 import { countryName } from "@/lib/countries";
 import { displayTitleName } from "@/lib/titleDisplay";
 import { getTitleScoreBreakdown } from "@/lib/recommend";
@@ -20,17 +20,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const userCountry = user?.country ?? null;
   const useOriginalTitles = user?.originalTitles ?? false;
 
-  const [title, myRating, wishlistEntry, scoreBreakdown] = await Promise.all([
-    prisma.title.findUnique({
-      where: { id },
-      include: {
-        genres: { include: { genre: true } },
-        cast: { include: { person: true }, orderBy: { order: "asc" }, take: 12 },
-        crew: { include: { person: true } },
-        providers: { where: { countryCode: userCountry ?? "" }, include: { provider: true } },
-        similar: { orderBy: { rank: "asc" } },
-      },
-    }),
+  const titleInclude = {
+    genres: { include: { genre: true } },
+    cast: { include: { person: true }, orderBy: { order: "asc" as const }, take: 12 },
+    crew: { include: { person: true } },
+    providers: { where: { countryCode: userCountry ?? "" }, include: { provider: true } },
+    similar: { orderBy: { rank: "asc" as const } },
+  };
+
+  const [initialTitle, myRating, wishlistEntry, scoreBreakdown] = await Promise.all([
+    prisma.title.findUnique({ where: { id }, include: titleInclude }),
     prisma.userTitleRating.findUnique({ where: { userId_titleId: { userId, titleId: id } } }),
     prisma.wishlist.findUnique({ where: { userId_titleId: { userId, titleId: id } } }),
     // Temporary (see recommend.ts) -- itemized "how was this score built"
@@ -38,8 +37,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // once the user's done sanity-checking the direct-sum formula.
     getTitleScoreBreakdown(userId, id, { userCountry, useOriginalTitles }),
   ]);
+  let title = initialTitle;
 
   if (!title) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
+  // Lazy, one-time fetch: same idea as Person.detailsFetchedAt -- nobody
+  // needs a trailer for every title in the catalog up front, so pull it
+  // from TMDB the first time someone actually opens this page, then cache
+  // it (including the "TMDB has none" case, so we don't keep retrying).
+  if (!title.trailerFetchedAt && hasTmdbKey()) {
+    try {
+      const videos = title.type === "MOVIE" ? await tmdb.movieVideos(title.tmdbId) : await tmdb.tvVideos(title.tmdbId);
+      title = await prisma.title.update({
+        where: { id },
+        data: { trailerKey: pickTrailerKey(videos.results), trailerFetchedAt: new Date() },
+        include: titleInclude,
+      });
+    } catch {
+      // TMDB hiccup -- show whatever we already have; trailerFetchedAt
+      // stays null so the next visit tries again instead of getting stuck.
+    }
+  }
 
   // TitleSimilar only stores tmdbId+type (the related title might not be in
   // our catalog); resolve to whatever we actually have, in TMDB's order.
@@ -73,6 +91,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     overview: title.overview,
     posterUrl: tmdbPosterUrl(title.posterPath, "w500"),
     backdropUrl: tmdbBackdropUrl(title.backdropPath),
+    trailerKey: title.trailerKey,
     voteAverage: title.voteAverage,
     voteCount: title.voteCount,
     budget: title.budget,

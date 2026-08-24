@@ -173,6 +173,31 @@ export interface TmdbPersonDetails {
   place_of_birth: string | null;
 }
 
+export interface TmdbVideo {
+  key: string; // YouTube video id
+  site: string; // "YouTube" | "Vimeo" | ...
+  type: string; // "Trailer" | "Teaser" | "Clip" | ...
+  official: boolean;
+  published_at: string;
+}
+
+export interface TmdbVideosResponse {
+  results: TmdbVideo[];
+}
+
+// Best "Trailer" (falling back to "Teaser") among a title's YouTube videos --
+// official over fan-made, most recently published first. Null when TMDB has
+// nothing embeddable for this title.
+export function pickTrailerKey(videos: TmdbVideo[]): string | null {
+  const youtube = videos.filter((v) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser"));
+  youtube.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "Trailer" ? -1 : 1;
+    if (a.official !== b.official) return a.official ? -1 : 1;
+    return (b.published_at || "").localeCompare(a.published_at || "");
+  });
+  return youtube[0]?.key ?? null;
+}
+
 export const tmdb = {
   movieGenres: () => tmdbFetch<{ genres: TmdbGenre[] }>("/genre/movie/list"),
   tvGenres: () => tmdbFetch<{ genres: TmdbGenre[] }>("/genre/tv/list"),
@@ -233,6 +258,14 @@ export const tmdb = {
   // batch backfill for it and no rate-limit budget spent on people nobody
   // ever clicks into.
   personDetails: (id: number) => tmdbFetch<TmdbPersonDetails>(`/person/${id}`),
+  // Same lazy-fetch-on-view idea as personDetails, for trailers (see
+  // /api/titles/[id]). `include_video_language` widens beyond just the
+  // es-MX videos `language` would otherwise restrict to -- most trailers on
+  // TMDB are only tagged "en", so without it most titles would show none.
+  movieVideos: (id: number) =>
+    tmdbFetch<TmdbVideosResponse>(`/movie/${id}/videos`, { include_video_language: "es,en,null" }),
+  tvVideos: (id: number) =>
+    tmdbFetch<TmdbVideosResponse>(`/tv/${id}/videos`, { include_video_language: "es,en,null" }),
 };
 
 export function sleep(ms: number) {

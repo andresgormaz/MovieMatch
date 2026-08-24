@@ -55,6 +55,7 @@ interface TitleDetail {
   overview: string | null;
   posterUrl: string | null;
   backdropUrl: string | null;
+  trailerKey: string | null;
   voteAverage: number | null;
   voteCount: number | null;
   budget: number | null;
@@ -97,8 +98,11 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
   const [confirmedScore, setConfirmedScore] = useState<number | null>(null);
   // Series-only: must be picked before a series can be marked seen.
   const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
+  const [trailerOpen, setTrailerOpen] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- navigating to a different title shouldn't carry over the previous one's open trailer
+    setTrailerOpen(false);
     (async () => {
       setLoading(true);
       setError(null);
@@ -211,16 +215,51 @@ export default function TitleDetailPage({ params }: { params: Promise<{ id: stri
     <div className="flex flex-col">
       <PageTour pageKey="titleDetail" steps={TOUR_STEPS} />
       <div className="relative w-full overflow-hidden">
-        {title.backdropUrl ? (
+        {trailerOpen && title.trailerKey ? (
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${title.trailerKey}?autoplay=1`}
+            title="Tráiler"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="h-56 w-full sm:h-80"
+          />
+        ) : title.backdropUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={title.backdropUrl} alt="" className="h-56 w-full object-cover sm:h-80" />
         ) : (
           <div className="h-40 w-full bg-gradient-to-br from-red-950/40 to-black" />
         )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        {!trailerOpen && (
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        )}
         <div className="absolute top-4 left-4">
           <BackButton onClick={() => router.back()} />
         </div>
+        {trailerOpen ? (
+          <button
+            onClick={() => setTrailerOpen(false)}
+            aria-label="Cerrar tráiler"
+            className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition-colors hover:bg-black/80"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : (
+          title.trailerKey && (
+            <button
+              onClick={() => setTrailerOpen(true)}
+              aria-label="Ver tráiler"
+              className="absolute inset-0 flex items-center justify-center"
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur transition-colors hover:bg-black/80">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </span>
+            </button>
+          )
+        )}
       </div>
 
       <div className="mx-auto -mt-20 flex w-full max-w-4xl flex-col gap-6 px-4 pb-12 sm:-mt-28 sm:flex-row">

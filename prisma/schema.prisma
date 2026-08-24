@@ -169,6 +169,13 @@ model Title {
   // single franchise binge can't manufacture a preference on its own.
   originCountry  String? // primary ISO 3166-1 country code
   onboardingRank Int? // lower = shown earlier during onboarding ("top 100")
+  // YouTube video key for the best trailer TMDB has, fetched lazily the
+  // first time someone opens this title's detail page (see /api/titles/[id],
+  // same pattern as Person.detailsFetchedAt). Null key with a non-null
+  // trailerFetchedAt means "we checked, TMDB has none" -- distinct from
+  // never having checked, so we don't refetch on every single page view.
+  trailerKey       String?
+  trailerFetchedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
