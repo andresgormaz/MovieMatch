@@ -73,7 +73,7 @@ export function HomeTour({ startOpen }: { startOpen: boolean }) {
           onClick={() => setOpen(true)}
           aria-label="Ver el tutorial de inicio"
           title="Ver tutorial"
-          className="fixed bottom-4 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-sm font-bold text-neutral-300 shadow-lg transition-colors hover:border-accent hover:text-white"
+          className="fixed right-4 bottom-24 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-sm font-bold text-neutral-300 shadow-lg transition-colors hover:border-accent hover:text-white sm:bottom-4"
         >
           ?
         </button>

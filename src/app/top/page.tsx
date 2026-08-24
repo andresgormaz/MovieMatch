@@ -4,6 +4,17 @@ import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
 import { displayTitleName } from "@/lib/titleDisplay";
 import { Poster } from "@/components/Poster";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-top-list"]',
+    title: "Tu top 5",
+    body: "Las mejores películas y series según las notas que les pusiste -- toca cualquiera para ver su ficha.",
+  },
+];
 
 async function topByType(userId: string, type: "MOVIE" | "SERIES", useOriginalTitles: boolean) {
   const ratings = await prisma.userTitleRating.findMany({
@@ -42,13 +53,17 @@ export default async function TopPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8">
+      <BackToHomeLink />
+      <PageTour pageKey="top" steps={TOUR_STEPS} />
       <div>
         <h1 className="text-2xl font-bold">Tu top 5</h1>
         <p className="mt-1 text-sm text-muted">Según las notas que les pusiste a las que ya viste.</p>
       </div>
 
-      <TopSection title="Películas" items={topMovies} />
-      <TopSection title="Series" items={topSeries} />
+      <div data-tour="tour-top-list" className="flex flex-col gap-8">
+        <TopSection title="Películas" items={topMovies} />
+        <TopSection title="Series" items={topSeries} />
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ export async function Navbar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/5 bg-gradient-to-b from-black/95 to-black/70 backdrop-blur-md">
-      <nav className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
+      <nav aria-label="Barra superior" className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
         <Link href="/" className="flex flex-shrink-0 items-center gap-1.5 text-xl font-black tracking-tight text-white">
           <span className="text-accent">Movie</span>Match
         </Link>

@@ -148,6 +148,7 @@ export default async function DashboardPage() {
         <QuickLink href="/explore" label="Explorar catálogo" />
         <QuickLink href="/news" label="Noticias" />
         <QuickLink href="/groups" label="Grupos" />
+        <QuickLink href="/top" label="Tu top 5" />
         <QuickLink href="/tastes" label="Mis gustos" />
         <QuickLink href="/profile" label="Perfil y estadísticas" />
       </div>

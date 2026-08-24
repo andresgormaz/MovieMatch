@@ -11,6 +11,17 @@ import {
   type Country,
   type Provider,
 } from "@/components/explore/FilterPanel";
+import { BackToHomeLink } from "@/components/BackToHomeLink";
+import { PageTour } from "@/components/PageTour";
+import type { TourStep } from "@/components/TourOverlay";
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    selector: '[data-tour="tour-group-list"]',
+    title: "Lo que combina a todo el grupo",
+    body: "No incluye nada que cualquiera de ustedes ya haya marcado como visto.",
+  },
+];
 
 export default function GroupRecommendationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -76,45 +87,49 @@ export default function GroupRecommendationsPage({ params }: { params: Promise<{
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 lg:flex-row">
-      <aside className="flex-shrink-0 lg:w-72">
-        <div className="lg:sticky lg:top-20">
-          <FilterPanel
-            filters={filters}
-            onChange={setFilters}
-            genres={genres}
-            countries={countries}
-            providers={providers}
-            onApply={applyFilters}
-            onClear={clearFilters}
-          />
-        </div>
-      </aside>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+      <BackToHomeLink />
+      <PageTour pageKey="groupDetail" steps={TOUR_STEPS} />
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <aside className="flex-shrink-0 lg:w-72">
+          <div className="lg:sticky lg:top-20">
+            <FilterPanel
+              filters={filters}
+              onChange={setFilters}
+              genres={genres}
+              countries={countries}
+              providers={providers}
+              onApply={applyFilters}
+              onClear={clearFilters}
+            />
+          </div>
+        </aside>
 
-      <div className="flex-1">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">Recomendaciones del grupo</h1>
-          <p className="mt-1 text-sm text-muted">
-            Combinan los gustos de todos los miembros y no incluyen nada que alguno ya haya visto.
-          </p>
-        </div>
+        <div className="flex-1">
+          <div className="mb-4">
+            <h1 className="text-2xl font-bold">Recomendaciones del grupo</h1>
+            <p className="mt-1 text-sm text-muted">
+              Combinan los gustos de todos los miembros y no incluyen nada que alguno ya haya visto.
+            </p>
+          </div>
 
-        <div className="flex flex-col gap-3">
-          {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
-          {error && (
-            <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-              {error}
-            </p>
-          )}
-          {!loading && !error && recs.length === 0 && (
-            <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
-              No encontramos recomendaciones nuevas para el grupo todavía. Sigan calificando
-              títulos, actores y géneros cada uno por su lado.
-            </p>
-          )}
-          {recs.map((r) => (
-            <RecommendationCard key={r.id} rec={r} onRated={handleRated} />
-          ))}
+          <div data-tour="tour-group-list" className="flex flex-col gap-3">
+            {loading && <p className="text-center text-sm text-muted">Cargando…</p>}
+            {error && (
+              <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
+                {error}
+              </p>
+            )}
+            {!loading && !error && recs.length === 0 && (
+              <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
+                No encontramos recomendaciones nuevas para el grupo todavía. Sigan calificando
+                títulos, actores y géneros cada uno por su lado.
+              </p>
+            )}
+            {recs.map((r) => (
+              <RecommendationCard key={r.id} rec={r} onRated={handleRated} />
+            ))}
+          </div>
         </div>
       </div>
     </div>

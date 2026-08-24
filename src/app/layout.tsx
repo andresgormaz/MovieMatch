@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { auth } from "@/lib/auth";
 import { Navbar } from "@/components/Navbar";
+import { BottomNav } from "@/components/BottomNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,7 +31,13 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Only used here to reserve room for BottomNav on mobile so its fixed
+  // position never covers the last bit of a page's content -- BottomNav
+  // does its own (redundant, harmless) session check to decide whether to
+  // render at all, same as Navbar already does.
+  const session = await auth();
+
   return (
     <html
       lang="es"
@@ -37,7 +45,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <Navbar />
-        <main className="flex-1">{children}</main>
+        <main className={`flex-1 ${session?.user ? "pb-20 sm:pb-0" : ""}`}>{children}</main>
+        <BottomNav />
       </body>
     </html>
   );
