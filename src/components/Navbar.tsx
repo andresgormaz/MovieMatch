@@ -19,20 +19,14 @@ export async function Navbar() {
               <Link href="/dashboard" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
                 Inicio
               </Link>
-              <Link href="/explore" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Explorar
-              </Link>
-              <Link href="/groups" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Grupos
-              </Link>
-              <Link href="/wishlist" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Mi lista
-              </Link>
-              <Link href="/diary" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Diario
-              </Link>
               <Link href="/recommendations" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Recomendaciones
+                Para ti
+              </Link>
+              <Link href="/know-you" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
+                Tus gustos
+              </Link>
+              <Link href="/social" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
+                Social
               </Link>
               <Link href="/profile" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
                 Perfil

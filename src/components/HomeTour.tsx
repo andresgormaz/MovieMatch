@@ -4,8 +4,7 @@ import { useRef, useState } from "react";
 import { TourOverlay, type TourStep } from "@/components/TourOverlay";
 
 // Selectors match `data-tour="..."` attributes sprinkled on the real
-// buttons/cards elsewhere (Navbar, dashboard's 3 home sections: Para ti,
-// Conócete, Social).
+// buttons/cards elsewhere (Navbar, dashboard's 3 compact teaser blocks).
 const STEPS: TourStep[] = [
   {
     selector: '[data-tour="tour-search"]',
@@ -13,29 +12,24 @@ const STEPS: TourStep[] = [
     body: "Escribe el nombre de una película o serie para ir directo a su ficha.",
   },
   {
-    selector: '[data-tour="tour-foryou"]',
+    selector: '[data-tour="tour-block-foryou"]',
     title: "Para ti",
-    body: 'Varias recomendaciones a la vez, no solo una -- si calificas una, quedan las demás. También desde acá: catálogo completo, tu lista y las novedades.',
+    body: "Toca para ver tus recomendaciones, el catálogo completo y tu lista -- este bloque es solo un adelanto, no se califica desde acá.",
   },
   {
-    selector: '[data-tour="tour-vs"]',
-    title: '"¿Cuál te gusta más?"',
-    body: "Compara pares de títulos que ya viste. Entre más compares, mejores serán tus recomendaciones.",
+    selector: '[data-tour="tour-block-knowyou"]',
+    title: "Tus gustos",
+    body: 'Compara pares en "¿cuál te gusta más?" o califica títulos populares -- ambas afinan tus recomendaciones rápido.',
   },
   {
-    selector: '[data-tour="tour-populares"]',
-    title: "Calificar populares",
-    body: "Títulos muy populares que probablemente ya viste -- calificarlos es de lo más rápido para afinar tus recomendaciones.",
-  },
-  {
-    selector: '[data-tour="tour-social"]',
-    title: "Amigos y grupos",
-    body: "Agrega amigos para mandarles recomendaciones puntuales, o vincula cuentas en un grupo para recomendaciones conjuntas.",
+    selector: '[data-tour="tour-block-social"]',
+    title: "Social",
+    body: "Amigos para mandar un título puntual, o grupos para recomendaciones conjuntas.",
   },
   {
     selector: '[data-tour="tour-quicklinks"]',
     title: "El resto de la app",
-    body: "Tu diario, noticias, tu top 5, tus gustos y tu perfil.",
+    body: "Tu diario, noticias y tu top 5. Recomendaciones, gustos, social y tu perfil siempre están abajo, en la barra de navegación.",
   },
 ];
 

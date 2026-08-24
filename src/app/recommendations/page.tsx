@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { RecommendationCard, type Recommendation } from "@/components/RecommendationCard";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 import {
@@ -148,6 +149,17 @@ export default function RecommendationsPage() {
               Se actualizan cada vez que calificas algo nuevo. Marca lo que ya viste para afinarlas
               todavía más.
             </p>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <Link href="/explore" className="text-accent-hover hover:underline">
+                Explorar catálogo completo →
+              </Link>
+              <Link href="/wishlist" className="text-accent-hover hover:underline">
+                Mi lista →
+              </Link>
+              <Link href="/whats-new" className="text-accent-hover hover:underline">
+                Novedades para ti →
+              </Link>
+            </div>
           </div>
 
           <div data-tour="tour-rec-list" className="flex flex-col gap-3">
