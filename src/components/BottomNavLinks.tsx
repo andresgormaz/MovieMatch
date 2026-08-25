@@ -18,6 +18,17 @@ const ICON_PROPS = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", 
 
 const ITEMS: NavItem[] = [
   {
+    href: "/dashboard",
+    label: "Inicio",
+    activePrefixes: ["/dashboard"],
+    icon: (
+      <svg {...ICON_PROPS}>
+        <path d="M4 11.5 12 4l8 7.5" />
+        <path d="M6 10v9.5a.5.5 0 0 0 .5.5H10v-5.5h4V20h3.5a.5.5 0 0 0 .5-.5V10" />
+      </svg>
+    ),
+  },
+  {
     href: "/recommendations",
     label: "Para ti",
     activePrefixes: ["/recommendations", "/explore", "/wishlist", "/whats-new"],
@@ -66,9 +77,7 @@ const ITEMS: NavItem[] = [
 // Mobile-only tab bar (sm:hidden) -- the top Navbar already lists these as
 // text links on desktop (see Navbar.tsx), but hides them on small screens to
 // make room for the search bar. This is the mobile equivalent, always
-// reachable without a round trip through the home screen. Deliberately no
-// "Inicio" tab -- the four sections below are the whole nav surface, per
-// spec; the logo in the top Navbar still goes home.
+// reachable without a round trip through the home screen.
 export function BottomNavLinks() {
   const pathname = usePathname();
 
@@ -78,7 +87,7 @@ export function BottomNavLinks() {
       className="fixed inset-x-0 bottom-0 z-30 border-t border-white/5 bg-black/95 backdrop-blur-md sm:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="grid grid-cols-4">
+      <div className="grid grid-cols-5">
         {ITEMS.map((item) => {
           const active = item.activePrefixes.some(
             (prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`),

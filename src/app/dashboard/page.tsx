@@ -76,14 +76,17 @@ export default async function DashboardPage() {
     newSinceLastVisit > 0
       ? `${newSinceLastVisit} recomendación${newSinceLastVisit === 1 ? "" : "es"} nueva${newSinceLastVisit === 1 ? "" : "s"} para ti`
       : "Recomendaciones a tu medida, catálogo completo y tu lista.";
-  // Populares-por-calificar takes priority as a call to action; once there's
-  // nothing pending there, the weighted taste chips (top actors/directores/
-  // géneros) take over as the more dynamic, always-changing teaser.
+  // The weighted taste chips take priority once there's any signal to show
+  // -- they're the dynamic, always-changing teaser the "populares por
+  // calificar" count doesn't compete well against (that pool rarely empties
+  // out, which used to bury the chips behind it almost permanently). Only
+  // brand-new users with no signal yet fall back to the populares count,
+  // then to plain copy.
   const knowYouDescription =
-    pendingPopular > 0 ? (
-      `${pendingPopular} título${pendingPopular === 1 ? "" : "s"} popular${pendingPopular === 1 ? "" : "es"} por calificar`
-    ) : tasteChips.length > 0 ? (
+    tasteChips.length > 0 ? (
       <TasteChipRow keywords={tasteChips} />
+    ) : pendingPopular > 0 ? (
+      `${pendingPopular} título${pendingPopular === 1 ? "" : "s"} popular${pendingPopular === 1 ? "" : "es"} por calificar`
     ) : (
       "Compara, califica y afina lo que te recomendamos."
     );
