@@ -77,6 +77,7 @@ export interface RecommendationResult {
   id: string;
   name: string;
   type: TitleType;
+  createdAt: Date;
   releaseYear: number | null;
   posterPath: string | null;
   backdropPath: string | null;
@@ -331,6 +332,7 @@ function scoreCandidates(
       id: title.id,
       name: displayTitleName(title, useOriginalTitles),
       type: title.type,
+      createdAt: title.createdAt,
       releaseYear: title.releaseYear,
       posterPath: title.posterPath,
       backdropPath: title.backdropPath,
@@ -363,12 +365,16 @@ export async function getRecommendations(
     limit?: number;
     userCountry?: string | null;
     useOriginalTitles?: boolean;
+    // Skips the (non-trivial) computeMergedPreferences call when a caller
+    // already has it -- e.g. dashboard/page.tsx, which also needs it for
+    // the taste chips/mosaic and would otherwise pay for it twice.
+    prefs?: DerivedPreferences;
   } = {},
 ): Promise<RecommendationResult[]> {
   const limit = opts.limit ?? 24;
   const useOriginalTitles = opts.useOriginalTitles ?? false;
 
-  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
+  const prefs = opts.prefs ?? (await computeMergedPreferences(userId, useOriginalTitles));
 
   const candidates = await fetchCandidates(
     {

@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { TitleType } from "@/generated/prisma/enums";
 import type { DerivedPreferences } from "@/lib/preferenceCounts";
@@ -57,7 +58,7 @@ export async function getTasteVisuals(
   const topDirectorIds = topWeighted(prefs.director, VISUAL_TOP_N);
   const candidateIds = [...new Set([...topActorIds, ...topDirectorIds])];
 
-  let people =
+  const people =
     candidateIds.length > 0
       ? await prisma.person.findMany({
           where: { id: { in: candidateIds } },
@@ -65,7 +66,13 @@ export async function getTasteVisuals(
         })
       : [];
 
-  people = await backfillMissingGender(people);
+  // Backfilling runs after the response is sent, not inline -- a render
+  // that needs this only ever sees whichever of these people already have
+  // a cached gender (missing ones just sit out of the pools this time).
+  // Waiting on up to 10 sequential TMDB calls before rendering the home
+  // page turned a page load into a multi-second one; this way the actual
+  // fetch still happens, it just can't block anyone's request.
+  scheduleGenderBackfill(people);
 
   const byId = new Map(people.map((p) => [p.id, p]));
   const actorPool = topActorIds.map((id) => byId.get(id)).filter((p) => p && p.gender === GENDER_MALE) as typeof people;
@@ -104,32 +111,29 @@ async function pickFavoriteGenrePoster(
 }
 
 // Only ever asked to backfill a handful of people (top 5 actors + top 5
-// directors, deduped) -- small enough to fetch inline on a home page
-// render. Self-heals people imported before Person.gender existed; once
-// cached, later visits skip straight past this.
-async function backfillMissingGender<
-  T extends { id: string; tmdbId: number; gender: number | null; detailsFetchedAt: Date | null },
->(people: T[]): Promise<T[]> {
-  if (!hasTmdbKey()) return people;
+// directors, deduped) -- small enough to fetch in the background after a
+// home page render. Self-heals people imported before Person.gender
+// existed; once cached, later visits find nothing left to do here.
+function scheduleGenderBackfill<T extends { id: string; tmdbId: number; gender: number | null; detailsFetchedAt: Date | null }>(
+  people: T[],
+): void {
+  if (!hasTmdbKey()) return;
   const missing = people.filter((p) => p.gender == null);
-  if (missing.length === 0) return people;
+  if (missing.length === 0) return;
 
-  const updated = new Map<string, number>();
-  for (const p of missing) {
-    try {
-      const details = await tmdb.personDetails(p.tmdbId);
-      const gender = details.gender ?? 0;
-      await prisma.person.update({
-        where: { id: p.id },
-        data: { gender, detailsFetchedAt: p.detailsFetchedAt ?? new Date() },
-      });
-      updated.set(p.id, gender);
-      await sleep(60);
-    } catch {
-      // Best effort -- this person just stays out of the actor/actress/
-      // director pools this time; gender stays null so the next render tries again.
+  after(async () => {
+    for (const p of missing) {
+      try {
+        const details = await tmdb.personDetails(p.tmdbId);
+        await prisma.person.update({
+          where: { id: p.id },
+          data: { gender: details.gender ?? 0, detailsFetchedAt: p.detailsFetchedAt ?? new Date() },
+        });
+        await sleep(60);
+      } catch {
+        // Best effort -- gender stays null so the next request that needs
+        // this person tries again.
+      }
     }
-  }
-  if (updated.size === 0) return people;
-  return people.map((p) => (updated.has(p.id) ? { ...p, gender: updated.get(p.id)! } : p));
+  });
 }

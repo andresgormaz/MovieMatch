@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { getRecommendations, type RecommendationResult } from "./recommend";
+import { computeMergedPreferences } from "./preferenceCounts";
 import { tmdbPosterUrl } from "./tmdb";
 import { displayTitleName } from "./titleDisplay";
 
@@ -60,18 +61,25 @@ export async function getWhatsNew(
   const newReleaseCutoff = new Date(now.getTime() - NEW_RELEASE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const resumeCutoff = new Date(now.getTime() - RESUME_SERIES_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
+  // Computed once and shared across every getRecommendations call below --
+  // this page used to run the (non-trivial) computeMergedPreferences up to
+  // 3 times over.
+  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
+
   const [newMoviesRaw, newSeriesRaw, resumeRows, startedCollections] = await Promise.all([
     getRecommendations(userId, {
       filters: { type: "MOVIE", releaseDate: { gte: newReleaseCutoff } },
       limit: SECTION_LIMIT,
       userCountry,
       useOriginalTitles,
+      prefs,
     }),
     getRecommendations(userId, {
       filters: { type: "SERIES" },
       limit: SECTION_LIMIT,
       userCountry,
       useOriginalTitles,
+      prefs,
     }),
     prisma.userTitleRating.findMany({
       where: {
@@ -101,6 +109,7 @@ export async function getWhatsNew(
           limit: SECTION_LIMIT,
           userCountry,
           useOriginalTitles,
+          prefs,
         })
       : [];
 

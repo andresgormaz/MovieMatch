@@ -11,6 +11,7 @@ import { VisitBeacon } from "@/components/VisitBeacon";
 import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
 
 const TASTE_CHIP_COUNT = 5;
+const RECS_FOR_HOME = 50;
 
 const ICON_PROPS = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
@@ -39,12 +40,22 @@ export default async function DashboardPage() {
   let friendsTotal = 0;
   let groupsTotal = 0;
   let recsTotal = 0;
+  // "New since your last visit" only means something once there's a previous
+  // visit to compare against (before that, everything in the catalog is
+  // "new", which isn't a useful signal). Doubles as the "Para ti" block's
+  // teaser line when it's positive, and its first pick doubles as the
+  // block's poster art -- falling back to the single top recommendation
+  // when nothing's new (or this is the first visit).
+  let newSinceLastVisit = 0;
+  let posterTitle: RecommendationResult | null = null;
   if (onboardingDone) {
     const useOriginalTitles = user?.originalTitles ?? false;
-    // Computed once and shared -- both getTasteKeywords and getTasteVisuals
-    // need it, and it's non-trivial to compute.
+    const userCountry = user?.country ?? null;
+    // Computed once and shared across every consumer below (taste chips,
+    // taste mosaic, recommendations) -- non-trivial to compute, and this
+    // whole block used to pay for it up to 3 times per home load.
     const prefs = await computeMergedPreferences(userId, useOriginalTitles);
-    const [popularPool, keywords, visuals, friendsCount, groupsCount, recsCount] = await Promise.all([
+    const [popularPool, keywords, visuals, friendsCount, groupsCount, recsCount, recs] = await Promise.all([
       // Same top-N-by-votes pool "Calificar populares" itself shows -- see
       // POPULAR_POOL_SIZE -- so the teaser count matches what's on the page.
       prisma.title.findMany({ orderBy: { voteCount: "desc" }, take: POPULAR_POOL_SIZE, select: { id: true } }),
@@ -53,6 +64,12 @@ export default async function DashboardPage() {
       prisma.friendship.count({ where: { OR: [{ userAId: userId }, { userBId: userId }] } }),
       prisma.groupMember.count({ where: { userId } }),
       prisma.sentRecommendation.count({ where: { toUserId: userId } }),
+      // Bounded top-N, not the whole catalog -- reused below for both the
+      // "N new since last visit" count and the poster teaser, one
+      // recommendation-engine pass instead of the two unbounded ones this
+      // used to run (one of them scoring up to 999 candidates just to
+      // produce a count).
+      getRecommendations(userId, { limit: RECS_FOR_HOME, userCountry, useOriginalTitles, prefs }),
     ]);
     const popularIds = popularPool.map((t) => t.id);
     const ratedPopularCount =
@@ -65,34 +82,10 @@ export default async function DashboardPage() {
     friendsTotal = friendsCount;
     groupsTotal = groupsCount;
     recsTotal = recsCount;
-  }
 
-  // "New since your last visit" only means something once there's a previous
-  // visit to compare against, and once onboarding is done (before that,
-  // everything in the catalog is "new" to them, which isn't a useful signal).
-  // Doubles as the "Para ti" block's teaser line when it's positive, and its
-  // first pick doubles as the block's poster art.
-  let newSinceLastVisit = 0;
-  let posterTitle: RecommendationResult | null = null;
-  if (onboardingDone && previousVisit) {
-    const fresh = await getRecommendations(userId, {
-      filters: { createdAt: { gt: previousVisit } },
-      limit: 999,
-      userCountry: user?.country ?? null,
-      useOriginalTitles: user?.originalTitles ?? false,
-    });
-    newSinceLastVisit = fresh.length;
-    posterTitle = fresh[0] ?? null;
-  }
-  // No fresh pick (nothing new, or this is the first visit) -- fall back to
-  // the single top recommendation just for its poster art.
-  if (onboardingDone && !posterTitle) {
-    const [topPick] = await getRecommendations(userId, {
-      limit: 1,
-      userCountry: user?.country ?? null,
-      useOriginalTitles: user?.originalTitles ?? false,
-    });
-    posterTitle = topPick ?? null;
+    const freshRecs = previousVisit ? recs.filter((r) => r.createdAt.getTime() > previousVisit.getTime()) : [];
+    newSinceLastVisit = freshRecs.length;
+    posterTitle = freshRecs[0] ?? recs[0] ?? null;
   }
 
   const forYouDescription =
