@@ -1,7 +1,8 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getRecommendations, type RecommendationResult } from "@/lib/recommend";
+import { getRecommendations } from "@/lib/recommend";
 import { computeMergedPreferences, getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
 import { getTasteVisuals, type TasteVisuals } from "@/lib/tasteVisuals";
 import { tmdbPosterUrl, tmdbProfileUrl } from "@/lib/tmdb";
@@ -15,78 +16,98 @@ const RECS_FOR_HOME = 50;
 
 const ICON_PROPS = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
+// Only the greeting + onboarding CTA / quicklinks depend on this -- the 3
+// teaser blocks (the genuinely slow part: preferences + recommendations)
+// are their own Suspense-boundary component below, so navigating here shows
+// this shell immediately (see loading.tsx for the pre-shell skeleton) and
+// the blocks stream in once ready, instead of the whole page waiting on
+// them and looking stuck.
 export default async function DashboardPage() {
   const session = await auth();
   const userId = session!.user.id;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: {
-      name: true,
-      country: true,
-      originalTitles: true,
-      onboardingCompletedAt: true,
-      homeVisitedAt: true,
-      tourSeenAt: true,
-    },
+    select: { name: true, onboardingCompletedAt: true },
   });
   const onboardingDone = Boolean(user?.onboardingCompletedAt);
+
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+      <VisitBeacon />
+      <div>
+        <h1 className="text-2xl font-bold">Hola{user?.name ? `, ${user.name}` : ""} 👋</h1>
+      </div>
+
+      {!onboardingDone && (
+        <Link
+          href="/onboarding/titles"
+          className="rounded-xl bg-accent px-6 py-4 text-center font-bold text-white hover:bg-accent-hover transition-colors"
+        >
+          Continuar configuración inicial →
+        </Link>
+      )}
+
+      {onboardingDone && (
+        <Suspense fallback={<HomeBlocksSkeleton />}>
+          <HomeBlocksSection userId={userId} />
+        </Suspense>
+      )}
+
+      <div data-tour="tour-quicklinks" className="grid grid-cols-2 gap-2.5">
+        <QuickLink href="/diary" label="Mi diario" />
+        <QuickLink href="/top" label="Tu top 5" />
+      </div>
+    </div>
+  );
+}
+
+// Everything that needs the (non-trivial) preference computation and a
+// recommendation-engine pass -- isolated behind Suspense above so it can
+// stream in on its own. Also renders HomeTour here, not in the page shell:
+// the tour's first-visit scan for its target elements runs once on mount,
+// so it needs to mount after these blocks actually exist in the DOM.
+async function HomeBlocksSection({ userId }: { userId: string }) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { country: true, originalTitles: true, homeVisitedAt: true, tourSeenAt: true },
+  });
   const previousVisit = user?.homeVisitedAt ?? null;
-  const showTour = onboardingDone && !user?.tourSeenAt;
+  const showTour = !user?.tourSeenAt;
+  const useOriginalTitles = user?.originalTitles ?? false;
+  const userCountry = user?.country ?? null;
 
-  let pendingPopular = 0;
-  let tasteChips: TasteKeyword[] = [];
-  let tasteVisuals: TasteVisuals = { moviePoster: null, actorPhoto: null, actressPhoto: null, directorPhoto: null };
-  let friendsTotal = 0;
-  let groupsTotal = 0;
-  let recsTotal = 0;
-  // "New since your last visit" only means something once there's a previous
-  // visit to compare against (before that, everything in the catalog is
-  // "new", which isn't a useful signal). Doubles as the "Para ti" block's
-  // teaser line when it's positive, and its first pick doubles as the
-  // block's poster art -- falling back to the single top recommendation
-  // when nothing's new (or this is the first visit).
-  let newSinceLastVisit = 0;
-  let posterTitle: RecommendationResult | null = null;
-  if (onboardingDone) {
-    const useOriginalTitles = user?.originalTitles ?? false;
-    const userCountry = user?.country ?? null;
-    // Computed once and shared across every consumer below (taste chips,
-    // taste mosaic, recommendations) -- non-trivial to compute, and this
-    // whole block used to pay for it up to 3 times per home load.
-    const prefs = await computeMergedPreferences(userId, useOriginalTitles);
-    const [popularPool, keywords, visuals, friendsCount, groupsCount, recsCount, recs] = await Promise.all([
-      // Same top-N-by-votes pool "Calificar populares" itself shows -- see
-      // POPULAR_POOL_SIZE -- so the teaser count matches what's on the page.
-      prisma.title.findMany({ orderBy: { voteCount: "desc" }, take: POPULAR_POOL_SIZE, select: { id: true } }),
-      getTasteKeywords(prefs),
-      getTasteVisuals(userId, prefs, useOriginalTitles),
-      prisma.friendship.count({ where: { OR: [{ userAId: userId }, { userBId: userId }] } }),
-      prisma.groupMember.count({ where: { userId } }),
-      prisma.sentRecommendation.count({ where: { toUserId: userId } }),
-      // Bounded top-N, not the whole catalog -- reused below for both the
-      // "N new since last visit" count and the poster teaser, one
-      // recommendation-engine pass instead of the two unbounded ones this
-      // used to run (one of them scoring up to 999 candidates just to
-      // produce a count).
-      getRecommendations(userId, { limit: RECS_FOR_HOME, userCountry, useOriginalTitles, prefs }),
-    ]);
-    const popularIds = popularPool.map((t) => t.id);
-    const ratedPopularCount =
-      popularIds.length > 0
-        ? await prisma.userTitleRating.count({ where: { userId, titleId: { in: popularIds } } })
-        : 0;
-    pendingPopular = popularIds.length - ratedPopularCount;
-    tasteChips = [...keywords].sort((a, b) => b.weight - a.weight).slice(0, TASTE_CHIP_COUNT);
-    tasteVisuals = visuals;
-    friendsTotal = friendsCount;
-    groupsTotal = groupsCount;
-    recsTotal = recsCount;
+  // Computed once and shared across every consumer below (taste chips,
+  // taste mosaic, recommendations) -- non-trivial to compute, and this
+  // whole block used to pay for it up to 3 times per home load.
+  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
+  const [popularPool, keywords, tasteVisuals, friendsCount, groupsCount, recsCount, recs] = await Promise.all([
+    // Same top-N-by-votes pool "Calificar populares" itself shows -- see
+    // POPULAR_POOL_SIZE -- so the teaser count matches what's on the page.
+    prisma.title.findMany({ orderBy: { voteCount: "desc" }, take: POPULAR_POOL_SIZE, select: { id: true } }),
+    getTasteKeywords(prefs),
+    getTasteVisuals(userId, prefs, useOriginalTitles),
+    prisma.friendship.count({ where: { OR: [{ userAId: userId }, { userBId: userId }] } }),
+    prisma.groupMember.count({ where: { userId } }),
+    prisma.sentRecommendation.count({ where: { toUserId: userId } }),
+    // Bounded top-N, not the whole catalog -- reused below for both the
+    // "N new since last visit" count and the poster teaser, one
+    // recommendation-engine pass instead of the two unbounded ones this
+    // used to run (one of them scoring up to 999 candidates just to
+    // produce a count).
+    getRecommendations(userId, { limit: RECS_FOR_HOME, userCountry, useOriginalTitles, prefs }),
+  ]);
+  const popularIds = popularPool.map((t) => t.id);
+  const ratedPopularCount =
+    popularIds.length > 0
+      ? await prisma.userTitleRating.count({ where: { userId, titleId: { in: popularIds } } })
+      : 0;
+  const pendingPopular = popularIds.length - ratedPopularCount;
+  const tasteChips = [...keywords].sort((a, b) => b.weight - a.weight).slice(0, TASTE_CHIP_COUNT);
 
-    const freshRecs = previousVisit ? recs.filter((r) => r.createdAt.getTime() > previousVisit.getTime()) : [];
-    newSinceLastVisit = freshRecs.length;
-    posterTitle = freshRecs[0] ?? recs[0] ?? null;
-  }
+  const freshRecs = previousVisit ? recs.filter((r) => r.createdAt.getTime() > previousVisit.getTime()) : [];
+  const newSinceLastVisit = freshRecs.length;
+  const posterTitle = freshRecs[0] ?? recs[0] ?? null;
 
   const forYouDescription =
     newSinceLastVisit > 0
@@ -107,90 +128,89 @@ export default async function DashboardPage() {
       "Compara, califica y afina lo que te recomendamos."
     );
   const socialDescription =
-    friendsTotal + groupsTotal + recsTotal > 0 ? (
-      <SocialStatsRow friends={friendsTotal} groups={groupsTotal} recs={recsTotal} />
+    friendsCount + groupsCount + recsCount > 0 ? (
+      <SocialStatsRow friends={friendsCount} groups={groupsCount} recs={recsCount} />
     ) : (
       "Amigos y grupos para compartir recomendaciones."
     );
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
-      <VisitBeacon />
-      {onboardingDone && <HomeTour startOpen={showTour} />}
-      <div>
-        <h1 className="text-2xl font-bold">Hola{user?.name ? `, ${user.name}` : ""} 👋</h1>
-      </div>
-
-      {!onboardingDone && (
-        <Link
-          href="/onboarding/titles"
-          className="rounded-xl bg-accent px-6 py-4 text-center font-bold text-white hover:bg-accent-hover transition-colors"
-        >
-          Continuar configuración inicial →
-        </Link>
-      )}
-
-      {onboardingDone && (
-        <div className="flex flex-col gap-2.5">
-          <HomeBlockLink
-            href="/recommendations"
-            tourId="tour-block-foryou"
-            label="Para ti"
-            description={forYouDescription}
-            visual={
-              posterTitle ? (
-                <div className="h-11 w-8 flex-shrink-0 overflow-hidden rounded-md bg-black/40">
-                  <Poster name={posterTitle.name} type={posterTitle.type} posterUrl={tmdbPosterUrl(posterTitle.posterPath, "w92")} />
-                </div>
-              ) : (
-                <IconBadge>
-                  <svg {...ICON_PROPS}>
-                    <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.8z" />
-                  </svg>
-                </IconBadge>
-              )
-            }
-          />
-          <HomeBlockLink
-            href="/know-you"
-            tourId="tour-block-knowyou"
-            label="Tus gustos"
-            description={knowYouDescription}
-            visual={
-              tasteVisuals.moviePoster || tasteVisuals.actorPhoto || tasteVisuals.actressPhoto || tasteVisuals.directorPhoto ? (
-                <TasteMosaic visuals={tasteVisuals} />
-              ) : (
-                <IconBadge>
-                  <svg {...ICON_PROPS}>
-                    <path d="M12 20s-7-4.3-9.5-9C1 7.5 2.5 4.5 5.5 4.5c1.8 0 3.2 1 4 2.3.8-1.3 2.2-2.3 4-2.3 3 0 4.5 3 3 6.5-2.5 4.7-9.5 9-9.5 9Z" />
-                  </svg>
-                </IconBadge>
-              )
-            }
-          />
-          <HomeBlockLink
-            href="/social"
-            tourId="tour-block-social"
-            label="Social"
-            description={socialDescription}
-            visual={
+    <>
+      <HomeTour startOpen={showTour} />
+      <div className="flex flex-col gap-2.5">
+        <HomeBlockLink
+          href="/recommendations"
+          tourId="tour-block-foryou"
+          label="Para ti"
+          description={forYouDescription}
+          visual={
+            posterTitle ? (
+              <div className="h-11 w-8 flex-shrink-0 overflow-hidden rounded-md bg-black/40">
+                <Poster name={posterTitle.name} type={posterTitle.type} posterUrl={tmdbPosterUrl(posterTitle.posterPath, "w92")} />
+              </div>
+            ) : (
               <IconBadge>
                 <svg {...ICON_PROPS}>
-                  <circle cx="9" cy="8.5" r="3" />
-                  <path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
-                  <path d="M15.5 6a3 3 0 0 1 0 5.8" />
-                  <path d="M17 14.8c2.4.5 3.8 2.2 3.8 4.7" />
+                  <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.8z" />
                 </svg>
               </IconBadge>
-            }
-          />
-        </div>
-      )}
-
-      <div data-tour="tour-quicklinks" className="grid grid-cols-2 gap-2.5">
-        <QuickLink href="/diary" label="Mi diario" />
-        <QuickLink href="/top" label="Tu top 5" />
+            )
+          }
+        />
+        <HomeBlockLink
+          href="/know-you"
+          tourId="tour-block-knowyou"
+          label="Tus gustos"
+          description={knowYouDescription}
+          visual={
+            tasteVisuals.moviePoster || tasteVisuals.actorPhoto || tasteVisuals.actressPhoto || tasteVisuals.directorPhoto ? (
+              <TasteMosaic visuals={tasteVisuals} />
+            ) : (
+              <IconBadge>
+                <svg {...ICON_PROPS}>
+                  <path d="M12 20s-7-4.3-9.5-9C1 7.5 2.5 4.5 5.5 4.5c1.8 0 3.2 1 4 2.3.8-1.3 2.2-2.3 4-2.3 3 0 4.5 3 3 6.5-2.5 4.7-9.5 9-9.5 9Z" />
+                </svg>
+              </IconBadge>
+            )
+          }
+        />
+        <HomeBlockLink
+          href="/social"
+          tourId="tour-block-social"
+          label="Social"
+          description={socialDescription}
+          visual={
+            <IconBadge>
+              <svg {...ICON_PROPS}>
+                <circle cx="9" cy="8.5" r="3" />
+                <path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
+                <path d="M15.5 6a3 3 0 0 1 0 5.8" />
+                <path d="M17 14.8c2.4.5 3.8 2.2 3.8 4.7" />
+              </svg>
+            </IconBadge>
+          }
+        />
       </div>
+    </>
+  );
+}
+
+// Matches the 3 HomeBlockLink rows closely enough (same height/spacing) that
+// nothing jumps around when the real content streams in over it -- shown
+// both here (Suspense fallback, once we already know onboarding is done)
+// and from loading.tsx (before we know anything at all).
+export function HomeBlocksSkeleton() {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5">
+          <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-full bg-white/10" />
+          <div className="min-w-0 flex-1">
+            <div className="h-3.5 w-24 animate-pulse rounded bg-white/10" />
+            <div className="mt-2 h-3 w-40 animate-pulse rounded bg-white/10" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
