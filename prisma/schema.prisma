@@ -338,6 +338,12 @@ model Person {
   // view", distinct from an empty biography (which TMDB genuinely has
   // nothing for) so we don't re-fetch on every single page load.
   detailsFetchedAt   DateTime?
+  // TMDB convention: 0 = not set, 1 = female, 2 = male, 3 = non-binary. Null
+  // means "never fetched" (same idea as detailsFetchedAt) -- captured from
+  // credits on import going forward, and self-healed a handful of people at
+  // a time wherever it's actually needed (see lib/tasteVisuals.ts) for
+  // people imported before this field existed.
+  gender             Int?
 
   castRoles TitleCast[]
   crewRoles TitleCrew[]

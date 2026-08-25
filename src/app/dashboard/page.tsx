@@ -2,8 +2,9 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getRecommendations, type RecommendationResult } from "@/lib/recommend";
-import { getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
-import { tmdbPosterUrl } from "@/lib/tmdb";
+import { computeMergedPreferences, getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
+import { getTasteVisuals, type TasteVisuals } from "@/lib/tasteVisuals";
+import { tmdbPosterUrl, tmdbProfileUrl } from "@/lib/tmdb";
 import { Poster } from "@/components/Poster";
 import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
@@ -34,15 +35,21 @@ export default async function DashboardPage() {
 
   let pendingPopular = 0;
   let tasteChips: TasteKeyword[] = [];
+  let tasteVisuals: TasteVisuals = { moviePoster: null, actorPhoto: null, actressPhoto: null, directorPhoto: null };
   let friendsTotal = 0;
   let groupsTotal = 0;
   let recsTotal = 0;
   if (onboardingDone) {
-    const [popularPool, keywords, friendsCount, groupsCount, recsCount] = await Promise.all([
+    const useOriginalTitles = user?.originalTitles ?? false;
+    // Computed once and shared -- both getTasteKeywords and getTasteVisuals
+    // need it, and it's non-trivial to compute.
+    const prefs = await computeMergedPreferences(userId, useOriginalTitles);
+    const [popularPool, keywords, visuals, friendsCount, groupsCount, recsCount] = await Promise.all([
       // Same top-N-by-votes pool "Calificar populares" itself shows -- see
       // POPULAR_POOL_SIZE -- so the teaser count matches what's on the page.
       prisma.title.findMany({ orderBy: { voteCount: "desc" }, take: POPULAR_POOL_SIZE, select: { id: true } }),
-      getTasteKeywords(userId, user?.originalTitles ?? false),
+      getTasteKeywords(prefs),
+      getTasteVisuals(userId, prefs, useOriginalTitles),
       prisma.friendship.count({ where: { OR: [{ userAId: userId }, { userBId: userId }] } }),
       prisma.groupMember.count({ where: { userId } }),
       prisma.sentRecommendation.count({ where: { toUserId: userId } }),
@@ -54,6 +61,7 @@ export default async function DashboardPage() {
         : 0;
     pendingPopular = popularIds.length - ratedPopularCount;
     tasteChips = [...keywords].sort((a, b) => b.weight - a.weight).slice(0, TASTE_CHIP_COUNT);
+    tasteVisuals = visuals;
     friendsTotal = friendsCount;
     groupsTotal = groupsCount;
     recsTotal = recsCount;
@@ -156,11 +164,15 @@ export default async function DashboardPage() {
             label="Tus gustos"
             description={knowYouDescription}
             visual={
-              <IconBadge>
-                <svg {...ICON_PROPS}>
-                  <path d="M12 20s-7-4.3-9.5-9C1 7.5 2.5 4.5 5.5 4.5c1.8 0 3.2 1 4 2.3.8-1.3 2.2-2.3 4-2.3 3 0 4.5 3 3 6.5-2.5 4.7-9.5 9-9.5 9Z" />
-                </svg>
-              </IconBadge>
+              tasteVisuals.moviePoster || tasteVisuals.actorPhoto || tasteVisuals.actressPhoto || tasteVisuals.directorPhoto ? (
+                <TasteMosaic visuals={tasteVisuals} />
+              ) : (
+                <IconBadge>
+                  <svg {...ICON_PROPS}>
+                    <path d="M12 20s-7-4.3-9.5-9C1 7.5 2.5 4.5 5.5 4.5c1.8 0 3.2 1 4 2.3.8-1.3 2.2-2.3 4-2.3 3 0 4.5 3 3 6.5-2.5 4.7-9.5 9-9.5 9Z" />
+                  </svg>
+                </IconBadge>
+              )
             }
           />
           <HomeBlockLink
@@ -234,6 +246,33 @@ function IconBadge({ children }: { children: React.ReactNode }) {
     <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent-hover">
       {children}
     </span>
+  );
+}
+
+// 2x2 collage standing in for the "Tus gustos" icon once there's taste data
+// to show art for: favorite genre's poster, favorite actor/actriz/director
+// photos, each a random pick within their own top 5 (see lib/tasteVisuals.ts)
+// so it varies across visits without ever showing something that isn't
+// genuinely a favorite. Any empty slot (no signal yet for that category)
+// just renders as a blank cell instead of collapsing the grid.
+function TasteMosaic({ visuals }: { visuals: TasteVisuals }) {
+  const cells = [
+    visuals.moviePoster && { url: tmdbPosterUrl(visuals.moviePoster.posterPath, "w92"), name: visuals.moviePoster.name },
+    visuals.actorPhoto && { url: tmdbProfileUrl(visuals.actorPhoto.profilePath, "w45"), name: visuals.actorPhoto.name },
+    visuals.actressPhoto && { url: tmdbProfileUrl(visuals.actressPhoto.profilePath, "w45"), name: visuals.actressPhoto.name },
+    visuals.directorPhoto && { url: tmdbProfileUrl(visuals.directorPhoto.profilePath, "w45"), name: visuals.directorPhoto.name },
+  ];
+  return (
+    <div className="grid h-9 w-9 flex-shrink-0 grid-cols-2 grid-rows-2 gap-px overflow-hidden rounded-md bg-black/40">
+      {cells.map((cell, i) => (
+        <div key={i} className="overflow-hidden bg-white/5">
+          {cell?.url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={cell.url} alt={cell.name} loading="lazy" className="h-full w-full object-cover" />
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 

@@ -403,10 +403,11 @@ const TASTE_TOP_GENRES = 5;
 // no titles here, unlike lib/news.ts's buildUserNewsKeywords, which adds
 // loved-title names on top of this for its own (different) purpose of
 // matching news article text. Shared by that and the home "Tus gustos"
-// word cloud so the extraction logic only lives in one place.
-export async function getTasteKeywords(userId: string, useOriginalTitles: boolean): Promise<TasteKeyword[]> {
-  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
-
+// word cloud so the extraction logic only lives in one place. Takes an
+// already-computed DerivedPreferences (not a userId) since computing it is
+// non-trivial, and a caller that also needs the raw prefs elsewhere (e.g.
+// lib/tasteVisuals.ts) shouldn't have to pay for it twice.
+export async function getTasteKeywords(prefs: DerivedPreferences): Promise<TasteKeyword[]> {
   const topPersonIds = new Set([
     ...[...prefs.actor.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]).slice(0, TASTE_TOP_PEOPLE_PER_ROLE).map(([id]) => id),
     ...[...prefs.director.entries()].filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]).slice(0, TASTE_TOP_PEOPLE_PER_ROLE).map(([id]) => id),

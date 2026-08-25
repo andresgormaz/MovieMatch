@@ -9,7 +9,7 @@ export function tmdbPosterUrl(path: string | null | undefined, size: "w92" | "w3
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 
-export function tmdbProfileUrl(path: string | null | undefined, size: "w185" = "w185") {
+export function tmdbProfileUrl(path: string | null | undefined, size: "w45" | "w185" = "w185") {
   if (!path) return null;
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
@@ -87,6 +87,8 @@ export interface TmdbPersonCredit {
   order?: number;
   job?: string;
   known_for_department?: string;
+  // TMDB convention: 0 = not set, 1 = female, 2 = male, 3 = non-binary.
+  gender?: number;
 }
 
 export interface TmdbCredits {
@@ -171,6 +173,8 @@ export interface TmdbPersonDetails {
   birthday: string | null; // "YYYY-MM-DD"
   deathday: string | null;
   place_of_birth: string | null;
+  // TMDB convention: 0 = not set, 1 = female, 2 = male, 3 = non-binary.
+  gender: number;
 }
 
 export interface TmdbVideo {

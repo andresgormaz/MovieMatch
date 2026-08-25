@@ -26,8 +26,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   // Lazy, one-time fetch: nobody imports a full bio for every Person up
   // front (most are never clicked into), so pull it from TMDB the first
-  // time someone actually opens this page, then cache it.
-  if (!person.detailsFetchedAt && hasTmdbKey()) {
+  // time someone actually opens this page, then cache it. Also re-fetches
+  // for anyone missing `gender` even if the bio was already cached --
+  // catches people imported before that field existed, so it self-heals on
+  // the next visit instead of staying null forever.
+  if ((!person.detailsFetchedAt || person.gender == null) && hasTmdbKey()) {
     try {
       const details = await tmdb.personDetails(person.tmdbId);
       person = await prisma.person.update({
@@ -37,6 +40,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           birthday: details.birthday ? new Date(details.birthday) : null,
           deathday: details.deathday ? new Date(details.deathday) : null,
           placeOfBirth: details.place_of_birth || null,
+          gender: details.gender ?? 0,
           detailsFetchedAt: new Date(),
         },
       });

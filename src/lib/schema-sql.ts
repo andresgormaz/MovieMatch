@@ -360,6 +360,7 @@ export const ALTER_STATEMENTS = [
   // and the unique index on this column (see INDEX_STATEMENTS) needs every
   // row to already hold a distinct value.
   `UPDATE "User" SET "friendCode" = lower(hex(randomblob(12))) WHERE "friendCode" IS NULL`,
+  `ALTER TABLE "Person" ADD COLUMN "gender" INTEGER`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

@@ -426,6 +426,9 @@ interface FetchedCredit {
   name: string;
   profilePath: string | null;
   department: "Actuación" | "Dirección";
+  // TMDB convention: 0 = not set, 1 = female, 2 = male, 3 = non-binary --
+  // already present on credits, no extra call needed to capture it here.
+  gender: number | null;
 }
 
 interface FetchedProvider {
@@ -521,7 +524,7 @@ async function enrichTitles(
     if (details.vote_count != null) voteCountByTitleId.set(t.id, details.vote_count);
 
     const cast = details.credits.cast.slice(0, 8).map(
-      (c): FetchedCredit => ({ tmdbId: c.id, name: c.name, profilePath: c.profile_path, department: "Actuación" }),
+      (c): FetchedCredit => ({ tmdbId: c.id, name: c.name, profilePath: c.profile_path, department: "Actuación", gender: c.gender ?? null }),
     );
     castByTitleId.set(t.id, cast);
     for (const c of cast) allPeople.set(c.tmdbId, c);
@@ -529,10 +532,10 @@ async function enrichTitles(
     const directors =
       t.type === "MOVIE"
         ? details.credits.crew.filter((c) => c.job === "Director")
-        : (details as { created_by: { id: number; name: string; profile_path: string | null }[] }).created_by;
+        : (details as { created_by: { id: number; name: string; profile_path: string | null; gender?: number }[] }).created_by;
     const crew = directors.map(
       (d): { credit: FetchedCredit; job: "Director" | "Creator" } => ({
-        credit: { tmdbId: d.id, name: d.name, profilePath: d.profile_path, department: "Dirección" },
+        credit: { tmdbId: d.id, name: d.name, profilePath: d.profile_path, department: "Dirección", gender: d.gender ?? null },
         job: t.type === "MOVIE" ? "Director" : "Creator",
       }),
     );
@@ -585,6 +588,7 @@ async function enrichTitles(
           name: p.name,
           profilePath: p.profilePath,
           knownForDepartment: p.department,
+          gender: p.gender,
         })),
       });
     }

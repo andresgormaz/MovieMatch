@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { prisma } from "@/lib/prisma";
-import { getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
+import { computeMergedPreferences, getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
 
 // A handful of movie/series news RSS feeds -- mixes English trade press with
 // a Spanish-language outlet since our users read es-LatAm. Each entry is
@@ -198,8 +198,9 @@ const TOP_LOVED_TITLES = 40;
 // of something they loved still surfaces) -- the title part only makes
 // sense here, not in the shared getTasteKeywords helper.
 async function buildUserNewsKeywords(userId: string, useOriginalTitles: boolean): Promise<TasteKeyword[]> {
+  const prefs = await computeMergedPreferences(userId, useOriginalTitles);
   const [tasteKeywords, lovedTitles] = await Promise.all([
-    getTasteKeywords(userId, useOriginalTitles),
+    getTasteKeywords(prefs),
     prisma.userTitleRating.findMany({
       where: { userId, seen: true, score: { gte: 4 } },
       include: { title: { select: { name: true, originalName: true } } },
