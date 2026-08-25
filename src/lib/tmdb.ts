@@ -1,7 +1,7 @@
 const TMDB_API_BASE = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p";
 
-export function tmdbPosterUrl(path: string | null | undefined, size: "w342" | "w500" = "w342") {
+export function tmdbPosterUrl(path: string | null | undefined, size: "w92" | "w342" | "w500" = "w342") {
   if (!path) return null;
   // Anime posters (from Jikan/MAL) are stored as full URLs, not TMDB-style
   // relative paths -- pass them through as-is instead of double-prefixing.

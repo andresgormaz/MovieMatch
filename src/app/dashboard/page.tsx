@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getRecommendations } from "@/lib/recommend";
+import { getRecommendations, type RecommendationResult } from "@/lib/recommend";
 import { getTasteKeywords, type TasteKeyword } from "@/lib/preferenceCounts";
+import { tmdbPosterUrl } from "@/lib/tmdb";
+import { Poster } from "@/components/Poster";
 import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
 import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
@@ -60,8 +62,10 @@ export default async function DashboardPage() {
   // "New since your last visit" only means something once there's a previous
   // visit to compare against, and once onboarding is done (before that,
   // everything in the catalog is "new" to them, which isn't a useful signal).
-  // Doubles as the "Para ti" block's teaser line when it's positive.
+  // Doubles as the "Para ti" block's teaser line when it's positive, and its
+  // first pick doubles as the block's poster art.
   let newSinceLastVisit = 0;
+  let posterTitle: RecommendationResult | null = null;
   if (onboardingDone && previousVisit) {
     const fresh = await getRecommendations(userId, {
       filters: { createdAt: { gt: previousVisit } },
@@ -70,6 +74,17 @@ export default async function DashboardPage() {
       useOriginalTitles: user?.originalTitles ?? false,
     });
     newSinceLastVisit = fresh.length;
+    posterTitle = fresh[0] ?? null;
+  }
+  // No fresh pick (nothing new, or this is the first visit) -- fall back to
+  // the single top recommendation just for its poster art.
+  if (onboardingDone && !posterTitle) {
+    const [topPick] = await getRecommendations(userId, {
+      limit: 1,
+      userCountry: user?.country ?? null,
+      useOriginalTitles: user?.originalTitles ?? false,
+    });
+    posterTitle = topPick ?? null;
   }
 
   const forYouDescription =
@@ -121,10 +136,18 @@ export default async function DashboardPage() {
             tourId="tour-block-foryou"
             label="Para ti"
             description={forYouDescription}
-            icon={
-              <svg {...ICON_PROPS}>
-                <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.8z" />
-              </svg>
+            visual={
+              posterTitle ? (
+                <div className="h-11 w-8 flex-shrink-0 overflow-hidden rounded-md bg-black/40">
+                  <Poster name={posterTitle.name} type={posterTitle.type} posterUrl={tmdbPosterUrl(posterTitle.posterPath, "w92")} />
+                </div>
+              ) : (
+                <IconBadge>
+                  <svg {...ICON_PROPS}>
+                    <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.8z" />
+                  </svg>
+                </IconBadge>
+              )
             }
           />
           <HomeBlockLink
@@ -132,10 +155,12 @@ export default async function DashboardPage() {
             tourId="tour-block-knowyou"
             label="Tus gustos"
             description={knowYouDescription}
-            icon={
-              <svg {...ICON_PROPS}>
-                <path d="M12 20s-7-4.3-9.5-9C1 7.5 2.5 4.5 5.5 4.5c1.8 0 3.2 1 4 2.3.8-1.3 2.2-2.3 4-2.3 3 0 4.5 3 3 6.5-2.5 4.7-9.5 9-9.5 9Z" />
-              </svg>
+            visual={
+              <IconBadge>
+                <svg {...ICON_PROPS}>
+                  <path d="M12 20s-7-4.3-9.5-9C1 7.5 2.5 4.5 5.5 4.5c1.8 0 3.2 1 4 2.3.8-1.3 2.2-2.3 4-2.3 3 0 4.5 3 3 6.5-2.5 4.7-9.5 9-9.5 9Z" />
+                </svg>
+              </IconBadge>
             }
           />
           <HomeBlockLink
@@ -143,13 +168,15 @@ export default async function DashboardPage() {
             tourId="tour-block-social"
             label="Social"
             description={socialDescription}
-            icon={
-              <svg {...ICON_PROPS}>
-                <circle cx="9" cy="8.5" r="3" />
-                <path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
-                <path d="M15.5 6a3 3 0 0 1 0 5.8" />
-                <path d="M17 14.8c2.4.5 3.8 2.2 3.8 4.7" />
-              </svg>
+            visual={
+              <IconBadge>
+                <svg {...ICON_PROPS}>
+                  <circle cx="9" cy="8.5" r="3" />
+                  <path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
+                  <path d="M15.5 6a3 3 0 0 1 0 5.8" />
+                  <path d="M17 14.8c2.4.5 3.8 2.2 3.8 4.7" />
+                </svg>
+              </IconBadge>
             }
           />
         </div>
@@ -174,13 +201,13 @@ function HomeBlockLink({
   tourId,
   label,
   description,
-  icon,
+  visual,
 }: {
   href: string;
   tourId: string;
   label: string;
   description: React.ReactNode;
-  icon: React.ReactNode;
+  visual: React.ReactNode;
 }) {
   return (
     <Link
@@ -188,9 +215,7 @@ function HomeBlockLink({
       data-tour={tourId}
       className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5 transition-colors hover:border-accent"
     >
-      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent-hover">
-        {icon}
-      </span>
+      {visual}
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-bold text-white">{label}</span>
         <span className="block truncate text-xs text-muted">{description}</span>
@@ -199,6 +224,16 @@ function HomeBlockLink({
         →
       </span>
     </Link>
+  );
+}
+
+// Circular icon badge -- the default leading visual for blocks that don't
+// have art of their own to show (only "Para ti" swaps this for a poster).
+function IconBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent-hover">
+      {children}
+    </span>
   );
 }
 
