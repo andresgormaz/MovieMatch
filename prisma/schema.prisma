@@ -221,6 +221,10 @@ model Title {
   // never having checked, so we don't refetch on every single page view.
   trailerKey       String?
   trailerFetchedAt DateTime?
+  // Same lazy-fetch-once idea as trailerFetchedAt, for TMDB's community
+  // reviews (see lib/reviews.ts) -- null means "never tried", non-null with
+  // zero TitleReview rows means "checked, TMDB has none for this title".
+  reviewsFetchedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -232,6 +236,7 @@ model Title {
   similar   TitleSimilar[]
   wishlist  Wishlist[]
   sentRecommendations SentRecommendation[]
+  reviews   TitleReview[]
 
   @@unique([tmdbId, type])
   @@index([tmdbId])
@@ -546,4 +551,22 @@ model NewsArticle {
   fetchedAt   DateTime @default(now())
 
   @@index([publishedAt])
+}
+
+// TMDB's own community reviews, cached per title (see Title.reviewsFetchedAt
+// -- lazy, fetched once) instead of hit fresh on every "Para ti" page load.
+// A handful of the most substantial reviews per title, not the full list.
+model TitleReview {
+  id               String   @id @default(cuid())
+  titleId          String
+  tmdbReviewId     String   @unique
+  author           String
+  authorAvatarPath String?
+  authorRating     Int? // TMDB author_details.rating, 1-10, null if the reviewer didn't leave one
+  content          String
+  url              String
+  publishedAt      DateTime // the review's own creation date on TMDB
+  title            Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([titleId])
 }

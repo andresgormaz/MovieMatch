@@ -10,7 +10,7 @@ import { HomeTour } from "@/components/HomeTour";
 import { VisitBeacon } from "@/components/VisitBeacon";
 import { POPULAR_POOL_SIZE } from "@/lib/titleFilters";
 
-const TASTE_CHIP_COUNT = 7;
+const TASTE_CHIP_COUNT = 5;
 
 const ICON_PROPS = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
@@ -194,9 +194,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div data-tour="tour-quicklinks" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div data-tour="tour-quicklinks" className="grid grid-cols-2 gap-2.5">
         <QuickLink href="/diary" label="Mi diario" />
-        <QuickLink href="/news" label="Noticias" />
         <QuickLink href="/top" label="Tu top 5" />
       </div>
     </div>
@@ -230,7 +229,7 @@ function HomeBlockLink({
       {visual}
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-bold text-white">{label}</span>
-        <span className="block truncate text-xs text-muted">{description}</span>
+        <span className="line-clamp-2 text-xs leading-snug text-muted">{description}</span>
       </span>
       <span aria-hidden className="flex-shrink-0 text-muted">
         →

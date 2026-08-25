@@ -14,7 +14,7 @@ const STEPS: TourStep[] = [
   {
     selector: '[data-tour="tour-block-foryou"]',
     title: "Para ti",
-    body: "Toca para ver tus recomendaciones, el catálogo completo y tu lista -- este bloque es solo un adelanto, no se califica desde acá.",
+    body: "Toca para ver tus recomendaciones, noticias y reseñas -- este bloque es solo un adelanto, no se califica desde acá.",
   },
   {
     selector: '[data-tour="tour-block-knowyou"]',
@@ -29,7 +29,7 @@ const STEPS: TourStep[] = [
   {
     selector: '[data-tour="tour-quicklinks"]',
     title: "El resto de la app",
-    body: "Tu diario, noticias y tu top 5. Recomendaciones, gustos, social y tu perfil siempre están abajo, en la barra de navegación.",
+    body: "Tu diario y tu top 5. Recomendaciones, gustos, social y tu perfil siempre están abajo, en la barra de navegación.",
   },
 ];
 

@@ -253,6 +253,18 @@ export const TABLE_STATEMENTS = [
     CONSTRAINT "SentRecommendation_toUserId_fkey" FOREIGN KEY ("toUserId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "SentRecommendation_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "TitleReview" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "titleId" TEXT NOT NULL,
+    "tmdbReviewId" TEXT NOT NULL,
+    "author" TEXT NOT NULL,
+    "authorAvatarPath" TEXT,
+    "authorRating" INTEGER,
+    "content" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "publishedAt" DATETIME NOT NULL,
+    CONSTRAINT "TitleReview_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -320,6 +332,8 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "SentRecommendation_toUserId_idx" ON "SentRecommendation"("toUserId")`,
   `CREATE INDEX IF NOT EXISTS "SentRecommendation_fromUserId_idx" ON "SentRecommendation"("fromUserId")`,
   `CREATE INDEX IF NOT EXISTS "SentRecommendation_titleId_idx" ON "SentRecommendation"("titleId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "TitleReview_tmdbReviewId_key" ON "TitleReview"("tmdbReviewId")`,
+  `CREATE INDEX IF NOT EXISTS "TitleReview_titleId_idx" ON "TitleReview"("titleId")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
@@ -361,6 +375,7 @@ export const ALTER_STATEMENTS = [
   // row to already hold a distinct value.
   `UPDATE "User" SET "friendCode" = lower(hex(randomblob(12))) WHERE "friendCode" IS NULL`,
   `ALTER TABLE "Person" ADD COLUMN "gender" INTEGER`,
+  `ALTER TABLE "Title" ADD COLUMN "reviewsFetchedAt" DATETIME`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

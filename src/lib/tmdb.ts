@@ -25,6 +25,18 @@ export function tmdbBackdropUrl(path: string | null | undefined, size: "w780" | 
   return `${TMDB_IMAGE_BASE}/${size}${path}`;
 }
 
+// TMDB review avatars are a known quirk: sometimes a normal TMDB-hosted
+// path (like any other profile image), sometimes a full external URL
+// (usually a Gravatar link) stuffed into the same field with a leading
+// slash -- e.g. "/https://secure.gravatar.com/avatar/xxx.jpg". Detect and
+// unwrap the latter instead of double-prefixing it with TMDB's image host.
+export function tmdbReviewAvatarUrl(path: string | null | undefined) {
+  if (!path) return null;
+  const withoutLeadingSlash = path.replace(/^\//, "");
+  if (withoutLeadingSlash.startsWith("http")) return withoutLeadingSlash;
+  return tmdbProfileUrl(path, "w45");
+}
+
 export function hasTmdbKey() {
   return Boolean(process.env.TMDB_API_KEY);
 }
@@ -189,6 +201,19 @@ export interface TmdbVideosResponse {
   results: TmdbVideo[];
 }
 
+export interface TmdbReview {
+  id: string;
+  author: string;
+  author_details: { avatar_path: string | null; rating: number | null };
+  content: string;
+  url: string;
+  created_at: string;
+}
+
+export interface TmdbReviewsResponse {
+  results: TmdbReview[];
+}
+
 // Best "Trailer" (falling back to "Teaser") among a title's YouTube videos --
 // official over fan-made, most recently published first. Null when TMDB has
 // nothing embeddable for this title.
@@ -270,6 +295,12 @@ export const tmdb = {
     tmdbFetch<TmdbVideosResponse>(`/movie/${id}/videos`, { include_video_language: "es,en,null" }),
   tvVideos: (id: number) =>
     tmdbFetch<TmdbVideosResponse>(`/tv/${id}/videos`, { include_video_language: "es,en,null" }),
+  // Same lazy-fetch-once idea, for the "Reseñas" tab (see lib/reviews.ts).
+  // Overrides the default es-MX `language` -- TMDB's review corpus is
+  // overwhelmingly written in English regardless of the title's language,
+  // and filtering to es-MX leaves almost every title with zero reviews.
+  movieReviews: (id: number) => tmdbFetch<TmdbReviewsResponse>(`/movie/${id}/reviews`, { language: "en-US" }),
+  tvReviews: (id: number) => tmdbFetch<TmdbReviewsResponse>(`/tv/${id}/reviews`, { language: "en-US" }),
 };
 
 export function sleep(ms: number) {
