@@ -45,7 +45,7 @@ test.describe("MiSuper list items", () => {
       await expect(page.getByRole("button", { name: "Eliminar Manzanas" })).toBeVisible();
 
       const fruitGroup = page.locator("details", { has: page.getByText("Frutas y verduras (2)") });
-      const fruitInputs = await fruitGroup.locator("li input").all();
+      const fruitInputs = await fruitGroup.locator('li input:not([type="checkbox"])').all();
       const fruitNames = await Promise.all(fruitInputs.map((input) => input.inputValue()));
       expect(fruitNames).toEqual(["Manzanas", "Peras"]);
 

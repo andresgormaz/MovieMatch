@@ -60,6 +60,15 @@ async function main() {
       data: { householdId, title, status: status as ListStatus },
     });
     console.log(JSON.stringify({ listId: list.id }));
+  } else if (action === "add-item") {
+    // Seeds an item directly, bypassing the quick-add UI -- item CRUD
+    // itself is already covered by list-items.spec.ts; tests that only
+    // care about checking/unchecking don't need to drive that flow too.
+    const [listId, householdId, rawName] = args;
+    const item = await prisma.listItem.create({
+      data: { listId, householdId, rawName, displayName: rawName },
+    });
+    console.log(JSON.stringify({ itemId: item.id }));
   } else if (action === "delete") {
     const [email] = args;
     // Deleting the owner cascades their household (and everything under

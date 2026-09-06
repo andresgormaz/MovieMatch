@@ -17,6 +17,9 @@ const patchSchema = z.object({
   categoryId: z.string().nullable().optional(),
   qty: z.number().positive().nullable().optional(),
   unit: z.string().trim().max(20).nullable().optional(),
+  // The timestamp itself doubles as the checked flag -- same idiom as
+  // onboardingCompletedAt/tourSeenAt elsewhere in this app.
+  checked: z.boolean().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; itemId: string }> }) {
@@ -47,7 +50,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  const { displayName, categoryId, qty, unit } = parsed.data;
+  const { displayName, categoryId, qty, unit, checked } = parsed.data;
   const updated = await prisma.listItem.update({
     where: { id: itemId },
     data: {
@@ -55,6 +58,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(categoryId !== undefined ? { categoryId } : {}),
       ...(qty !== undefined ? { qty } : {}),
       ...(unit !== undefined ? { unit } : {}),
+      ...(checked !== undefined ? { checkedAt: checked ? new Date() : null } : {}),
     },
     include: { category: { select: CATEGORY_SELECT } },
   });
