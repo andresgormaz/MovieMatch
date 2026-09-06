@@ -18,5 +18,5 @@ export default async function AfterGooglePage() {
 
   if (!user?.country) redirect("/onboarding/country");
   if (!user.onboardingCompletedAt) redirect("/onboarding/titles");
-  redirect("/dashboard");
+  redirect("/");
 }

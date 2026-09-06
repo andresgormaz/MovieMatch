@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Poster } from "@/components/Poster";
+import { getAppKeyForPathname } from "@/lib/appNav";
 
 interface SearchResult {
   id: string;
@@ -14,6 +15,7 @@ interface SearchResult {
 
 export function TitleSearch() {
   const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -69,6 +71,12 @@ export function TitleSearch() {
     setResults([]);
     router.push(`/explore?q=${encodeURIComponent(q)}`);
   }
+
+  // This searches the movie/series catalog specifically -- meaningless (and
+  // confusing) outside MovieMatch's own pages, e.g. above a MiSuper grocery
+  // list or the neutral super-app hub. All hooks above still run
+  // unconditionally either way.
+  if (getAppKeyForPathname(pathname) !== "moviematch") return null;
 
   return (
     <div ref={containerRef} data-tour="tour-search" className="relative w-full max-w-xs">

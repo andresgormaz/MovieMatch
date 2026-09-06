@@ -30,7 +30,7 @@ function LoginForm() {
       setError("Email o contraseña incorrectos");
       return;
     }
-    router.push(searchParams.get("callbackUrl") || "/dashboard");
+    router.push(searchParams.get("callbackUrl") || "/");
     router.refresh();
   }
 

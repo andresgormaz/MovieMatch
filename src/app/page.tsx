@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tmdbPosterUrl } from "@/lib/tmdb";
 import { Poster } from "@/components/Poster";
 
+const ICON_PROPS = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
 export default async function Home() {
   const session = await auth();
-  if (session?.user) redirect("/dashboard");
+  if (session?.user) return <Hub name={session.user.name} />;
 
   const backdrop = await prisma.title.findMany({
     take: 42,
@@ -66,5 +67,118 @@ export default async function Home() {
         </ol>
       </div>
     </div>
+  );
+}
+
+// The super-app landing for anyone already signed in -- one shared account
+// across every app below. Kept inline here (not its own component file)
+// since it's this small, same as dashboard/page.tsx's own local helpers.
+function Hub({ name }: { name?: string | null }) {
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+      <div>
+        <h1 className="text-2xl font-bold">Hola{name ? `, ${name}` : ""} 👋</h1>
+        <p className="mt-1 text-sm text-muted">¿Qué quieres abrir?</p>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <HubTile
+          href="/dashboard"
+          label="MovieMatch"
+          description="Recomendaciones de películas y series a tu medida."
+          icon={
+            <svg {...ICON_PROPS}>
+              <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.8z" />
+            </svg>
+          }
+        />
+        <HubTile
+          href="/mi-super"
+          label="MiSuper"
+          description="Lista de supermercado inteligente para tu hogar."
+          icon={
+            <svg {...ICON_PROPS}>
+              <path d="M4.5 7h15l-1.4 9.3a2 2 0 0 1-2 1.7H7.9a2 2 0 0 1-2-1.7L4.5 7Z" />
+              <path d="M8 7V5.5a4 4 0 0 1 8 0V7" />
+            </svg>
+          }
+        />
+        <HubTile
+          label="MisCuentas"
+          description="Cuentas del hogar y gastos compartidos -- próximamente."
+          icon={
+            <svg {...ICON_PROPS}>
+              <rect x="3" y="6" width="18" height="13" rx="2" />
+              <path d="M3 10h18" />
+              <circle cx="16" cy="14.5" r="1.4" fill="currentColor" stroke="none" />
+            </svg>
+          }
+          disabled
+        />
+        <HubTile
+          label="MiAgenda"
+          description="Permisos y puntos familiares -- próximamente."
+          icon={
+            <svg {...ICON_PROPS}>
+              <rect x="3.5" y="5" width="17" height="16" rx="2" />
+              <path d="M3.5 9.5h17" />
+              <path d="M8 3v4M16 3v4" />
+            </svg>
+          }
+          disabled
+        />
+      </div>
+    </div>
+  );
+}
+
+function HubTile({
+  href,
+  label,
+  description,
+  icon,
+  disabled,
+}: {
+  href?: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+}) {
+  const content = (
+    <>
+      <span
+        className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+          disabled ? "bg-white/5 text-muted" : "bg-accent/15 text-accent-hover"
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-sm font-bold ${disabled ? "text-muted" : "text-white"}`}>{label}</span>
+        <span className="block truncate text-xs text-muted">{description}</span>
+      </span>
+      {!disabled && (
+        <span aria-hidden className="flex-shrink-0 text-muted">
+          →
+        </span>
+      )}
+    </>
+  );
+
+  if (disabled || !href) {
+    return (
+      <div className="flex cursor-default items-center gap-3 rounded-xl border border-border/60 bg-surface/40 px-4 py-3.5">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3.5 transition-colors hover:border-accent"
+    >
+      {content}
+    </Link>
   );
 }

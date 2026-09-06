@@ -4,7 +4,7 @@ import { authConfig } from "@/lib/auth.config";
 
 const { auth } = NextAuth(authConfig);
 
-const PROTECTED_PREFIXES = ["/onboarding", "/recommendations", "/dashboard", "/explore", "/groups"];
+const PROTECTED_PREFIXES = ["/onboarding", "/recommendations", "/dashboard", "/explore", "/groups", "/mi-super"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -16,8 +16,10 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
+  // "/" is the super-app hub now -- someone already logged in who lands on
+  // /login or /register belongs there, not funneled straight into MovieMatch.
   if ((pathname === "/login" || pathname === "/register") && req.auth) {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
+    return NextResponse.redirect(new URL("/", req.nextUrl.origin));
   }
 
   return NextResponse.next();
@@ -30,6 +32,7 @@ export const config = {
     "/dashboard/:path*",
     "/explore/:path*",
     "/groups/:path*",
+    "/mi-super/:path*",
     "/login",
     "/register",
   ],

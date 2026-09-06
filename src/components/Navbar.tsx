@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { LogoutButton } from "@/components/LogoutButton";
 import { TitleSearch } from "@/components/TitleSearch";
+import { NavbarLinks } from "@/components/NavbarLinks";
 
 export async function Navbar() {
   const session = await auth();
@@ -16,21 +17,7 @@ export async function Navbar() {
         <div className="ml-auto flex items-center gap-3 text-sm sm:gap-5">
           {session?.user ? (
             <>
-              <Link href="/dashboard" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Inicio
-              </Link>
-              <Link href="/recommendations" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Para ti
-              </Link>
-              <Link href="/know-you" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Tus gustos
-              </Link>
-              <Link href="/social" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Social
-              </Link>
-              <Link href="/profile" className="hidden text-neutral-300 hover:text-white transition-colors sm:block">
-                Perfil
-              </Link>
+              <NavbarLinks />
               <LogoutButton />
             </>
           ) : (
