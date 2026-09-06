@@ -15,7 +15,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return authzErrorResponse(e);
   }
 
-  const list = await prisma.shoppingList.findUniqueOrThrow({ where: { id } });
+  const list = await prisma.shoppingList.findUniqueOrThrow({
+    where: { id },
+    include: {
+      items: { include: { category: { select: { id: true, name: true, sortOrder: true } } } },
+    },
+  });
   return NextResponse.json({ list });
 }
 
@@ -49,6 +54,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(title !== undefined ? { title } : {}),
       ...(status !== undefined ? { status } : {}),
       ...(plannedAt !== undefined ? { plannedAt: plannedAt ? new Date(plannedAt) : null } : {}),
+    },
+    include: {
+      items: { include: { category: { select: { id: true, name: true, sortOrder: true } } } },
     },
   });
   return NextResponse.json({ list });
