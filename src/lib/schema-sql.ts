@@ -265,6 +265,62 @@ export const TABLE_STATEMENTS = [
     "publishedAt" DATETIME NOT NULL,
     CONSTRAINT "TitleReview_titleId_fkey" FOREIGN KEY ("titleId") REFERENCES "Title" ("id") ON DELETE CASCADE ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "Household" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT,
+    "ownerUserId" TEXT NOT NULL,
+    "inviteCode" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Household_ownerUserId_fkey" FOREIGN KEY ("ownerUserId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "HouseholdMember" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "householdId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "role" TEXT NOT NULL DEFAULT 'EDITOR',
+    "joinedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "HouseholdMember_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "HouseholdMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "Category" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "householdId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Category_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ShoppingList" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "householdId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "plannedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ShoppingList_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ListItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "listId" TEXT NOT NULL,
+    "householdId" TEXT NOT NULL,
+    "categoryId" TEXT,
+    "rawName" TEXT NOT NULL,
+    "displayName" TEXT NOT NULL,
+    "qty" REAL,
+    "unit" TEXT,
+    "checkedAt" DATETIME,
+    "sourceType" TEXT NOT NULL DEFAULT 'manual',
+    "isSuggested" BOOLEAN NOT NULL DEFAULT false,
+    "clientMutationId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ListItem_listId_fkey" FOREIGN KEY ("listId") REFERENCES "ShoppingList" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ListItem_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ListItem_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -334,6 +390,17 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "SentRecommendation_titleId_idx" ON "SentRecommendation"("titleId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "TitleReview_tmdbReviewId_key" ON "TitleReview"("tmdbReviewId")`,
   `CREATE INDEX IF NOT EXISTS "TitleReview_titleId_idx" ON "TitleReview"("titleId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Household_inviteCode_key" ON "Household"("inviteCode")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "HouseholdMember_householdId_userId_key" ON "HouseholdMember"("householdId", "userId")`,
+  `CREATE INDEX IF NOT EXISTS "HouseholdMember_userId_idx" ON "HouseholdMember"("userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Category_householdId_name_key" ON "Category"("householdId", "name")`,
+  `CREATE INDEX IF NOT EXISTS "Category_householdId_idx" ON "Category"("householdId")`,
+  `CREATE INDEX IF NOT EXISTS "ShoppingList_householdId_status_idx" ON "ShoppingList"("householdId", "status")`,
+  `CREATE INDEX IF NOT EXISTS "ShoppingList_householdId_plannedAt_idx" ON "ShoppingList"("householdId", "plannedAt")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "ListItem_listId_clientMutationId_key" ON "ListItem"("listId", "clientMutationId")`,
+  `CREATE INDEX IF NOT EXISTS "ListItem_listId_idx" ON "ListItem"("listId")`,
+  `CREATE INDEX IF NOT EXISTS "ListItem_householdId_idx" ON "ListItem"("householdId")`,
+  `CREATE INDEX IF NOT EXISTS "ListItem_categoryId_idx" ON "ListItem"("categoryId")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
