@@ -40,9 +40,16 @@ async function main() {
         members: { create: { userId: user.id, role: "OWNER" } },
         categories: { create: DEFAULT_CATEGORIES.map((name, i) => ({ name, sortOrder: i })) },
       },
+      include: { categories: { orderBy: { sortOrder: "asc" } } },
     });
     // Printed so the calling test can read it back off stdout.
-    console.log(JSON.stringify({ inviteCode: household.inviteCode, householdId: household.id }));
+    console.log(
+      JSON.stringify({
+        inviteCode: household.inviteCode,
+        householdId: household.id,
+        categoryId: household.categories[0].id,
+      }),
+    );
   } else if (action === "delete") {
     const [email] = args;
     // Deleting the owner cascades their household (and everything under

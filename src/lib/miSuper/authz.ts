@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { HouseholdRole } from "@/generated/prisma/enums";
 
@@ -43,4 +44,13 @@ export async function requireListAccess(userId: string, listId: string, minRole:
   if (!list) throw new MiSuperAuthzError("Lista no encontrada", 404);
   await requireHouseholdMember(userId, list.householdId, minRole);
   return list;
+}
+
+// Every mi-super route does the same try/catch around requireHouseholdMember/
+// requireListAccess -- this collapses that into one line. Re-throws anything
+// that isn't the expected authz error, so a genuine bug still surfaces as a
+// 500 instead of being silently swallowed.
+export function authzErrorResponse(e: unknown): NextResponse {
+  if (e instanceof MiSuperAuthzError) return NextResponse.json({ error: e.message }, { status: e.status });
+  throw e;
 }
