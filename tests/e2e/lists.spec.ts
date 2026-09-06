@@ -40,10 +40,21 @@ test.describe("MiSuper Listas", () => {
 
       await page.getByText("Compra semanal").click();
       await page.waitForURL((url) => /\/mi-super\/listas\/[a-z0-9]+$/.test(url.pathname));
+      // React's dev-mode Strict Mode double-invokes the mount effect that
+      // loads this page's data, firing two concurrent GETs. Waiting for the
+      // network to settle here ensures both have resolved before we touch
+      // the (controlled) title input -- filling too early risks a still
+      // in-flight duplicate fetch resolving afterwards and clobbering the
+      // edit with the server's still-unrenamed title.
+      await page.waitForLoadState("networkidle");
 
       const titleInput = page.getByRole("textbox").first();
+      await expect(titleInput).toHaveValue("Compra semanal");
       await titleInput.fill("Compra semanal renovada");
-      await page.getByRole("button", { name: "Guardar" }).click();
+      await Promise.all([
+        page.waitForResponse((res) => res.url().includes("/api/mi-super/lists/") && res.request().method() === "PATCH"),
+        page.getByRole("button", { name: "Guardar" }).click(),
+      ]);
       await expect(titleInput).toHaveValue("Compra semanal renovada");
 
       await page.getByRole("button", { name: "Empezar a comprar" }).click();

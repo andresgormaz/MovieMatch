@@ -69,6 +69,13 @@ async function main() {
       data: { listId, householdId, rawName, displayName: rawName },
     });
     console.log(JSON.stringify({ itemId: item.id }));
+  } else if (action === "get-item-checked") {
+    // Reads server-side state directly -- for the offline sync test, this
+    // is how we confirm a queued mutation actually reached the database
+    // rather than trusting the UI's own (possibly still-optimistic) view.
+    const [itemId] = args;
+    const item = await prisma.listItem.findUniqueOrThrow({ where: { id: itemId } });
+    console.log(JSON.stringify({ checked: item.checkedAt !== null }));
   } else if (action === "delete") {
     const [email] = args;
     // Deleting the owner cascades their household (and everything under

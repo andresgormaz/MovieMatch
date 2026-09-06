@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
+import { loadPendingQueue, enqueuePendingCheck, removePendingCheck } from "@/lib/miSuper/offlineQueue";
 
 interface CategoryInfo {
   id: string;
@@ -44,23 +45,47 @@ export default function ListDetailPage({ params }: { params: Promise<{ id: strin
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategoryId, setNewItemCategoryId] = useState(UNCATEGORIZED);
   const [adding, setAdding] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/mi-super/lists/${id}`);
-    if (!res.ok) {
-      setNotFound(true);
-      return;
-    }
-    const { list: l } = await res.json();
-    setList(l);
-    setTitleDraft(l.title);
+    // Best-effort: a `load()` attempted while offline (the periodic retry
+    // in particular) shouldn't throw an unhandled rejection -- it just
+    // leaves whatever's already on screen (already-correct, optimistic or
+    // pending-queue-merged) as-is.
+    try {
+      const res = await fetch(`/api/mi-super/lists/${id}`);
+      if (!res.ok) {
+        setNotFound(true);
+        return;
+      }
+      const { list: l } = await res.json();
 
-    const currentRes = await fetch("/api/mi-super/households/current");
-    if (currentRes.ok) {
-      const { household } = await currentRes.json();
-      const categoriesRes = await fetch(`/api/mi-super/households/${household.id}/categories`);
-      const { categories: c } = await categoriesRes.json();
-      setCategories(c);
+      // A reload while offline should still reflect this device's own
+      // not-yet-synced toggles, not the server's last-known state.
+      const pending = loadPendingQueue(id);
+      if (pending.length > 0) {
+        const overrides = new Map(pending.map((m) => [m.itemId, m.checked]));
+        l.items = l.items.map((item: ItemInfo) =>
+          overrides.has(item.id)
+            ? { ...item, checkedAt: overrides.get(item.id) ? new Date().toISOString() : null }
+            : item,
+        );
+      }
+      setPendingCount(pending.length);
+      setList(l);
+      setTitleDraft(l.title);
+
+      const currentRes = await fetch("/api/mi-super/households/current");
+      if (currentRes.ok) {
+        const { household } = await currentRes.json();
+        const categoriesRes = await fetch(`/api/mi-super/households/${household.id}/categories`);
+        const { categories: c } = await categoriesRes.json();
+        setCategories(c);
+      }
+    } catch {
+      // Offline -- nothing to do here, flushPendingChecks()'s own retry
+      // loop (online event + periodic timer) is what recovers from this.
     }
   }, [id]);
 
@@ -68,6 +93,57 @@ export default function ListDetailPage({ params }: { params: Promise<{ id: strin
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load on mount
     load();
   }, [load]);
+
+  const flushPendingChecks = useCallback(async () => {
+    if (!navigator.onLine) return;
+    let queue = loadPendingQueue(id);
+    // Nothing queued -- skip the resync fetch entirely. This runs on every
+    // mount (and every periodic tick), so without this early return it
+    // would refetch the list on a timer regardless of whether there was
+    // ever anything to flush, race the very edits a person is mid-typing,
+    // and occasionally stomp them with a stale response.
+    if (queue.length === 0) return;
+    for (const mutation of queue) {
+      try {
+        const res = await fetch(`/api/mi-super/lists/${id}/items/${mutation.itemId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ checked: mutation.checked, clientMutationId: mutation.clientMutationId }),
+        });
+        if (!res.ok) break; // server rejected it -- stop and leave the rest queued
+        queue = removePendingCheck(id, mutation.itemId);
+        setPendingCount(queue.length);
+      } catch {
+        break; // still offline in practice, despite navigator.onLine -- retry later
+      }
+    }
+    if (queue.length === 0) load();
+  }, [id, load]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing from navigator.onLine on mount
+    setIsOnline(navigator.onLine);
+    flushPendingChecks();
+
+    function handleOnline() {
+      setIsOnline(true);
+      flushPendingChecks();
+    }
+    function handleOffline() {
+      setIsOnline(false);
+    }
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    // A periodic safety net -- navigator.onLine can say "online" while
+    // requests still fail (e.g. captive portals, flaky connections), so the
+    // "online" event alone isn't always enough to trigger a retry.
+    const interval = setInterval(flushPendingChecks, 15_000);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      clearInterval(interval);
+    };
+  }, [flushPendingChecks]);
 
   async function saveTitle(e: React.FormEvent) {
     e.preventDefault();
@@ -147,8 +223,8 @@ export default function ListDetailPage({ params }: { params: Promise<{ id: strin
   async function toggleChecked(itemId: string, checked: boolean) {
     // Optimistic: this is a controlled checkbox, so without an immediate
     // local update React's own reconciliation snaps it back to its old
-    // value the instant the click's synthetic event finishes, before the
-    // PATCH round-trip ever resolves.
+    // value the instant the click's synthetic event finishes, well before
+    // a PATCH round-trip -- offline or not -- could ever resolve.
     setList((prev) =>
       prev
         ? {
@@ -159,12 +235,25 @@ export default function ListDetailPage({ params }: { params: Promise<{ id: strin
           }
         : prev,
     );
-    await fetch(`/api/mi-super/lists/${id}/items/${itemId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checked }),
-    });
-    load();
+
+    const clientMutationId = crypto.randomUUID();
+    try {
+      const res = await fetch(`/api/mi-super/lists/${id}/items/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checked, clientMutationId }),
+      });
+      if (!res.ok) throw new Error("request failed");
+      const queue = removePendingCheck(id, itemId);
+      setPendingCount(queue.length);
+      load();
+    } catch {
+      // Offline (or the request otherwise failed) -- keep the optimistic
+      // state as-is and queue the mutation instead of re-fetching, which
+      // would just overwrite it with stale server data.
+      const queue = enqueuePendingCheck(id, { itemId, checked, clientMutationId });
+      setPendingCount(queue.length);
+    }
   }
 
   const groups = useMemo(() => {
@@ -221,6 +310,12 @@ export default function ListDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <BackToHomeLink href="/mi-super/listas" label="Listas" />
+
+      {(!isOnline || pendingCount > 0) && (
+        <p className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-300">
+          Sin conexión — {pendingCount} cambios pendientes
+        </p>
+      )}
 
       <div className="flex flex-col gap-3">
         <span className="w-fit rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted">

@@ -20,6 +20,9 @@ const patchSchema = z.object({
   // The timestamp itself doubles as the checked flag -- same idiom as
   // onboardingCompletedAt/tourSeenAt elsewhere in this app.
   checked: z.boolean().optional(),
+  // Lets the offline queue (PR8) retry a check/uncheck without double-
+  // applying it -- see the early-return below.
+  clientMutationId: z.string().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; itemId: string }> }) {
@@ -50,7 +53,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  const { displayName, categoryId, qty, unit, checked } = parsed.data;
+  // A retried offline mutation replays the exact same clientMutationId --
+  // if it already landed (item.clientMutationId matches), skip re-applying
+  // it rather than trust a second write to be harmless.
+  if (parsed.data.clientMutationId && parsed.data.clientMutationId === item.clientMutationId) {
+    const current = await prisma.listItem.findUniqueOrThrow({
+      where: { id: itemId },
+      include: { category: { select: CATEGORY_SELECT } },
+    });
+    return NextResponse.json({ item: current });
+  }
+
+  const { displayName, categoryId, qty, unit, checked, clientMutationId } = parsed.data;
   const updated = await prisma.listItem.update({
     where: { id: itemId },
     data: {
@@ -59,6 +73,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(qty !== undefined ? { qty } : {}),
       ...(unit !== undefined ? { unit } : {}),
       ...(checked !== undefined ? { checkedAt: checked ? new Date() : null } : {}),
+      ...(clientMutationId !== undefined ? { clientMutationId } : {}),
     },
     include: { category: { select: CATEGORY_SELECT } },
   });
