@@ -8,6 +8,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../../src/lib/prisma";
 import { DEFAULT_CATEGORIES } from "../../../src/lib/miSuper/categories";
+import type { ListStatus } from "../../../src/generated/prisma/enums";
 
 const PASSWORD = "Test1234!";
 
@@ -50,6 +51,15 @@ async function main() {
         categoryId: household.categories[0].id,
       }),
     );
+  } else if (action === "add-list") {
+    // Seeds a list directly in a given status -- e2e coverage for the
+    // "completadas" section can't drive that transition through the UI yet
+    // (that's PR7's "Terminar compra"), so this fixture stands in for it.
+    const [householdId, title, status] = args;
+    const list = await prisma.shoppingList.create({
+      data: { householdId, title, status: status as ListStatus },
+    });
+    console.log(JSON.stringify({ listId: list.id }));
   } else if (action === "delete") {
     const [email] = args;
     // Deleting the owner cascades their household (and everything under

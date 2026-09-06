@@ -32,6 +32,22 @@ export async function requireHouseholdMember(userId: string, householdId: string
   return member;
 }
 
+// For routes that aren't scoped to a specific household id in the URL (e.g.
+// creating a list) -- resolves the caller's own household the same way
+// mi-super/(guarded)/layout.tsx does (first membership; Fase 1's UI only
+// ever guides a user through one household) and checks the role in one step.
+export async function requireAnyHousehold(userId: string, minRole: HouseholdRole = "VIEWER") {
+  const membership = await prisma.householdMember.findFirst({
+    where: { userId },
+    orderBy: { joinedAt: "asc" },
+  });
+  if (!membership) throw new MiSuperAuthzError("No perteneces a ningún hogar", 404);
+  if (ROLE_RANK[membership.role] < ROLE_RANK[minRole]) {
+    throw new MiSuperAuthzError("No tienes permiso para esta acción", 403);
+  }
+  return membership;
+}
+
 // Same idea for a specific list -- resolves the list's household first
 // (list.householdId is the source of truth; ListItem.householdId is only a
 // denormalized copy for its own fast lookups) then delegates to the same
