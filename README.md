@@ -1,5 +1,12 @@
 # 🎬 MovieMatch
 
+Este proyecto es la base de una pequeña "super app" familiar: un hub (`/`) que da acceso a
+MovieMatch y a las apps que se vayan sumando con el tiempo (MiSuper ya está, MisCuentas y
+MiAgenda quedan como próximamente). Todas viven en el mismo proyecto Next.js, comparten el
+login (NextAuth) y la base de datos (Prisma + SQLite/Turso) — no son despliegues separados.
+
+## MovieMatch
+
 App web para encontrar películas y series que te van a gustar. Calificas títulos que ya viste,
 dices qué actores/directores te gustan y qué géneros/países prefieres, y MovieMatch te
 recomienda contenido nuevo. Las recomendaciones se recalculan al instante con cada
@@ -28,6 +35,35 @@ modelo, así que mientras más usas la app, mejor se pone.
 6. **Grupos** (`/groups`): vinculás tu cuenta con otras (link de invitación) para recibir
    recomendaciones conjuntas que combinan los gustos de todo el grupo y excluyen lo que
    cualquier miembro ya vio.
+
+## MiSuper
+
+Lista de supermercado colaborativa (`/mi-super`), pensada para un hogar (no una persona sola):
+
+1. **Hogar** (`/mi-super/onboarding`, `/mi-super/join/[code]`): al entrar por primera vez creás
+   un hogar o te unís a uno existente con un link de invitación — igual que los Grupos de
+   MovieMatch, pero para compras. Un hogar trae categorías por defecto (Frutas y verduras,
+   Lácteos, Abarrotes, etc.) que después se pueden renombrar, reordenar o borrar desde
+   **Ajustes** (`/mi-super/ajustes`), junto con el nombre del hogar y sus integrantes.
+2. **Listas** (`/mi-super/listas`): se agrupan en Futuras (recién creadas), Activas (en curso) y
+   Completadas. Cada lista tiene sus propios productos, agrupados por categoría y en orden
+   alfabético dentro de cada una.
+3. **Modo compra** (`/mi-super/listas/[id]`): agregás productos con un campo rápido, los marcás
+   como comprados a medida que los ponés en el carro (se van al final de su categoría, tachados,
+   con una barra de progreso), y cerrás con "Terminar compra" cuando termines — sin que haga
+   falta marcar todo.
+4. **Funciona sin conexión** para lo esencial: marcar/desmarcar un producto sigue andando sin
+   señal (buena parte de un supermercado tiene mala cobertura) — el cambio se ve al toque y se
+   guarda en el dispositivo hasta que vuelva la conexión, mostrando cuántos cambios quedan
+   pendientes de sincronizar.
+5. **Historial** y **Aprendizaje** (`/mi-super/historial`, `/mi-super/aprendizaje`): quedan
+   como próximamente — requieren guardar el historial de compras completadas, que es la fase
+   siguiente de esta funcionalidad.
+
+MiSuper es también donde este proyecto empezó a sumar pruebas automatizadas
+(`npm test` para lógica de negocio con Vitest, `npm run test:e2e` para flujos completos con
+Playwright) — MovieMatch sigue verificándose de forma manual, pero cualquier funcionalidad
+nueva de MiSuper suma su propia cobertura.
 
 ## Stack
 
@@ -149,6 +185,8 @@ Cada vez que hagas push a la rama conectada, Vercel vuelve a desplegar solo.
 | `npm run lint` | Lint (ESLint) |
 | `npm run db:migrate` | Aplica migraciones de Prisma |
 | `npm run db:seed` | Importa/actualiza el catálogo de títulos, personas y géneros |
+| `npm test` | Pruebas unitarias (Vitest) |
+| `npm run test:e2e` | Pruebas end-to-end (Playwright) |
 
 ## Estructura del proyecto
 
@@ -162,6 +200,12 @@ src/lib/tmdb.ts               # Cliente de la API de TMDB
 src/app/onboarding/*          # Flujo de onboarding (títulos, actores, preferencias)
 src/app/recommendations/      # Pantalla de recomendaciones
 src/app/api/*                 # Endpoints (ratings, preferencias, recomendaciones, auth)
+src/app/page.tsx              # Hub ("/"): landing con acceso a cada app de la super app
+src/lib/appNav.tsx            # Config de navegación por app (MovieMatch, MiSuper, ...)
+src/app/mi-super/*            # Páginas de MiSuper (hogar, listas, ajustes)
+src/app/api/mi-super/*        # Endpoints de MiSuper
+src/lib/miSuper/*             # Autorización (authz.ts), categorías por defecto, cola offline
+tests/e2e/*                   # Pruebas Playwright (por ahora, solo MiSuper)
 ```
 
 ## Notas / roadmap
