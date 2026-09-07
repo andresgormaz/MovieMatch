@@ -15,14 +15,30 @@ async function loadOwnActivity(childId: string, activityId: string) {
 
 // The type itself never changes on edit -- only the caregiver credit and
 // that type's own detail field (fixing a mis-tap: wrong parent, wrong
-// quality/ounces/mood/content).
+// quality/ounces/mood/content). diaperAmount/diaperConsistency accept an
+// explicit null so editing a POOP diaper back to PEE can clear them --
+// omitted (undefined) means "leave as-is", null means "clear it".
 const patchSchema = z.object({
   caregiverId: z.string().optional(),
   mealQuality: z.enum(["GOOD", "REGULAR", "BAD"]).optional(),
   milkOunces: z.number().positive().optional(),
   wakeMood: z.enum(["CALM", "CRYING"]).optional(),
   diaperContent: z.enum(["PEE", "POOP"]).optional(),
+  diaperAmount: z.enum(["LITTLE", "A_LOT"]).nullable().optional(),
+  diaperConsistency: z.enum(["NORMAL", "HARD", "DIARRHEA"]).nullable().optional(),
 });
+
+// undefined = field wasn't sent, keep the activity's existing value;
+// null = explicitly cleared; anything else = the new value. Used only to
+// build the *merged* view passed to validateActivityDetail -- the actual
+// Prisma update below writes parsed.data's fields verbatim (Prisma treats
+// undefined as "don't touch" and null as "set to NULL", which is exactly
+// this same distinction).
+function mergedField<T>(patched: T | null | undefined, existing: T | null): T | undefined {
+  if (patched === undefined) return existing ?? undefined;
+  if (patched === null) return undefined;
+  return patched;
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -57,10 +73,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // PATCH is only ever expected to send milkOunces, but this guards against
   // a stray field regardless.
   const detailError = validateActivityDetail(activity.type, {
-    mealQuality: parsed.data.mealQuality ?? activity.mealQuality ?? undefined,
-    milkOunces: parsed.data.milkOunces ?? activity.milkOunces ?? undefined,
-    wakeMood: parsed.data.wakeMood ?? activity.wakeMood ?? undefined,
-    diaperContent: parsed.data.diaperContent ?? activity.diaperContent ?? undefined,
+    mealQuality: mergedField(parsed.data.mealQuality, activity.mealQuality),
+    milkOunces: mergedField(parsed.data.milkOunces, activity.milkOunces),
+    wakeMood: mergedField(parsed.data.wakeMood, activity.wakeMood),
+    diaperContent: mergedField(parsed.data.diaperContent, activity.diaperContent),
+    diaperAmount: mergedField(parsed.data.diaperAmount, activity.diaperAmount),
+    diaperConsistency: mergedField(parsed.data.diaperConsistency, activity.diaperConsistency),
   });
   if (detailError) return NextResponse.json({ error: detailError }, { status: 400 });
 
@@ -72,6 +90,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       milkOunces: parsed.data.milkOunces,
       wakeMood: parsed.data.wakeMood,
       diaperContent: parsed.data.diaperContent,
+      diaperAmount: parsed.data.diaperAmount,
+      diaperConsistency: parsed.data.diaperConsistency,
     },
     include: { caregiver: { select: CAREGIVER_SELECT } },
   });

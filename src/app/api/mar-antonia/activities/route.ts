@@ -42,6 +42,8 @@ const createSchema = z.object({
   milkOunces: z.number().positive().optional(),
   wakeMood: z.enum(["CALM", "CRYING"]).optional(),
   diaperContent: z.enum(["PEE", "POOP"]).optional(),
+  diaperAmount: z.enum(["LITTLE", "A_LOT"]).nullable().optional(),
+  diaperConsistency: z.enum(["NORMAL", "HARD", "DIARRHEA"]).nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -80,6 +82,8 @@ export async function POST(request: Request) {
       milkOunces: parsed.data.milkOunces,
       wakeMood: parsed.data.wakeMood,
       diaperContent: parsed.data.diaperContent,
+      diaperAmount: parsed.data.diaperAmount,
+      diaperConsistency: parsed.data.diaperConsistency,
     },
     include: { caregiver: { select: CAREGIVER_SELECT } },
   });

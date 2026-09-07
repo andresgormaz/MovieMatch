@@ -733,6 +733,18 @@ enum DiaperContent {
   POOP
 }
 
+// Only meaningful when DiaperContent is POOP -- a pee diaper has neither.
+enum DiaperAmount {
+  LITTLE
+  A_LOT
+}
+
+enum DiaperConsistency {
+  NORMAL
+  HARD
+  DIARRHEA
+}
+
 model Child {
   id          String   @id @default(cuid())
   name        String   @default("MarAntonia")
@@ -774,6 +786,8 @@ model ChildActivity {
   milkOunces    Float?          // MILK only
   wakeMood      WakeMood?       // NIGHT_WAKE only
   diaperContent DiaperContent?  // DIAPER only
+  diaperAmount      DiaperAmount?      // DIAPER + POOP only
+  diaperConsistency DiaperConsistency? // DIAPER + POOP only
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 

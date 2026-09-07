@@ -46,8 +46,10 @@ test.describe("MarAntonia quick-log", () => {
 
       await page.getByRole("button", { name: "Pañal" }).click();
       await page.getByRole("button", { name: "Caca" }).click();
+      await page.getByRole("button", { name: "Mucha" }).click();
+      await page.getByRole("button", { name: "Dura" }).click();
       await page.getByRole("button", { name: "Guardar" }).click();
-      await expect(page.locator("ul li", { hasText: "Pañal" })).toContainText("Caca");
+      await expect(page.locator("ul li", { hasText: "Pañal" })).toContainText("Caca (mucha, dura)");
 
       const rows = page.locator("ul li");
       await expect(rows).toHaveCount(5);

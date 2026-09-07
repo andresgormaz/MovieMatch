@@ -23,6 +23,8 @@ interface ActivityInfo {
   milkOunces: number | null;
   wakeMood: "CALM" | "CRYING" | null;
   diaperContent: "PEE" | "POOP" | null;
+  diaperAmount: "LITTLE" | "A_LOT" | null;
+  diaperConsistency: "NORMAL" | "HARD" | "DIARRHEA" | null;
 }
 interface DaySummary {
   date: string;
@@ -52,12 +54,26 @@ const DIAPER_CONTENT_LABEL: Record<NonNullable<ActivityInfo["diaperContent"]>, s
   PEE: "Pipí",
   POOP: "Caca",
 };
+const DIAPER_AMOUNT_LABEL: Record<NonNullable<ActivityInfo["diaperAmount"]>, string> = {
+  LITTLE: "poca",
+  A_LOT: "mucha",
+};
+const DIAPER_CONSISTENCY_LABEL: Record<NonNullable<ActivityInfo["diaperConsistency"]>, string> = {
+  NORMAL: "normal",
+  HARD: "dura",
+  DIARRHEA: "diarrea",
+};
 
 function activityDetail(a: ActivityInfo): string | null {
   if (a.type === "MEAL" && a.mealQuality) return MEAL_QUALITY_LABEL[a.mealQuality];
   if (a.type === "MILK" && a.milkOunces != null) return `${a.milkOunces} oz`;
   if (a.type === "NIGHT_WAKE" && a.wakeMood) return WAKE_MOOD_LABEL[a.wakeMood];
-  if (a.type === "DIAPER" && a.diaperContent) return DIAPER_CONTENT_LABEL[a.diaperContent];
+  if (a.type === "DIAPER" && a.diaperContent) {
+    if (a.diaperContent === "POOP" && a.diaperAmount && a.diaperConsistency) {
+      return `Caca (${DIAPER_AMOUNT_LABEL[a.diaperAmount]}, ${DIAPER_CONSISTENCY_LABEL[a.diaperConsistency]})`;
+    }
+    return DIAPER_CONTENT_LABEL[a.diaperContent];
+  }
   return null;
 }
 
@@ -92,6 +108,8 @@ export default function MarAntoniaHomePage() {
   const [draftMilkOunces, setDraftMilkOunces] = useState("");
   const [draftWakeMood, setDraftWakeMood] = useState<ActivityInfo["wakeMood"]>(null);
   const [draftDiaperContent, setDraftDiaperContent] = useState<ActivityInfo["diaperContent"]>(null);
+  const [draftDiaperAmount, setDraftDiaperAmount] = useState<ActivityInfo["diaperAmount"]>(null);
+  const [draftDiaperConsistency, setDraftDiaperConsistency] = useState<ActivityInfo["diaperConsistency"]>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,6 +158,8 @@ export default function MarAntoniaHomePage() {
     setDraftMilkOunces("");
     setDraftWakeMood(null);
     setDraftDiaperContent(null);
+    setDraftDiaperAmount(null);
+    setDraftDiaperConsistency(null);
   }
 
   function openCreate(type: ActivityType) {
@@ -162,6 +182,8 @@ export default function MarAntoniaHomePage() {
     setDraftMilkOunces(activity.milkOunces != null ? String(activity.milkOunces) : "");
     setDraftWakeMood(activity.wakeMood);
     setDraftDiaperContent(activity.diaperContent);
+    setDraftDiaperAmount(activity.diaperAmount);
+    setDraftDiaperConsistency(activity.diaperConsistency);
   }
 
   function closePanel() {
@@ -200,12 +222,25 @@ export default function MarAntoniaHomePage() {
       setError("Elige qué tenía el pañal.");
       return;
     }
+    if (expandedType === "DIAPER" && draftDiaperContent === "POOP" && !draftDiaperAmount) {
+      setError("Elige cuánta caca tenía.");
+      return;
+    }
+    if (expandedType === "DIAPER" && draftDiaperContent === "POOP" && !draftDiaperConsistency) {
+      setError("Elige cómo era la caca.");
+      return;
+    }
 
+    const isPoop = expandedType === "DIAPER" && draftDiaperContent === "POOP";
     const detail = {
       mealQuality: expandedType === "MEAL" ? draftMealQuality : undefined,
       milkOunces: expandedType === "MILK" ? Number(draftMilkOunces) : undefined,
       wakeMood: expandedType === "NIGHT_WAKE" ? draftWakeMood : undefined,
       diaperContent: expandedType === "DIAPER" ? draftDiaperContent : undefined,
+      // Explicit null (not just omitted) so editing a POOP diaper back to
+      // PEE actually clears these instead of leaving the old values stored.
+      diaperAmount: isPoop ? draftDiaperAmount : expandedType === "DIAPER" ? null : undefined,
+      diaperConsistency: isPoop ? draftDiaperConsistency : expandedType === "DIAPER" ? null : undefined,
     };
 
     setSaving(true);
@@ -362,15 +397,48 @@ export default function MarAntoniaHomePage() {
           )}
 
           {expandedType === "DIAPER" && (
-            <PillGroup
-              label="¿Qué tenía?"
-              options={[
-                { value: "PEE" as const, label: "Pipí" },
-                { value: "POOP" as const, label: "Caca" },
-              ]}
-              value={draftDiaperContent}
-              onChange={setDraftDiaperContent}
-            />
+            <>
+              <PillGroup
+                label="¿Qué tenía?"
+                options={[
+                  { value: "PEE" as const, label: "Pipí" },
+                  { value: "POOP" as const, label: "Caca" },
+                ]}
+                value={draftDiaperContent}
+                onChange={(v) => {
+                  setDraftDiaperContent(v);
+                  // Amount/consistency only make sense for POOP -- clear
+                  // them if the pill switches back to PEE.
+                  if (v === "PEE") {
+                    setDraftDiaperAmount(null);
+                    setDraftDiaperConsistency(null);
+                  }
+                }}
+              />
+              {draftDiaperContent === "POOP" && (
+                <>
+                  <PillGroup
+                    label="¿Cuánta?"
+                    options={[
+                      { value: "LITTLE" as const, label: "Poca" },
+                      { value: "A_LOT" as const, label: "Mucha" },
+                    ]}
+                    value={draftDiaperAmount}
+                    onChange={setDraftDiaperAmount}
+                  />
+                  <PillGroup
+                    label="¿Cómo era?"
+                    options={[
+                      { value: "NORMAL" as const, label: "Normal" },
+                      { value: "HARD" as const, label: "Dura" },
+                      { value: "DIARRHEA" as const, label: "Diarrea" },
+                    ]}
+                    value={draftDiaperConsistency}
+                    onChange={setDraftDiaperConsistency}
+                  />
+                </>
+              )}
+            </>
           )}
 
           {error && <p className="text-sm text-red-400">{error}</p>}

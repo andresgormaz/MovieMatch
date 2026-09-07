@@ -481,6 +481,8 @@ export const ALTER_STATEMENTS = [
   `UPDATE "User" SET "friendCode" = lower(hex(randomblob(12))) WHERE "friendCode" IS NULL`,
   `ALTER TABLE "Person" ADD COLUMN "gender" INTEGER`,
   `ALTER TABLE "Title" ADD COLUMN "reviewsFetchedAt" DATETIME`,
+  `ALTER TABLE "ChildActivity" ADD COLUMN "diaperAmount" TEXT`,
+  `ALTER TABLE "ChildActivity" ADD COLUMN "diaperConsistency" TEXT`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

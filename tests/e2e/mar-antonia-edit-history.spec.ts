@@ -52,6 +52,39 @@ test.describe("MarAntonia edit/delete and day history", () => {
     }
   });
 
+  test("editing a POOP diaper back to PEE clears its amount and consistency", async ({ page }) => {
+    const email = "e2e-marantonia-diaper@example.com";
+    runFixture("create-with-child", email, "Bebé Pañal", "MAMA");
+
+    try {
+      await login(page, email);
+      await page.goto("/mar-antonia");
+
+      await page.getByRole("button", { name: "Pañal" }).click();
+      await page.getByRole("button", { name: "Caca" }).click();
+      await page.getByRole("button", { name: "Mucha" }).click();
+      await page.getByRole("button", { name: "Diarrea" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.locator("ul li", { hasText: "Pañal" })).toContainText("Caca (mucha, diarrea)");
+
+      // Switching back to Pipí should hide (and, on save, clear) the
+      // amount/consistency pickers -- there's nothing to report for a pee
+      // diaper.
+      await page.locator("ul li", { hasText: "Pañal" }).click();
+      await page.getByRole("button", { name: "Pipí" }).click();
+      await expect(page.getByText("¿Cuánta?")).not.toBeVisible();
+      await page.getByRole("button", { name: "Guardar cambios" }).click();
+      await expect(page.locator("ul li", { hasText: "Pañal" })).toContainText("Pipí");
+      await expect(page.locator("ul li", { hasText: "Pañal" })).not.toContainText("Caca");
+
+      // Confirm it stuck server-side, not just in the optimistic UI.
+      await page.reload();
+      await expect(page.locator("ul li", { hasText: "Pañal" })).toContainText("Pipí");
+    } finally {
+      runFixture("delete", email);
+    }
+  });
+
   test("a previous day's activities render collapsed and expand on demand", async ({ page }) => {
     const email = "e2e-marantonia-history@example.com";
     const output = runFixture("create-with-child", email, "Bebé Historial", "MAMA");
