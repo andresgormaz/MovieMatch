@@ -21,6 +21,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
 
   return NextResponse.json({
-    caregivers: caregivers.map((c) => ({ id: c.user.id, name: c.user.name, email: c.user.email, role: c.role })),
+    caregivers: caregivers.map((c) => ({
+      id: c.user.id,
+      name: c.user.name,
+      email: c.user.email,
+      role: c.role,
+      // No SessionProvider wraps this app for a client component to read its
+      // own user id via useSession() -- this flag is how the quick-log
+      // panel knows which pill to default to instead.
+      isYou: c.user.id === session.user.id,
+    })),
   });
 }
