@@ -103,6 +103,16 @@ function Hub({ name }: { name?: string | null }) {
           }
         />
         <HubTile
+          href="/mar-antonia"
+          label="MarAntonia"
+          description="Comidas, siestas, leches y despertadas de nuestra hija."
+          icon={
+            <svg {...ICON_PROPS}>
+              <path d="M12 20.5s-7.2-4.4-9.6-9C.8 7.5 2.4 4.3 5.6 4.3c1.9 0 3.4 1 4.4 2.5 1-1.5 2.5-2.5 4.4-2.5 3.2 0 4.8 3.2 3.2 7.2-2.4 4.6-9.6 9-9.6 9Z" />
+            </svg>
+          }
+        />
+        <HubTile
           label="MisCuentas"
           description="Cuentas del hogar y gastos compartidos -- próximamente."
           icon={

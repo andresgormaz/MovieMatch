@@ -35,6 +35,7 @@ test.describe("Super-app hub", () => {
     await login(page);
     await expect(page.getByRole("link", { name: /MovieMatch/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /MiSuper/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /MarAntonia/ })).toBeVisible();
     await expect(page.getByText("MisCuentas")).toBeVisible();
     await expect(page.getByText("MiAgenda")).toBeVisible();
   });

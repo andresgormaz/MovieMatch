@@ -11,7 +11,7 @@ export interface NavItem {
   activePrefixes: string[];
 }
 
-export type AppKey = "moviematch" | "mi-super";
+export type AppKey = "moviematch" | "mi-super" | "mar-antonia";
 
 const ICON_PROPS = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
@@ -136,9 +136,35 @@ const MI_SUPER_ITEMS: NavItem[] = [
   },
 ];
 
+const MAR_ANTONIA_ITEMS: NavItem[] = [
+  {
+    href: "/mar-antonia",
+    label: "Inicio",
+    activePrefixes: ["/mar-antonia"],
+    icon: (
+      <svg {...ICON_PROPS}>
+        <path d="M4 11.5 12 4l8 7.5" />
+        <path d="M6 10v9.5a.5.5 0 0 0 .5.5H10v-5.5h4V20h3.5a.5.5 0 0 0 .5-.5V10" />
+      </svg>
+    ),
+  },
+  {
+    href: "/mar-antonia/ajustes",
+    label: "Ajustes",
+    activePrefixes: ["/mar-antonia/ajustes"],
+    icon: (
+      <svg {...ICON_PROPS}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.4-2-3.4-2.3.8a7.7 7.7 0 0 0-1.7-1L15 3.6h-4l-.4 2.4a7.7 7.7 0 0 0-1.7 1l-2.3-.8-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.4 2 3.4 2.3-.8c.5.4 1.1.8 1.7 1l.4 2.4h4l.4-2.4c.6-.2 1.2-.6 1.7-1l2.3.8 2-3.4-2-1.4Z" />
+      </svg>
+    ),
+  },
+];
+
 export const NAV_ITEMS: Record<AppKey, NavItem[]> = {
   moviematch: MOVIEMATCH_ITEMS,
   "mi-super": MI_SUPER_ITEMS,
+  "mar-antonia": MAR_ANTONIA_ITEMS,
 };
 
 // Null means "no app-specific nav" -- just the hub itself ("/"), which sits
@@ -147,6 +173,7 @@ export const NAV_ITEMS: Record<AppKey, NavItem[]> = {
 // pre-existing routes exactly (zero behavior change for any of them).
 export function getAppKeyForPathname(pathname: string | null): AppKey | null {
   if (pathname?.startsWith("/mi-super")) return "mi-super";
+  if (pathname?.startsWith("/mar-antonia")) return "mar-antonia";
   if (pathname === "/") return null;
   return "moviematch";
 }

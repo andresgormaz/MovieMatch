@@ -4,7 +4,7 @@ import { authConfig } from "@/lib/auth.config";
 
 const { auth } = NextAuth(authConfig);
 
-const PROTECTED_PREFIXES = ["/onboarding", "/recommendations", "/dashboard", "/explore", "/groups", "/mi-super"];
+const PROTECTED_PREFIXES = ["/onboarding", "/recommendations", "/dashboard", "/explore", "/groups", "/mi-super", "/mar-antonia"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
@@ -33,6 +33,7 @@ export const config = {
     "/explore/:path*",
     "/groups/:path*",
     "/mi-super/:path*",
+    "/mar-antonia/:path*",
     "/login",
     "/register",
   ],
