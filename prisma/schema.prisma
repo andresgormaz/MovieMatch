@@ -86,6 +86,9 @@ model User {
   receivedRecommendations SentRecommendation[] @relation("SentRecTo")
   ownedHouseholds        Household[]       @relation("HouseholdOwner")
   householdMemberships   HouseholdMember[]
+  ownedChildren          Child[]           @relation("ChildOwner")
+  childCaregiving        ChildCaregiver[]
+  childActivitiesLogged  ChildActivity[]   @relation("ChildActivityCaregiver")
 }
 
 // A friendship is one row per pair, regardless of who sent the invite --
@@ -690,4 +693,93 @@ model ListItem {
   @@index([listId])
   @@index([householdId])
   @@index([categoryId])
+}
+
+// ---------------------------------------------------------------------------
+// MarAntonia: baby-tracking app for the family's daughter -- another separate
+// app inside the same project (see the super-app hub at "/"), sharing
+// accounts but not any data with MovieMatch or MiSuper. Two caregivers
+// (mamá/papá) log feedings, naps, meals, wake-ups and diaper changes; no
+// OWNER/EDITOR/VIEWER hierarchy like MiSuper's Household -- both caregivers
+// have equal rights over their child's data.
+// ---------------------------------------------------------------------------
+
+enum CaregiverRole {
+  MAMA
+  PAPA
+}
+
+enum ChildActivityType {
+  MEAL
+  NAP
+  MILK
+  NIGHT_WAKE
+  DIAPER
+}
+
+enum MealQuality {
+  GOOD
+  REGULAR
+  BAD
+}
+
+enum WakeMood {
+  CALM
+  CRYING
+}
+
+enum DiaperContent {
+  PEE
+  POOP
+}
+
+model Child {
+  id          String   @id @default(cuid())
+  name        String   @default("MarAntonia")
+  ownerUserId String
+  inviteCode  String   @unique @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner      User             @relation("ChildOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  caregivers ChildCaregiver[]
+  activities ChildActivity[]
+}
+
+model ChildCaregiver {
+  id       String        @id @default(cuid())
+  childId  String
+  userId   String
+  role     CaregiverRole
+  joinedAt DateTime      @default(now())
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, userId])
+  @@index([userId])
+}
+
+model ChildActivity {
+  id          String            @id @default(cuid())
+  childId     String
+  type        ChildActivityType
+  occurredAt  DateTime          @default(now())
+  // Who's credited -- defaults to whoever logged it, but stays editable per
+  // entry (e.g. one parent logging on behalf of the other on a shared
+  // device). SetNull rather than cascade: removing a caregiver account
+  // shouldn't delete the history they logged.
+  caregiverId   String?
+  mealQuality   MealQuality?    // MEAL only
+  milkOunces    Float?          // MILK only
+  wakeMood      WakeMood?       // NIGHT_WAKE only
+  diaperContent DiaperContent?  // DIAPER only
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  child     Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  caregiver User? @relation("ChildActivityCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
+
+  @@index([childId, occurredAt])
+  @@index([childId, type])
 }

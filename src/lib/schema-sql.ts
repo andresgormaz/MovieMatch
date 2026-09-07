@@ -321,6 +321,39 @@ export const TABLE_STATEMENTS = [
     CONSTRAINT "ListItem_householdId_fkey" FOREIGN KEY ("householdId") REFERENCES "Household" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "ListItem_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "Child" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL DEFAULT 'MarAntonia',
+    "ownerUserId" TEXT NOT NULL,
+    "inviteCode" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Child_ownerUserId_fkey" FOREIGN KEY ("ownerUserId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ChildCaregiver" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "childId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "joinedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ChildCaregiver_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ChildCaregiver_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ChildActivity" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "childId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "caregiverId" TEXT,
+    "mealQuality" TEXT,
+    "milkOunces" REAL,
+    "wakeMood" TEXT,
+    "diaperContent" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ChildActivity_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ChildActivity_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -401,6 +434,11 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "ListItem_listId_idx" ON "ListItem"("listId")`,
   `CREATE INDEX IF NOT EXISTS "ListItem_householdId_idx" ON "ListItem"("householdId")`,
   `CREATE INDEX IF NOT EXISTS "ListItem_categoryId_idx" ON "ListItem"("categoryId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Child_inviteCode_key" ON "Child"("inviteCode")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "ChildCaregiver_childId_userId_key" ON "ChildCaregiver"("childId", "userId")`,
+  `CREATE INDEX IF NOT EXISTS "ChildCaregiver_userId_idx" ON "ChildCaregiver"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "ChildActivity_childId_occurredAt_idx" ON "ChildActivity"("childId", "occurredAt")`,
+  `CREATE INDEX IF NOT EXISTS "ChildActivity_childId_type_idx" ON "ChildActivity"("childId", "type")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
