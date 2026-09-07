@@ -38,6 +38,9 @@ export async function GET(request: Request) {
 const createSchema = z.object({
   type: z.enum(["MEAL", "NAP", "MILK", "NIGHT_WAKE", "DIAPER"]),
   caregiverId: z.string(),
+  // Defaults to now() at the DB level when omitted -- the UI always sends
+  // one (pre-filled with the current time, editable before saving).
+  occurredAt: z.string().datetime().optional(),
   mealQuality: z.enum(["GOOD", "REGULAR", "BAD"]).optional(),
   milkOunces: z.number().positive().optional(),
   wakeMood: z.enum(["CALM", "CRYING"]).optional(),
@@ -78,6 +81,7 @@ export async function POST(request: Request) {
       childId: caregiver.childId,
       type: parsed.data.type,
       caregiverId: parsed.data.caregiverId,
+      occurredAt: parsed.data.occurredAt ? new Date(parsed.data.occurredAt) : undefined,
       mealQuality: parsed.data.mealQuality,
       milkOunces: parsed.data.milkOunces,
       wakeMood: parsed.data.wakeMood,

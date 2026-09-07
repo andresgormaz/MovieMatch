@@ -89,6 +89,10 @@ function formatDay(dateKey: string) {
   });
 }
 
+function toTimeInputValue(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
 const TODAY = "today";
 
 export default function MarAntoniaHomePage() {
@@ -104,6 +108,11 @@ export default function MarAntoniaHomePage() {
   const [expandedType, setExpandedType] = useState<ActivityType | null>(null);
   const [editingContext, setEditingContext] = useState<{ id: string; dayKey: string } | null>(null);
   const [draftCaregiverId, setDraftCaregiverId] = useState<string | null>(null);
+  // The calendar day the edited/created entry belongs to -- draftTime only
+  // carries the hour/minute, this supplies the rest so an edit never jumps
+  // to a different day-bucket just because the clock advanced.
+  const [draftBaseDate, setDraftBaseDate] = useState<Date>(() => new Date());
+  const [draftTime, setDraftTime] = useState("");
   const [draftMealQuality, setDraftMealQuality] = useState<ActivityInfo["mealQuality"]>(null);
   const [draftMilkOunces, setDraftMilkOunces] = useState("");
   const [draftWakeMood, setDraftWakeMood] = useState<ActivityInfo["wakeMood"]>(null);
@@ -171,6 +180,9 @@ export default function MarAntoniaHomePage() {
     setExpandedType(type);
     resetDraft();
     setDraftCaregiverId(myCaregiverId);
+    const now = new Date();
+    setDraftBaseDate(now);
+    setDraftTime(toTimeInputValue(now));
   }
 
   function openEdit(activity: ActivityInfo, dayKey: string) {
@@ -184,6 +196,9 @@ export default function MarAntoniaHomePage() {
     setDraftDiaperContent(activity.diaperContent);
     setDraftDiaperAmount(activity.diaperAmount);
     setDraftDiaperConsistency(activity.diaperConsistency);
+    const occurredAt = new Date(activity.occurredAt);
+    setDraftBaseDate(occurredAt);
+    setDraftTime(toTimeInputValue(occurredAt));
   }
 
   function closePanel() {
@@ -204,6 +219,10 @@ export default function MarAntoniaHomePage() {
     if (!expandedType) return;
     if (!draftCaregiverId) {
       setError("Elige quién lo registra.");
+      return;
+    }
+    if (!draftTime) {
+      setError("Elige una hora.");
       return;
     }
     if (expandedType === "MEAL" && !draftMealQuality) {
@@ -231,8 +250,13 @@ export default function MarAntoniaHomePage() {
       return;
     }
 
+    const [hours, minutes] = draftTime.split(":").map(Number);
+    const occurredAt = new Date(draftBaseDate);
+    occurredAt.setHours(hours, minutes, 0, 0);
+
     const isPoop = expandedType === "DIAPER" && draftDiaperContent === "POOP";
     const detail = {
+      occurredAt: occurredAt.toISOString(),
       mealQuality: expandedType === "MEAL" ? draftMealQuality : undefined,
       milkOunces: expandedType === "MILK" ? Number(draftMilkOunces) : undefined,
       wakeMood: expandedType === "NIGHT_WAKE" ? draftWakeMood : undefined,
@@ -352,6 +376,19 @@ export default function MarAntoniaHomePage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="activity-time" className="text-sm font-semibold text-white">
+              ¿A qué hora?
+            </label>
+            <input
+              id="activity-time"
+              type="time"
+              value={draftTime}
+              onChange={(e) => setDraftTime(e.target.value)}
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+            />
           </div>
 
           {expandedType === "MEAL" && (

@@ -20,6 +20,7 @@ async function loadOwnActivity(childId: string, activityId: string) {
 // omitted (undefined) means "leave as-is", null means "clear it".
 const patchSchema = z.object({
   caregiverId: z.string().optional(),
+  occurredAt: z.string().datetime().optional(),
   mealQuality: z.enum(["GOOD", "REGULAR", "BAD"]).optional(),
   milkOunces: z.number().positive().optional(),
   wakeMood: z.enum(["CALM", "CRYING"]).optional(),
@@ -86,6 +87,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     where: { id },
     data: {
       caregiverId: parsed.data.caregiverId,
+      occurredAt: parsed.data.occurredAt ? new Date(parsed.data.occurredAt) : undefined,
       mealQuality: parsed.data.mealQuality,
       milkOunces: parsed.data.milkOunces,
       wakeMood: parsed.data.wakeMood,
