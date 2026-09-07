@@ -8,7 +8,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../../src/lib/prisma";
 import { DEFAULT_CATEGORIES } from "../../../src/lib/miSuper/categories";
-import type { ListStatus } from "../../../src/generated/prisma/enums";
+import type { ListStatus, CaregiverRole } from "../../../src/generated/prisma/enums";
 
 const PASSWORD = "Test1234!";
 
@@ -69,6 +69,26 @@ async function main() {
       data: { listId, householdId, rawName, displayName: rawName },
     });
     console.log(JSON.stringify({ itemId: item.id }));
+  } else if (action === "create-with-child") {
+    // A ready-made child profile (with its owner already a caregiver) for
+    // tests that only care about a second caregiver joining it -- avoids
+    // driving the create-profile UI just to set up a fixture for a join
+    // test.
+    const [email, childName, role] = args;
+    const passwordHash = await bcrypt.hash(PASSWORD, 10);
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { email, name: "E2E Caregiver", passwordHash, onboardingCompletedAt: new Date(), tourSeenAt: new Date() },
+    });
+    const child = await prisma.child.create({
+      data: {
+        name: childName || undefined,
+        ownerUserId: user.id,
+        caregivers: { create: { userId: user.id, role: (role || "MAMA") as CaregiverRole } },
+      },
+    });
+    console.log(JSON.stringify({ inviteCode: child.inviteCode, childId: child.id }));
   } else if (action === "get-item-checked") {
     // Reads server-side state directly -- for the offline sync test, this
     // is how we confirm a queued mutation actually reached the database
