@@ -8,7 +8,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../../src/lib/prisma";
 import { DEFAULT_CATEGORIES } from "../../../src/lib/miSuper/categories";
-import type { ListStatus, CaregiverRole } from "../../../src/generated/prisma/enums";
+import type { ListStatus, CaregiverRole, ChildActivityType } from "../../../src/generated/prisma/enums";
 
 const PASSWORD = "Test1234!";
 
@@ -88,7 +88,45 @@ async function main() {
         caregivers: { create: { userId: user.id, role: (role || "MAMA") as CaregiverRole } },
       },
     });
-    console.log(JSON.stringify({ inviteCode: child.inviteCode, childId: child.id }));
+    console.log(JSON.stringify({ inviteCode: child.inviteCode, childId: child.id, ownerUserId: user.id }));
+  } else if (action === "add-caregiver") {
+    // Adds a second caregiver directly, bypassing the invite/join UI --
+    // that flow is already covered by mar-antonia-onboarding.spec.ts; tests
+    // that only care about reassigning an activity's caregiver don't need
+    // to drive it again.
+    const [childId, email, role] = args;
+    const passwordHash = await bcrypt.hash(PASSWORD, 10);
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: {
+        email,
+        name: "E2E Second Caregiver",
+        passwordHash,
+        onboardingCompletedAt: new Date(),
+        tourSeenAt: new Date(),
+      },
+    });
+    await prisma.childCaregiver.create({ data: { childId, userId: user.id, role: role as CaregiverRole } });
+  } else if (action === "add-activity") {
+    // Seeds an activity directly, optionally back-dated -- covers a
+    // "previous day" grouping without waiting a real day, and lets a test
+    // start from an existing entry without driving the quick-log UI for it.
+    const [childId, caregiverUserId, type, occurredAtIso, detailField, detailValue] = args;
+    const detail: Record<string, string | number> = {};
+    if (detailField && detailField !== "-") {
+      detail[detailField] = detailField === "milkOunces" ? Number(detailValue) : detailValue;
+    }
+    const activity = await prisma.childActivity.create({
+      data: {
+        childId,
+        caregiverId: caregiverUserId,
+        type: type as ChildActivityType,
+        occurredAt: new Date(occurredAtIso),
+        ...detail,
+      },
+    });
+    console.log(JSON.stringify({ activityId: activity.id }));
   } else if (action === "get-item-checked") {
     // Reads server-side state directly -- for the offline sync test, this
     // is how we confirm a queued mutation actually reached the database

@@ -13,9 +13,10 @@ interface CaregiverInfo {
   role: "MAMA" | "PAPA";
   isYou: boolean;
 }
+type ActivityType = "MEAL" | "NAP" | "MILK" | "NIGHT_WAKE" | "DIAPER";
 interface ActivityInfo {
   id: string;
-  type: "MEAL" | "NAP" | "MILK" | "NIGHT_WAKE" | "DIAPER";
+  type: ActivityType;
   occurredAt: string;
   caregiverId: string | null;
   mealQuality: "GOOD" | "REGULAR" | "BAD" | null;
@@ -23,10 +24,14 @@ interface ActivityInfo {
   wakeMood: "CALM" | "CRYING" | null;
   diaperContent: "PEE" | "POOP" | null;
 }
+interface DaySummary {
+  date: string;
+  count: number;
+}
 
 const ROLE_LABEL: Record<CaregiverInfo["role"], string> = { MAMA: "Mamá", PAPA: "Papá" };
 
-const TYPE_CONFIG: Record<ActivityInfo["type"], { label: string; icon: string }> = {
+const TYPE_CONFIG: Record<ActivityType, { label: string; icon: string }> = {
   MEAL: { label: "Comida", icon: "🍽️" },
   NAP: { label: "Siesta", icon: "😴" },
   MILK: { label: "Leche", icon: "🍼" },
@@ -60,13 +65,28 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
 }
 
+function formatDay(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+const TODAY = "today";
+
 export default function MarAntoniaHomePage() {
   const [child, setChild] = useState<ChildInfo | null>(null);
   const [caregivers, setCaregivers] = useState<CaregiverInfo[]>([]);
-  const [activities, setActivities] = useState<ActivityInfo[]>([]);
+  const [todayActivities, setTodayActivities] = useState<ActivityInfo[]>([]);
+  const [pastDays, setPastDays] = useState<DaySummary[]>([]);
+  const [pastDayActivities, setPastDayActivities] = useState<Record<string, ActivityInfo[]>>({});
   const [loading, setLoading] = useState(true);
 
-  const [expandedType, setExpandedType] = useState<ActivityInfo["type"] | null>(null);
+  // dayKey is TODAY or a "YYYY-MM-DD" past date -- lets save/delete know
+  // which bucket to refresh regardless of where the row being edited lives.
+  const [expandedType, setExpandedType] = useState<ActivityType | null>(null);
+  const [editingContext, setEditingContext] = useState<{ id: string; dayKey: string } | null>(null);
   const [draftCaregiverId, setDraftCaregiverId] = useState<string | null>(null);
   const [draftMealQuality, setDraftMealQuality] = useState<ActivityInfo["mealQuality"]>(null);
   const [draftMilkOunces, setDraftMilkOunces] = useState("");
@@ -77,40 +97,85 @@ export default function MarAntoniaHomePage() {
 
   const myCaregiverId = useMemo(() => caregivers.find((c) => c.isYou)?.id ?? null, [caregivers]);
 
+  const reloadToday = useCallback(async () => {
+    const res = await fetch("/api/mar-antonia/activities");
+    const { activities } = await res.json();
+    setTodayActivities(activities);
+  }, []);
+
+  const reloadPastDay = useCallback(async (date: string) => {
+    const res = await fetch(`/api/mar-antonia/activities?date=${date}`);
+    const { activities } = await res.json();
+    setPastDayActivities((prev) => ({ ...prev, [date]: activities }));
+  }, []);
+
+  const reloadPastDaysSummary = useCallback(async () => {
+    const res = await fetch("/api/mar-antonia/activities/days");
+    const { days } = await res.json();
+    setPastDays(days);
+  }, []);
+
   const load = useCallback(async () => {
     const currentRes = await fetch("/api/mar-antonia/children/current");
     if (!currentRes.ok) return;
     const { child: c } = await currentRes.json();
     setChild(c);
 
-    const [caregiversRes, activitiesRes] = await Promise.all([
-      fetch(`/api/mar-antonia/children/${c.id}/caregivers`),
-      fetch("/api/mar-antonia/activities"),
-    ]);
+    const caregiversRes = await fetch(`/api/mar-antonia/children/${c.id}/caregivers`);
     const { caregivers: cg } = await caregiversRes.json();
-    const { activities: acts } = await activitiesRes.json();
     setCaregivers(cg);
-    setActivities(acts);
+
+    await Promise.all([reloadToday(), reloadPastDaysSummary()]);
     setLoading(false);
-  }, []);
+  }, [reloadToday, reloadPastDaysSummary]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load on mount
     load();
   }, [load]);
 
-  function openPanel(type: ActivityInfo["type"]) {
-    if (expandedType === type) {
-      setExpandedType(null);
-      return;
-    }
-    setExpandedType(type);
+  function resetDraft() {
     setError(null);
-    setDraftCaregiverId(myCaregiverId);
     setDraftMealQuality(null);
     setDraftMilkOunces("");
     setDraftWakeMood(null);
     setDraftDiaperContent(null);
+  }
+
+  function openCreate(type: ActivityType) {
+    if (!editingContext && expandedType === type) {
+      setExpandedType(null);
+      return;
+    }
+    setEditingContext(null);
+    setExpandedType(type);
+    resetDraft();
+    setDraftCaregiverId(myCaregiverId);
+  }
+
+  function openEdit(activity: ActivityInfo, dayKey: string) {
+    setEditingContext({ id: activity.id, dayKey });
+    setExpandedType(activity.type);
+    resetDraft();
+    setDraftCaregiverId(activity.caregiverId);
+    setDraftMealQuality(activity.mealQuality);
+    setDraftMilkOunces(activity.milkOunces != null ? String(activity.milkOunces) : "");
+    setDraftWakeMood(activity.wakeMood);
+    setDraftDiaperContent(activity.diaperContent);
+  }
+
+  function closePanel() {
+    setExpandedType(null);
+    setEditingContext(null);
+  }
+
+  async function afterMutation(dayKey: string) {
+    if (dayKey === TODAY) {
+      await reloadToday();
+    } else {
+      await reloadPastDay(dayKey);
+      await reloadPastDaysSummary();
+    }
   }
 
   async function saveActivity() {
@@ -136,28 +201,68 @@ export default function MarAntoniaHomePage() {
       return;
     }
 
+    const detail = {
+      mealQuality: expandedType === "MEAL" ? draftMealQuality : undefined,
+      milkOunces: expandedType === "MILK" ? Number(draftMilkOunces) : undefined,
+      wakeMood: expandedType === "NIGHT_WAKE" ? draftWakeMood : undefined,
+      diaperContent: expandedType === "DIAPER" ? draftDiaperContent : undefined,
+    };
+
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/mar-antonia/activities", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: expandedType,
-        caregiverId: draftCaregiverId,
-        mealQuality: expandedType === "MEAL" ? draftMealQuality : undefined,
-        milkOunces: expandedType === "MILK" ? Number(draftMilkOunces) : undefined,
-        wakeMood: expandedType === "NIGHT_WAKE" ? draftWakeMood : undefined,
-        diaperContent: expandedType === "DIAPER" ? draftDiaperContent : undefined,
-      }),
-    });
+    const res = editingContext
+      ? await fetch(`/api/mar-antonia/activities/${editingContext.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caregiverId: draftCaregiverId, ...detail }),
+        })
+      : await fetch("/api/mar-antonia/activities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: expandedType, caregiverId: draftCaregiverId, ...detail }),
+        });
     setSaving(false);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       setError(body.error ?? "No se pudo guardar. Inténtalo de nuevo.");
       return;
     }
-    setExpandedType(null);
-    load();
+    const dayKey = editingContext?.dayKey ?? TODAY;
+    closePanel();
+    afterMutation(dayKey);
+  }
+
+  async function deleteActivity() {
+    if (!editingContext) return;
+    setSaving(true);
+    await fetch(`/api/mar-antonia/activities/${editingContext.id}`, { method: "DELETE" });
+    setSaving(false);
+    const dayKey = editingContext.dayKey;
+    closePanel();
+    afterMutation(dayKey);
+  }
+
+  function handlePastDayToggle(date: string, open: boolean) {
+    if (open && !pastDayActivities[date]) reloadPastDay(date);
+  }
+
+  function renderRow(a: ActivityInfo, dayKey: string) {
+    const caregiverRole = caregivers.find((c) => c.id === a.caregiverId)?.role;
+    const detail = activityDetail(a);
+    return (
+      <li key={a.id}>
+        <button
+          onClick={() => openEdit(a, dayKey)}
+          className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-surface px-3 py-2 text-left text-sm hover:border-white/30 transition-colors"
+        >
+          <span className="text-lg">{TYPE_CONFIG[a.type].icon}</span>
+          <span className="flex-1">{TYPE_CONFIG[a.type].label}</span>
+          <span className="text-muted">{formatTime(a.occurredAt)}</span>
+          {caregiverRole && <span className="text-xs text-neutral-500">{ROLE_LABEL[caregiverRole]}</span>}
+          {detail && <span className="text-xs font-semibold text-accent-hover">{detail}</span>}
+        </button>
+      </li>
+    );
   }
 
   if (loading || !child) {
@@ -176,12 +281,14 @@ export default function MarAntoniaHomePage() {
       </div>
 
       <div className="grid grid-cols-5 gap-2">
-        {(Object.keys(TYPE_CONFIG) as ActivityInfo["type"][]).map((type) => (
+        {(Object.keys(TYPE_CONFIG) as ActivityType[]).map((type) => (
           <button
             key={type}
-            onClick={() => openPanel(type)}
+            onClick={() => openCreate(type)}
             className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-3 text-xs font-semibold transition-colors ${
-              expandedType === type ? "border-accent bg-accent/15 text-white" : "border-border bg-surface text-neutral-300 hover:border-white/30"
+              !editingContext && expandedType === type
+                ? "border-accent bg-accent/15 text-white"
+                : "border-border bg-surface text-neutral-300 hover:border-white/30"
             }`}
           >
             <span className="text-xl">{TYPE_CONFIG[type].icon}</span>
@@ -268,39 +375,55 @@ export default function MarAntoniaHomePage() {
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 
-          <button
-            onClick={saveActivity}
-            disabled={saving}
-            className="rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
-          >
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={saveActivity}
+              disabled={saving}
+              className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+            >
+              {saving ? "Guardando…" : editingContext ? "Guardar cambios" : "Guardar"}
+            </button>
+            {editingContext && (
+              <button
+                onClick={deleteActivity}
+                disabled={saving}
+                className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-semibold text-red-400 hover:border-red-400/50 transition-colors disabled:opacity-50"
+              >
+                Eliminar
+              </button>
+            )}
+            <button onClick={closePanel} className="rounded-lg px-3 py-2.5 text-sm text-muted hover:text-white transition-colors">
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 
-      {activities.length === 0 ? (
+      {todayActivities.length === 0 ? (
         <p className="rounded-2xl border border-border bg-surface p-6 text-center text-sm text-muted">
           Todavía no registraste nada hoy.
         </p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
-          {activities.map((a) => {
-            const caregiverRole = caregivers.find((c) => c.id === a.caregiverId)?.role;
-            const detail = activityDetail(a);
-            return (
-              <li
-                key={a.id}
-                className="flex items-center gap-2 rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm"
-              >
-                <span className="text-lg">{TYPE_CONFIG[a.type].icon}</span>
-                <span className="flex-1">{TYPE_CONFIG[a.type].label}</span>
-                <span className="text-muted">{formatTime(a.occurredAt)}</span>
-                {caregiverRole && <span className="text-xs text-neutral-500">{ROLE_LABEL[caregiverRole]}</span>}
-                {detail && <span className="text-xs font-semibold text-accent-hover">{detail}</span>}
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="flex flex-col gap-1.5">{todayActivities.map((a) => renderRow(a, TODAY))}</ul>
+      )}
+
+      {pastDays.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {pastDays.map((day) => (
+            <details
+              key={day.date}
+              className="rounded-xl border border-border bg-surface p-3"
+              onToggle={(e) => handlePastDayToggle(day.date, e.currentTarget.open)}
+            >
+              <summary className="cursor-pointer text-sm font-semibold capitalize text-muted">
+                {formatDay(day.date)} ({day.count})
+              </summary>
+              <ul className="mt-3 flex flex-col gap-1.5">
+                {(pastDayActivities[day.date] ?? []).map((a) => renderRow(a, day.date))}
+              </ul>
+            </details>
+          ))}
+        </div>
       )}
     </div>
   );
