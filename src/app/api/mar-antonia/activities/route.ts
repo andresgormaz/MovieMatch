@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 }
 
 const createSchema = z.object({
-  type: z.enum(["MEAL", "SLEEP", "MILK", "NIGHT_WAKE", "DIAPER"]),
+  type: z.enum(["MEAL", "SLEEP", "MILK", "NIGHT_WAKE", "DIAPER", "BATH", "OUTING"]),
   caregiverId: z.string(),
   // Defaults to now() at the DB level when omitted -- the UI always sends
   // one (pre-filled with the current time, editable before saving). For
@@ -44,12 +44,15 @@ const createSchema = z.object({
   // only set later via POST /api/mar-antonia/activities/sleep ("fin").
   occurredAt: z.string().datetime().optional(),
   mealQuality: z.enum(["GOOD", "REGULAR", "BAD"]).optional(),
-  milkOunces: z.number().positive().optional(),
+  // A button picker, not a free-form amount -- these are the only three
+  // options offered.
+  milkOunces: z.union([z.literal(4), z.literal(6), z.literal(8)]).optional(),
   wakeMood: z.enum(["CALM", "CRYING"]).optional(),
   diaperContent: z.enum(["PEE", "POOP"]).optional(),
   diaperAmount: z.enum(["LITTLE", "A_LOT"]).nullable().optional(),
   diaperConsistency: z.enum(["NORMAL", "HARD", "DIARRHEA"]).nullable().optional(),
   sleepType: z.enum(["SIESTA", "NOCHE"]).optional(),
+  outingType: z.enum(["CAR", "PARK", "FAMILY_VISIT", "OTHER"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -109,6 +112,7 @@ export async function POST(request: Request) {
       diaperAmount: parsed.data.diaperAmount,
       diaperConsistency: parsed.data.diaperConsistency,
       sleepType: parsed.data.sleepType,
+      outingType: parsed.data.outingType,
     },
     include: { caregiver: { select: CAREGIVER_SELECT } },
   });

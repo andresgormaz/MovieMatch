@@ -22,12 +22,13 @@ const patchSchema = z.object({
   caregiverId: z.string().optional(),
   occurredAt: z.string().datetime().optional(),
   mealQuality: z.enum(["GOOD", "REGULAR", "BAD"]).optional(),
-  milkOunces: z.number().positive().optional(),
+  milkOunces: z.union([z.literal(4), z.literal(6), z.literal(8)]).optional(),
   wakeMood: z.enum(["CALM", "CRYING"]).optional(),
   diaperContent: z.enum(["PEE", "POOP"]).optional(),
   diaperAmount: z.enum(["LITTLE", "A_LOT"]).nullable().optional(),
   diaperConsistency: z.enum(["NORMAL", "HARD", "DIARRHEA"]).nullable().optional(),
   sleepType: z.enum(["SIESTA", "NOCHE"]).optional(),
+  outingType: z.enum(["CAR", "PARK", "FAMILY_VISIT", "OTHER"]).optional(),
   // Explicit null clears it back to "still in progress" -- e.g. fixing a
   // premature "fin"/"despertar" tap.
   sleepEndedAt: z.string().datetime().nullable().optional(),
@@ -99,6 +100,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     sleepType: mergedField(parsed.data.sleepType, activity.sleepType),
     sleepEndedAt: mergedField(parsed.data.sleepEndedAt, activity.sleepEndedAt?.toISOString() ?? null),
     sleepAchievedAt: mergedField(parsed.data.sleepAchievedAt, activity.sleepAchievedAt?.toISOString() ?? null),
+    outingType: mergedField(parsed.data.outingType, activity.outingType),
   });
   if (detailError) return NextResponse.json({ error: detailError }, { status: 400 });
 
@@ -116,6 +118,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       sleepType: parsed.data.sleepType,
       sleepEndedAt: dateOrNull(parsed.data.sleepEndedAt),
       sleepAchievedAt: dateOrNull(parsed.data.sleepAchievedAt),
+      outingType: parsed.data.outingType,
     },
     include: { caregiver: { select: CAREGIVER_SELECT } },
   });

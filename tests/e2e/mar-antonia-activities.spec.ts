@@ -37,9 +37,9 @@ test.describe("MarAntonia quick-log", () => {
       await expect(page.locator("ul li", { hasText: "Siesta" })).toContainText("en curso");
 
       await page.getByRole("button", { name: "Leche" }).click();
-      await page.fill("#milk-ounces", "4.5");
+      await page.getByRole("button", { name: "6 oz" }).click();
       await page.getByRole("button", { name: "Guardar" }).click();
-      await expect(page.locator("ul li", { hasText: "Leche" })).toContainText("4.5 oz");
+      await expect(page.locator("ul li", { hasText: "Leche" })).toContainText("6 oz");
 
       await page.getByRole("button", { name: "Despertada" }).click();
       await page.getByRole("button", { name: "Llorando" }).click();
@@ -53,8 +53,17 @@ test.describe("MarAntonia quick-log", () => {
       await page.getByRole("button", { name: "Guardar" }).click();
       await expect(page.locator("ul li", { hasText: "Pañal" })).toContainText("Caca (mucha, dura)");
 
+      await page.getByRole("button", { name: "Baño" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.locator("ul li", { hasText: "Baño" })).toBeVisible();
+
+      await page.getByRole("button", { name: "Paseo" }).click();
+      await page.getByRole("button", { name: "Parque" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.locator("ul li", { hasText: "Paseo" })).toContainText("Parque");
+
       const rows = page.locator("ul li");
-      await expect(rows).toHaveCount(5);
+      await expect(rows).toHaveCount(7);
       for (const row of await rows.all()) {
         await expect(row).toContainText("Mamá");
       }
@@ -75,7 +84,7 @@ test.describe("MarAntonia quick-log", () => {
       await page.getByRole("button", { name: "Leche" }).click();
       await expect(page.locator("#activity-time")).not.toHaveValue("");
       await page.fill("#activity-time", "08:15");
-      await page.fill("#milk-ounces", "4");
+      await page.getByRole("button", { name: "4 oz" }).click();
       await page.getByRole("button", { name: "Guardar" }).click();
       await expect(page.locator("ul li", { hasText: "Leche" })).toBeVisible();
 
@@ -107,9 +116,52 @@ test.describe("MarAntonia quick-log", () => {
 
       await page.getByRole("button", { name: "Leche" }).click();
       await page.getByRole("button", { name: "Guardar" }).click();
-      await expect(page.getByText("Escribe cuántas onzas.")).toBeVisible();
+      await expect(page.getByText("Elige cuántas onzas.")).toBeVisible();
+      await expect(page.locator("ul li")).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Paseo" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.getByText("Elige el tipo de paseo.")).toBeVisible();
       await expect(page.locator("ul li")).toHaveCount(0);
     } finally {
+      runFixture("delete", email);
+    }
+  });
+
+  test("editing a Baño entry reassigns its caregiver, and a Paseo entry can change its destination", async ({
+    page,
+  }) => {
+    const email = "e2e-marantonia-bath-outing@example.com";
+    const output = runFixture("create-with-child", email, "Bebé de Prueba", "MAMA");
+    const { childId } = JSON.parse(output.trim().split("\n").pop()!) as { childId: string };
+    runFixture("add-caregiver", childId, "e2e-marantonia-bath-outing-papa@example.com", "PAPA");
+
+    try {
+      await login(page, email);
+      await page.goto("/mar-antonia");
+
+      // Baño has no detail field at all -- just caregiver + time.
+      await page.getByRole("button", { name: "Baño" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.locator("ul li", { hasText: "Baño" })).toContainText("Mamá");
+
+      await page.locator("ul li", { hasText: "Baño" }).click();
+      await page.getByRole("button", { name: "Papá" }).click();
+      await page.getByRole("button", { name: "Guardar cambios" }).click();
+      await expect(page.locator("ul li", { hasText: "Baño" })).toContainText("Papá");
+
+      // Paseo's destination is editable like any other detail field.
+      await page.getByRole("button", { name: "Paseo" }).click();
+      await page.getByRole("button", { name: "En coche" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.locator("ul li", { hasText: "Paseo" })).toContainText("En coche");
+
+      await page.locator("ul li", { hasText: "Paseo" }).click();
+      await page.getByRole("button", { name: "Otro" }).click();
+      await page.getByRole("button", { name: "Guardar cambios" }).click();
+      await expect(page.locator("ul li", { hasText: "Paseo" })).toContainText("Otro");
+    } finally {
+      runFixture("delete", "e2e-marantonia-bath-outing-papa@example.com");
       runFixture("delete", email);
     }
   });

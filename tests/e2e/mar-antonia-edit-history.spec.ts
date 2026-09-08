@@ -27,7 +27,7 @@ test.describe("MarAntonia edit/delete and day history", () => {
       await page.goto("/mar-antonia");
 
       await page.getByRole("button", { name: "Leche" }).click();
-      await page.fill("#milk-ounces", "4");
+      await page.getByRole("button", { name: "4 oz" }).click();
       await page.getByRole("button", { name: "Guardar" }).click();
       await expect(page.locator("ul li", { hasText: "Leche" })).toContainText("4 oz");
       await expect(page.locator("ul li", { hasText: "Leche" })).toContainText("Mamá");
@@ -35,9 +35,9 @@ test.describe("MarAntonia edit/delete and day history", () => {
       // Editing: click the row to reopen the panel pre-filled, switch the
       // caregiver and the ounces, save.
       await page.locator("ul li", { hasText: "Leche" }).click();
-      await expect(page.locator("#milk-ounces")).toHaveValue("4");
+      await expect(page.locator(".gap-3").getByRole("button", { name: "4 oz" })).toHaveClass(/border-accent/);
       await page.getByRole("button", { name: "Papá" }).click();
-      await page.fill("#milk-ounces", "6");
+      await page.getByRole("button", { name: "6 oz" }).click();
       await page.getByRole("button", { name: "Guardar cambios" }).click();
       await expect(page.locator("ul li", { hasText: "Leche" })).toContainText("6 oz");
       await expect(page.locator("ul li", { hasText: "Leche" })).toContainText("Papá");

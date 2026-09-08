@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SLEEP_TYPE_LABEL } from "@/lib/marAntonia/activityTypes";
+import { SLEEP_TYPE_LABEL, OUTING_TYPE_LABEL, MILK_OUNCES_OPTIONS } from "@/lib/marAntonia/activityTypes";
 
 interface ChildInfo {
   id: string;
@@ -14,8 +14,9 @@ interface CaregiverInfo {
   role: "MAMA" | "PAPA";
   isYou: boolean;
 }
-type ActivityType = "MEAL" | "SLEEP" | "MILK" | "NIGHT_WAKE" | "DIAPER";
+type ActivityType = "MEAL" | "SLEEP" | "MILK" | "NIGHT_WAKE" | "DIAPER" | "BATH" | "OUTING";
 type SleepType = "SIESTA" | "NOCHE";
+type OutingType = "CAR" | "PARK" | "FAMILY_VISIT" | "OTHER";
 interface ActivityInfo {
   id: string;
   type: ActivityType;
@@ -30,6 +31,7 @@ interface ActivityInfo {
   sleepType: SleepType | null;
   sleepEndedAt: string | null;
   sleepAchievedAt: string | null;
+  outingType: OutingType | null;
 }
 interface DaySummary {
   date: string;
@@ -46,6 +48,8 @@ const TYPE_CONFIG: Record<Exclude<ActivityType, "SLEEP">, { label: string; icon:
   MILK: { label: "Leche", icon: "🍼" },
   NIGHT_WAKE: { label: "Despertada", icon: "🌙" },
   DIAPER: { label: "Pañal", icon: "🧷" },
+  BATH: { label: "Baño", icon: "🛁" },
+  OUTING: { label: "Paseo", icon: "🚗" },
 };
 
 const SLEEP_TYPE_ICON: Record<SleepType, string> = {
@@ -73,6 +77,8 @@ const QUICK_LOG_BUTTONS: QuickLogButton[] = [
   },
   { key: "DIAPER", label: TYPE_CONFIG.DIAPER.label, icon: TYPE_CONFIG.DIAPER.icon, activityType: "DIAPER" },
   { key: "DORMIR", label: "Dormir", icon: SLEEP_TYPE_ICON.NOCHE, activityType: "SLEEP", sleepType: "NOCHE" },
+  { key: "BATH", label: TYPE_CONFIG.BATH.label, icon: TYPE_CONFIG.BATH.icon, activityType: "BATH" },
+  { key: "OUTING", label: TYPE_CONFIG.OUTING.label, icon: TYPE_CONFIG.OUTING.icon, activityType: "OUTING" },
 ];
 
 const MEAL_QUALITY_LABEL: Record<NonNullable<ActivityInfo["mealQuality"]>, string> = {
@@ -121,6 +127,7 @@ function activityDetail(a: ActivityInfo): string | null {
     const toSleep = `tardó ${formatDurationMinutes(a.occurredAt, a.sleepAchievedAt)} en dormirse`;
     return a.sleepEndedAt ? `${toSleep} · hasta ${formatTime(a.sleepEndedAt)}` : `${toSleep} · durmiendo`;
   }
+  if (a.type === "OUTING" && a.outingType) return OUTING_TYPE_LABEL[a.outingType];
   return null;
 }
 
@@ -186,6 +193,7 @@ export default function MarAntoniaHomePage() {
   const [draftDiaperContent, setDraftDiaperContent] = useState<ActivityInfo["diaperContent"]>(null);
   const [draftDiaperAmount, setDraftDiaperAmount] = useState<ActivityInfo["diaperAmount"]>(null);
   const [draftDiaperConsistency, setDraftDiaperConsistency] = useState<ActivityInfo["diaperConsistency"]>(null);
+  const [draftOutingType, setDraftOutingType] = useState<OutingType | null>(null);
   const [draftSleepType, setDraftSleepType] = useState<SleepType | null>(null);
   // Create-mode only ("¿inicio o fin?", or for NOCHE "¿hacer dormir o
   // despertar?") -- edit mode fixes both times of an existing session
@@ -284,6 +292,7 @@ export default function MarAntoniaHomePage() {
     setDraftDiaperContent(null);
     setDraftDiaperAmount(null);
     setDraftDiaperConsistency(null);
+    setDraftOutingType(null);
     setDraftSleepType(null);
     setDraftSleepPhase(null);
     setDraftSleepSubPhase(null);
@@ -330,6 +339,7 @@ export default function MarAntoniaHomePage() {
     setDraftDiaperContent(activity.diaperContent);
     setDraftDiaperAmount(activity.diaperAmount);
     setDraftDiaperConsistency(activity.diaperConsistency);
+    setDraftOutingType(activity.outingType);
     setDraftSleepType(activity.sleepType);
     const occurredAt = new Date(activity.occurredAt);
     setDraftBaseDate(occurredAt);
@@ -385,7 +395,7 @@ export default function MarAntoniaHomePage() {
       return;
     }
     if (expandedType === "MILK" && !draftMilkOunces) {
-      setError("Escribe cuántas onzas.");
+      setError("Elige cuántas onzas.");
       return;
     }
     if (expandedType === "NIGHT_WAKE" && !draftWakeMood) {
@@ -404,6 +414,10 @@ export default function MarAntoniaHomePage() {
       setError("Elige cómo era la caca.");
       return;
     }
+    if (expandedType === "OUTING" && !draftOutingType) {
+      setError("Elige el tipo de paseo.");
+      return;
+    }
 
     const [hours, minutes] = draftTime.split(":").map(Number);
     const occurredAt = new Date(draftBaseDate);
@@ -420,6 +434,7 @@ export default function MarAntoniaHomePage() {
       // PEE actually clears these instead of leaving the old values stored.
       diaperAmount: isPoop ? draftDiaperAmount : expandedType === "DIAPER" ? null : undefined,
       diaperConsistency: isPoop ? draftDiaperConsistency : expandedType === "DIAPER" ? null : undefined,
+      outingType: expandedType === "OUTING" ? draftOutingType : undefined,
     };
 
     setSaving(true);
@@ -855,20 +870,12 @@ export default function MarAntoniaHomePage() {
           )}
 
           {expandedType === "MILK" && (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="milk-ounces" className="text-sm font-semibold text-white">
-                ¿Cuántas onzas?
-              </label>
-              <input
-                id="milk-ounces"
-                type="number"
-                step="0.5"
-                min="0"
-                value={draftMilkOunces}
-                onChange={(e) => setDraftMilkOunces(e.target.value)}
-                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
-              />
-            </div>
+            <PillGroup
+              label="¿Cuántas onzas?"
+              options={MILK_OUNCES_OPTIONS.map((oz) => ({ value: String(oz), label: `${oz} oz` }))}
+              value={draftMilkOunces || null}
+              onChange={setDraftMilkOunces}
+            />
           )}
 
           {expandedType === "NIGHT_WAKE" && (
@@ -926,6 +933,20 @@ export default function MarAntoniaHomePage() {
                 </>
               )}
             </>
+          )}
+
+          {expandedType === "OUTING" && (
+            <PillGroup
+              label="¿A dónde?"
+              options={[
+                { value: "CAR" as const, label: "En coche" },
+                { value: "PARK" as const, label: "Parque" },
+                { value: "FAMILY_VISIT" as const, label: "Visita familia" },
+                { value: "OTHER" as const, label: "Otro" },
+              ]}
+              value={draftOutingType}
+              onChange={setDraftOutingType}
+            />
           )}
 
           {error && <p className="text-sm text-red-400">{error}</p>}

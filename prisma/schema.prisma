@@ -715,6 +715,8 @@ enum ChildActivityType {
   MILK
   NIGHT_WAKE
   DIAPER
+  BATH
+  OUTING
 }
 
 // SLEEP only -- siesta (nap) and noche (overnight sleep) are tracked as
@@ -751,6 +753,14 @@ enum DiaperConsistency {
   NORMAL
   HARD
   DIARRHEA
+}
+
+// OUTING only.
+enum OutingType {
+  CAR
+  PARK
+  FAMILY_VISIT
+  OTHER
 }
 
 model Child {
@@ -791,11 +801,12 @@ model ChildActivity {
   // shouldn't delete the history they logged.
   caregiverId   String?
   mealQuality   MealQuality?    // MEAL only
-  milkOunces    Float?          // MILK only
+  milkOunces    Float?          // MILK only -- always 4, 6, or 8 (see validateActivityDetail)
   wakeMood      WakeMood?       // NIGHT_WAKE only
   diaperContent DiaperContent?  // DIAPER only
   diaperAmount      DiaperAmount?      // DIAPER + POOP only
   diaperConsistency DiaperConsistency? // DIAPER + POOP only
+  outingType    OutingType?     // OUTING only. BATH has no detail field at all -- just occurredAt + caregiver.
   // SLEEP only -- occurredAt above doubles as the session's start time;
   // sleepEndedAt stays null while the nap/night is still in progress, and
   // "the last siesta/noche" a "fin" tap closes is whichever SLEEP row of

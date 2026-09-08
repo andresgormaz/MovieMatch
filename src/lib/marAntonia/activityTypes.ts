@@ -1,4 +1,4 @@
-import type { ChildActivityType, SleepType } from "@/generated/prisma/enums";
+import type { ChildActivityType, OutingType, SleepType } from "@/generated/prisma/enums";
 
 export const ACTIVITY_TYPE_LABEL: Record<ChildActivityType, string> = {
   MEAL: "Comida",
@@ -6,7 +6,20 @@ export const ACTIVITY_TYPE_LABEL: Record<ChildActivityType, string> = {
   MILK: "Leche",
   NIGHT_WAKE: "Despertada",
   DIAPER: "Pañal",
+  BATH: "Baño",
+  OUTING: "Paseo",
 };
+
+export const OUTING_TYPE_LABEL: Record<OutingType, string> = {
+  CAR: "En coche",
+  PARK: "Parque",
+  FAMILY_VISIT: "Visita familia",
+  OTHER: "Otro",
+};
+
+// MILK only ever logs one of these three amounts -- a button picker, not a
+// free-form number.
+export const MILK_OUNCES_OPTIONS = [4, 6, 8] as const;
 
 // Display label only -- the enum value stays NOCHE (matches the schema/
 // migration history), but the user-facing category is called "Dormir" now
@@ -26,7 +39,8 @@ export type DetailField =
   | "diaperConsistency"
   | "sleepType"
   | "sleepEndedAt"
-  | "sleepAchievedAt";
+  | "sleepAchievedAt"
+  | "outingType";
 
 export const DETAIL_FIELDS: DetailField[] = [
   "mealQuality",
@@ -38,15 +52,19 @@ export const DETAIL_FIELDS: DetailField[] = [
   "sleepType",
   "sleepEndedAt",
   "sleepAchievedAt",
+  "outingType",
 ];
 
-// MEAL/MILK/NIGHT_WAKE each have at most one detail field. DIAPER and SLEEP
-// are the exceptions -- see validateDiaperDetail/validateSleepDetail below --
-// so they're left out here and handled on their own.
+// MEAL/MILK/NIGHT_WAKE/OUTING each have at most one detail field, and BATH
+// has none at all. DIAPER and SLEEP are the exceptions -- see
+// validateDiaperDetail/validateSleepDetail below -- so they're left out here
+// and handled on their own.
 const SIMPLE_REQUIRED_FIELD: Partial<Record<ChildActivityType, DetailField | null>> = {
   MEAL: "mealQuality",
   MILK: "milkOunces",
   NIGHT_WAKE: "wakeMood",
+  OUTING: "outingType",
+  BATH: null,
 };
 
 const SLEEP_ONLY_FIELDS = ["sleepType", "sleepEndedAt", "sleepAchievedAt"] as const;
@@ -89,7 +107,7 @@ export function validateActivityDetail(
 // when it's PEE, neither applies -- a pee diaper has no amount/consistency
 // to report.
 function validateDiaperDetail(data: Partial<Record<DetailField, unknown>>): string | null {
-  if (data.mealQuality != null || data.milkOunces != null || data.wakeMood != null) {
+  if (data.mealQuality != null || data.milkOunces != null || data.wakeMood != null || data.outingType != null) {
     return "Ese detalle no aplica a este tipo de registro";
   }
   if (data.sleepType != null || data.sleepEndedAt != null || data.sleepAchievedAt != null) {
@@ -119,7 +137,8 @@ function validateSleepDetail(data: Partial<Record<DetailField, unknown>>): strin
     data.wakeMood != null ||
     data.diaperContent != null ||
     data.diaperAmount != null ||
-    data.diaperConsistency != null
+    data.diaperConsistency != null ||
+    data.outingType != null
   ) {
     return "Ese detalle no aplica a este tipo de registro";
   }
