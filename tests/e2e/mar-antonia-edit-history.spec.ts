@@ -52,6 +52,48 @@ test.describe("MarAntonia edit/delete and day history", () => {
     }
   });
 
+  test("either caregiver can see and edit/delete entries the other one logged", async ({ page }) => {
+    const mamaEmail = "e2e-marantonia-shared-mama@example.com";
+    const papaEmail = "e2e-marantonia-shared-papa@example.com";
+    const output = runFixture("create-with-child", mamaEmail, "Bebé Compartido", "MAMA");
+    const { childId } = JSON.parse(output.trim().split("\n").pop()!) as { childId: string };
+    runFixture("add-caregiver", childId, papaEmail, "PAPA");
+
+    try {
+      await login(page, mamaEmail);
+      await page.goto("/mar-antonia");
+      await page.getByRole("button", { name: "Comida" }).click();
+      await page.getByRole("button", { name: "Bien" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.locator("ul li", { hasText: "Comida" })).toContainText("Mamá");
+
+      // Switching to the other caregiver's own session -- clear the
+      // cookie first, since /login redirects away when already
+      // authenticated. No ownership check should hide or lock mamá's
+      // entry from papá.
+      await page.context().clearCookies();
+      await login(page, papaEmail);
+      await page.goto("/mar-antonia");
+      await expect(page.locator("ul li", { hasText: "Comida" })).toContainText("Bien");
+      await expect(page.locator("ul li", { hasText: "Comida" })).toContainText("Mamá");
+
+      await page.locator("ul li", { hasText: "Comida" }).click();
+      await page.getByRole("button", { name: "Regular" }).click();
+      await page.getByRole("button", { name: "Guardar cambios" }).click();
+      await expect(page.locator("ul li", { hasText: "Comida" })).toContainText("Regular");
+
+      // Confirm server-side, then delete an entry papá didn't create.
+      await page.reload();
+      await expect(page.locator("ul li", { hasText: "Comida" })).toContainText("Regular");
+      await page.locator("ul li", { hasText: "Comida" }).click();
+      await page.getByRole("button", { name: "Eliminar" }).click();
+      await expect(page.getByText("Todavía no registraste nada hoy.")).toBeVisible();
+    } finally {
+      runFixture("delete", papaEmail);
+      runFixture("delete", mamaEmail);
+    }
+  });
+
   test("editing a POOP diaper back to PEE clears its amount and consistency", async ({ page }) => {
     const email = "e2e-marantonia-diaper@example.com";
     runFixture("create-with-child", email, "Bebé Pañal", "MAMA");
