@@ -244,16 +244,19 @@ export default function MarAntoniaHomePage() {
   }, []);
 
   const load = useCallback(async () => {
-    const currentRes = await fetch("/api/mar-antonia/children/current");
+    // Every request here is a network round trip to a remote (Turso)
+    // database, not a local query -- today's feed and the day summary don't
+    // depend on the child/caregivers bootstrap at all, so firing all three
+    // at once instead of waiting on the bootstrap first cuts real load time.
+    const [currentRes] = await Promise.all([
+      fetch("/api/mar-antonia/children/current"),
+      reloadToday(),
+      reloadPastDaysSummary(),
+    ]);
     if (!currentRes.ok) return;
-    const { child: c } = await currentRes.json();
+    const { child: c, caregivers: cg } = await currentRes.json();
     setChild(c);
-
-    const caregiversRes = await fetch(`/api/mar-antonia/children/${c.id}/caregivers`);
-    const { caregivers: cg } = await caregiversRes.json();
     setCaregivers(cg);
-
-    await Promise.all([reloadToday(), reloadPastDaysSummary()]);
     setLoading(false);
   }, [reloadToday, reloadPastDaysSummary]);
 

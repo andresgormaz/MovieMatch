@@ -32,12 +32,9 @@ export default function MarAntoniaAjustesPage() {
     // guarantees at least one child exists for this user; this page only
     // ever operates on the first one, same scope as the Inicio page.
     const currentRes = await fetch("/api/mar-antonia/children/current");
-    const { child: c } = await currentRes.json();
+    const { child: c, caregivers: cg } = await currentRes.json();
     setChild(c);
     setNameDraft(c.name);
-
-    const caregiversRes = await fetch(`/api/mar-antonia/children/${c.id}/caregivers`);
-    const { caregivers: cg } = await caregiversRes.json();
     setCaregivers(cg);
     setLoading(false);
   }, []);
