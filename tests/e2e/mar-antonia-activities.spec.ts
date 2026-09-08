@@ -29,10 +29,12 @@ test.describe("MarAntonia quick-log", () => {
       await page.getByRole("button", { name: "Guardar" }).click();
       await expect(page.locator("ul li", { hasText: "Comida" })).toContainText("Bien");
 
-      // Siesta has no detail field -- just the caregiver toggle.
-      await page.getByRole("button", { name: "Siesta" }).click();
+      // Siesta needs a phase (inicio/fin) before the usual caregiver+time
+      // fields apply.
+      await page.locator(".grid-cols-3").getByRole("button", { name: "Siesta" }).click();
+      await page.locator(".gap-3").getByRole("button", { name: "Inicio" }).click();
       await page.getByRole("button", { name: "Guardar" }).click();
-      await expect(page.locator("ul li", { hasText: "Siesta" })).toBeVisible();
+      await expect(page.locator("ul li", { hasText: "Siesta" })).toContainText("en curso");
 
       await page.getByRole("button", { name: "Leche" }).click();
       await page.fill("#milk-ounces", "4.5");

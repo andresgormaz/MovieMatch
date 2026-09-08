@@ -711,10 +711,18 @@ enum CaregiverRole {
 
 enum ChildActivityType {
   MEAL
-  NAP
+  SLEEP
   MILK
   NIGHT_WAKE
   DIAPER
+}
+
+// SLEEP only -- siesta (nap) and noche (overnight sleep) are tracked as
+// separate open/closed sessions rather than sharing one "last sleep" slot,
+// so a nap can be logged mid-way through an ongoing night sleep.
+enum SleepType {
+  SIESTA
+  NOCHE
 }
 
 enum MealQuality {
@@ -788,6 +796,12 @@ model ChildActivity {
   diaperContent DiaperContent?  // DIAPER only
   diaperAmount      DiaperAmount?      // DIAPER + POOP only
   diaperConsistency DiaperConsistency? // DIAPER + POOP only
+  // SLEEP only -- occurredAt above doubles as the session's start time;
+  // sleepEndedAt stays null while the nap/night is still in progress, and
+  // "the last siesta/noche" a "fin" tap closes is whichever SLEEP row of
+  // that sleepType still has sleepEndedAt null for this child.
+  sleepType    SleepType?
+  sleepEndedAt DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SLEEP_TYPE_LABEL } from "@/lib/marAntonia/activityTypes";
 
 interface ChildInfo {
   id: string;
@@ -13,7 +14,8 @@ interface CaregiverInfo {
   role: "MAMA" | "PAPA";
   isYou: boolean;
 }
-type ActivityType = "MEAL" | "NAP" | "MILK" | "NIGHT_WAKE" | "DIAPER";
+type ActivityType = "MEAL" | "SLEEP" | "MILK" | "NIGHT_WAKE" | "DIAPER";
+type SleepType = "SIESTA" | "NOCHE";
 interface ActivityInfo {
   id: string;
   type: ActivityType;
@@ -25,6 +27,8 @@ interface ActivityInfo {
   diaperContent: "PEE" | "POOP" | null;
   diaperAmount: "LITTLE" | "A_LOT" | null;
   diaperConsistency: "NORMAL" | "HARD" | "DIARRHEA" | null;
+  sleepType: SleepType | null;
+  sleepEndedAt: string | null;
 }
 interface DaySummary {
   date: string;
@@ -33,13 +37,42 @@ interface DaySummary {
 
 const ROLE_LABEL: Record<CaregiverInfo["role"], string> = { MAMA: "Mamá", PAPA: "Papá" };
 
-const TYPE_CONFIG: Record<ActivityType, { label: string; icon: string }> = {
+// SLEEP has no entry here -- siesta and dormir (overnight) are two fully
+// separate quick-log buttons with their own icon/label, keyed by sleepType
+// instead of activity type. See QUICK_LOG_BUTTONS and activityIconLabel.
+const TYPE_CONFIG: Record<Exclude<ActivityType, "SLEEP">, { label: string; icon: string }> = {
   MEAL: { label: "Comida", icon: "🍽️" },
-  NAP: { label: "Siesta", icon: "😴" },
   MILK: { label: "Leche", icon: "🍼" },
   NIGHT_WAKE: { label: "Despertada", icon: "🌙" },
   DIAPER: { label: "Pañal", icon: "🧷" },
 };
+
+const SLEEP_TYPE_ICON: Record<SleepType, string> = {
+  SIESTA: "😴",
+  NOCHE: "🛌",
+};
+
+type QuickLogButton = {
+  key: string;
+  label: string;
+  icon: string;
+  activityType: ActivityType;
+  sleepType?: SleepType;
+};
+
+const QUICK_LOG_BUTTONS: QuickLogButton[] = [
+  { key: "MEAL", label: TYPE_CONFIG.MEAL.label, icon: TYPE_CONFIG.MEAL.icon, activityType: "MEAL" },
+  { key: "SIESTA", label: "Siesta", icon: SLEEP_TYPE_ICON.SIESTA, activityType: "SLEEP", sleepType: "SIESTA" },
+  { key: "MILK", label: TYPE_CONFIG.MILK.label, icon: TYPE_CONFIG.MILK.icon, activityType: "MILK" },
+  {
+    key: "NIGHT_WAKE",
+    label: TYPE_CONFIG.NIGHT_WAKE.label,
+    icon: TYPE_CONFIG.NIGHT_WAKE.icon,
+    activityType: "NIGHT_WAKE",
+  },
+  { key: "DIAPER", label: TYPE_CONFIG.DIAPER.label, icon: TYPE_CONFIG.DIAPER.icon, activityType: "DIAPER" },
+  { key: "DORMIR", label: "Dormir", icon: SLEEP_TYPE_ICON.NOCHE, activityType: "SLEEP", sleepType: "NOCHE" },
+];
 
 const MEAL_QUALITY_LABEL: Record<NonNullable<ActivityInfo["mealQuality"]>, string> = {
   GOOD: "Bien",
@@ -74,7 +107,22 @@ function activityDetail(a: ActivityInfo): string | null {
     }
     return DIAPER_CONTENT_LABEL[a.diaperContent];
   }
+  if (a.type === "SLEEP") {
+    return a.sleepEndedAt ? `hasta ${formatTime(a.sleepEndedAt)}` : "en curso";
+  }
   return null;
+}
+
+// Siesta and Dormir are separate categories from the user's point of view,
+// so a SLEEP row shows its own icon/label by sleepType instead of a generic
+// "Dormir" header for both (activityDetail above then only needs to carry
+// the en-curso/hasta-status suffix).
+function activityIconLabel(a: ActivityInfo): { icon: string; label: string } {
+  if (a.type === "SLEEP") {
+    const type = a.sleepType ?? "SIESTA";
+    return { icon: SLEEP_TYPE_ICON[type], label: SLEEP_TYPE_LABEL[type] };
+  }
+  return TYPE_CONFIG[a.type];
 }
 
 function formatTime(iso: string) {
@@ -119,6 +167,20 @@ export default function MarAntoniaHomePage() {
   const [draftDiaperContent, setDraftDiaperContent] = useState<ActivityInfo["diaperContent"]>(null);
   const [draftDiaperAmount, setDraftDiaperAmount] = useState<ActivityInfo["diaperAmount"]>(null);
   const [draftDiaperConsistency, setDraftDiaperConsistency] = useState<ActivityInfo["diaperConsistency"]>(null);
+  const [draftSleepType, setDraftSleepType] = useState<SleepType | null>(null);
+  // Create-mode only ("¿inicio o fin?") -- edit mode fixes both times of an
+  // existing session directly instead, see draftSleepEnded below.
+  const [draftSleepPhase, setDraftSleepPhase] = useState<"START" | "END" | null>(null);
+  // Create-mode phase=END only: the session a "fin" tap is about to close,
+  // fetched once a subtype is picked -- "loading" while in flight, null once
+  // fetched and nothing is open.
+  const [openSleepSession, setOpenSleepSession] = useState<ActivityInfo | "loading" | null>(null);
+  // Edit-mode only: whether the session being edited already has an end
+  // time, and that time itself (empty draftSleepEndTime means "clear it
+  // back to in-progress" on save).
+  const [draftSleepEnded, setDraftSleepEnded] = useState(false);
+  const [draftSleepEndTime, setDraftSleepEndTime] = useState("");
+  const [draftSleepEndBaseDate, setDraftSleepEndBaseDate] = useState<Date>(() => new Date());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -161,6 +223,24 @@ export default function MarAntoniaHomePage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (editingContext || expandedType !== "SLEEP" || draftSleepPhase !== "END" || !draftSleepType) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- kicks off the open-session lookup for the "fin" panel
+    setOpenSleepSession("loading");
+    fetch(`/api/mar-antonia/activities/sleep?sleepType=${draftSleepType}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setOpenSleepSession(data.activity ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setOpenSleepSession(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editingContext, expandedType, draftSleepPhase, draftSleepType]);
+
   function resetDraft() {
     setError(null);
     setDraftMealQuality(null);
@@ -169,17 +249,33 @@ export default function MarAntoniaHomePage() {
     setDraftDiaperContent(null);
     setDraftDiaperAmount(null);
     setDraftDiaperConsistency(null);
+    setDraftSleepType(null);
+    setDraftSleepPhase(null);
+    setOpenSleepSession(null);
+    setDraftSleepEnded(false);
+    setDraftSleepEndTime("");
   }
 
-  function openCreate(type: ActivityType) {
-    if (!editingContext && expandedType === type) {
+  function isQuickLogButtonActive(button: QuickLogButton) {
+    return (
+      !editingContext &&
+      expandedType === button.activityType &&
+      (button.activityType !== "SLEEP" || draftSleepType === button.sleepType)
+    );
+  }
+
+  function openCreate(button: QuickLogButton) {
+    if (isQuickLogButtonActive(button)) {
       setExpandedType(null);
       return;
     }
     setEditingContext(null);
-    setExpandedType(type);
+    setExpandedType(button.activityType);
     resetDraft();
     setDraftCaregiverId(myCaregiverId);
+    // Siesta/Dormir are separate buttons, so the subtype is fixed by which
+    // one was tapped -- no picker needed to choose it.
+    if (button.sleepType) setDraftSleepType(button.sleepType);
     const now = new Date();
     setDraftBaseDate(now);
     setDraftTime(toTimeInputValue(now));
@@ -196,9 +292,15 @@ export default function MarAntoniaHomePage() {
     setDraftDiaperContent(activity.diaperContent);
     setDraftDiaperAmount(activity.diaperAmount);
     setDraftDiaperConsistency(activity.diaperConsistency);
+    setDraftSleepType(activity.sleepType);
     const occurredAt = new Date(activity.occurredAt);
     setDraftBaseDate(occurredAt);
     setDraftTime(toTimeInputValue(occurredAt));
+    const ended = activity.sleepEndedAt != null;
+    setDraftSleepEnded(ended);
+    const endBase = ended ? new Date(activity.sleepEndedAt!) : new Date();
+    setDraftSleepEndBaseDate(endBase);
+    setDraftSleepEndTime(toTimeInputValue(endBase));
   }
 
   function closePanel() {
@@ -221,6 +323,16 @@ export default function MarAntoniaHomePage() {
       setError("Elige quién lo registra.");
       return;
     }
+
+    // SLEEP doesn't fit the single-instant/single-detail shape the rest of
+    // this function assumes (start vs. end are two different requests, and
+    // "fin" doesn't take a manual time at all) -- handled entirely on its
+    // own below.
+    if (expandedType === "SLEEP") {
+      await saveSleepActivity();
+      return;
+    }
+
     if (!draftTime) {
       setError("Elige una hora.");
       return;
@@ -291,6 +403,123 @@ export default function MarAntoniaHomePage() {
     afterMutation(dayKey);
   }
 
+  async function saveSleepActivity() {
+    if (!draftSleepType) {
+      setError("Elige si es siesta o noche.");
+      return;
+    }
+
+    if (editingContext) {
+      // Editing an existing session: both times are directly fixable, and
+      // an end time can be cleared back to "en curso".
+      if (!draftTime) {
+        setError("Elige una hora.");
+        return;
+      }
+      if (draftSleepEnded && !draftSleepEndTime) {
+        setError("Elige la hora de fin.");
+        return;
+      }
+      const [hours, minutes] = draftTime.split(":").map(Number);
+      const occurredAt = new Date(draftBaseDate);
+      occurredAt.setHours(hours, minutes, 0, 0);
+
+      let sleepEndedAt: string | null = null;
+      if (draftSleepEnded) {
+        const [endHours, endMinutes] = draftSleepEndTime.split(":").map(Number);
+        const endedAt = new Date(draftSleepEndBaseDate);
+        endedAt.setHours(endHours, endMinutes, 0, 0);
+        sleepEndedAt = endedAt.toISOString();
+      }
+
+      setSaving(true);
+      setError(null);
+      const res = await fetch(`/api/mar-antonia/activities/${editingContext.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          caregiverId: draftCaregiverId,
+          occurredAt: occurredAt.toISOString(),
+          sleepType: draftSleepType,
+          sleepEndedAt,
+        }),
+      });
+      setSaving(false);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "No se pudo guardar. Inténtalo de nuevo.");
+        return;
+      }
+      const dayKey = editingContext.dayKey;
+      closePanel();
+      afterMutation(dayKey);
+      return;
+    }
+
+    if (!draftSleepPhase) {
+      setError(draftSleepType === "NOCHE" ? "Elige si es hacer dormir o despertar." : "Elige si es inicio o fin.");
+      return;
+    }
+
+    if (draftSleepPhase === "START") {
+      if (!draftTime) {
+        setError("Elige una hora.");
+        return;
+      }
+      const [hours, minutes] = draftTime.split(":").map(Number);
+      const occurredAt = new Date(draftBaseDate);
+      occurredAt.setHours(hours, minutes, 0, 0);
+
+      setSaving(true);
+      setError(null);
+      const res = await fetch("/api/mar-antonia/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "SLEEP",
+          sleepType: draftSleepType,
+          caregiverId: draftCaregiverId,
+          occurredAt: occurredAt.toISOString(),
+        }),
+      });
+      setSaving(false);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error ?? "No se pudo guardar. Inténtalo de nuevo.");
+        return;
+      }
+      closePanel();
+      afterMutation(TODAY);
+      return;
+    }
+
+    // phase === "END" -- no manual time here, the end is always the system
+    // clock at the moment this is saved.
+    if (!openSleepSession || openSleepSession === "loading") {
+      setError(`No hay ninguna sesión de ${SLEEP_TYPE_LABEL[draftSleepType].toLowerCase()} en curso.`);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/mar-antonia/activities/sleep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sleepType: draftSleepType, caregiverId: draftCaregiverId }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "No se pudo guardar. Inténtalo de nuevo.");
+      return;
+    }
+    closePanel();
+    // The closed session's start could belong to an earlier day (an
+    // overnight "noche"), so a full reload is simpler and safer than
+    // guessing which day-bucket to refresh.
+    await load();
+  }
+
   async function deleteActivity() {
     if (!editingContext) return;
     setSaving(true);
@@ -308,14 +537,15 @@ export default function MarAntoniaHomePage() {
   function renderRow(a: ActivityInfo, dayKey: string) {
     const caregiverRole = caregivers.find((c) => c.id === a.caregiverId)?.role;
     const detail = activityDetail(a);
+    const { icon, label } = activityIconLabel(a);
     return (
       <li key={a.id}>
         <button
           onClick={() => openEdit(a, dayKey)}
           className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-surface px-3 py-2 text-left text-sm hover:border-white/30 transition-colors"
         >
-          <span className="text-lg">{TYPE_CONFIG[a.type].icon}</span>
-          <span className="flex-1">{TYPE_CONFIG[a.type].label}</span>
+          <span className="text-lg">{icon}</span>
+          <span className="flex-1">{label}</span>
           <span className="text-muted">{formatTime(a.occurredAt)}</span>
           {caregiverRole && <span className="text-xs text-neutral-500">{ROLE_LABEL[caregiverRole]}</span>}
           {detail && <span className="text-xs font-semibold text-accent-hover">{detail}</span>}
@@ -339,19 +569,19 @@ export default function MarAntoniaHomePage() {
         <p className="mt-1 text-sm text-muted">{child.name}</p>
       </div>
 
-      <div className="grid grid-cols-5 gap-2">
-        {(Object.keys(TYPE_CONFIG) as ActivityType[]).map((type) => (
+      <div className="grid grid-cols-3 gap-2">
+        {QUICK_LOG_BUTTONS.map((button) => (
           <button
-            key={type}
-            onClick={() => openCreate(type)}
+            key={button.key}
+            onClick={() => openCreate(button)}
             className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-3 text-xs font-semibold transition-colors ${
-              !editingContext && expandedType === type
+              isQuickLogButtonActive(button)
                 ? "border-accent bg-accent/15 text-white"
                 : "border-border bg-surface text-neutral-300 hover:border-white/30"
             }`}
           >
-            <span className="text-xl">{TYPE_CONFIG[type].icon}</span>
-            {TYPE_CONFIG[type].label}
+            <span className="text-xl">{button.icon}</span>
+            {button.label}
           </button>
         ))}
       </div>
@@ -378,18 +608,82 @@ export default function MarAntoniaHomePage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label htmlFor="activity-time" className="text-sm font-semibold text-white">
-              ¿A qué hora?
-            </label>
-            <input
-              id="activity-time"
-              type="time"
-              value={draftTime}
-              onChange={(e) => setDraftTime(e.target.value)}
-              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+          {expandedType === "SLEEP" && !editingContext && (
+            <PillGroup
+              label={draftSleepType === "NOCHE" ? "¿Hacer dormir o despertar?" : "¿Inicio o fin?"}
+              options={
+                draftSleepType === "NOCHE"
+                  ? [
+                      { value: "START" as const, label: "Hacer dormir" },
+                      { value: "END" as const, label: "Despertar" },
+                    ]
+                  : [
+                      { value: "START" as const, label: "Inicio" },
+                      { value: "END" as const, label: "Fin" },
+                    ]
+              }
+              value={draftSleepPhase}
+              onChange={setDraftSleepPhase}
             />
-          </div>
+          )}
+
+          {(expandedType !== "SLEEP" || editingContext || draftSleepPhase === "START") && (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="activity-time" className="text-sm font-semibold text-white">
+                {expandedType === "SLEEP" ? "Hora de inicio" : "¿A qué hora?"}
+              </label>
+              <input
+                id="activity-time"
+                type="time"
+                value={draftTime}
+                onChange={(e) => setDraftTime(e.target.value)}
+                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </div>
+          )}
+
+          {expandedType === "SLEEP" && !editingContext && draftSleepPhase === "END" && draftSleepType && (
+            <p className="text-sm text-muted">
+              {openSleepSession === "loading" && "Buscando…"}
+              {openSleepSession === null &&
+                `No hay ninguna sesión de ${SLEEP_TYPE_LABEL[draftSleepType].toLowerCase()} en curso.`}
+              {openSleepSession && openSleepSession !== "loading" && (
+                <>
+                  Empezó a las {formatTime(openSleepSession.occurredAt)}.{" "}
+                  {draftSleepType === "NOCHE"
+                    ? "Se registrará el despertar con la hora actual."
+                    : "Se registrará el fin con la hora actual."}
+                </>
+              )}
+            </p>
+          )}
+
+          {expandedType === "SLEEP" && editingContext && (
+            <PillGroup
+              label="¿Terminó?"
+              options={[
+                { value: "yes" as const, label: "Sí" },
+                { value: "no" as const, label: "Todavía no" },
+              ]}
+              value={draftSleepEnded ? "yes" : "no"}
+              onChange={(v) => setDraftSleepEnded(v === "yes")}
+            />
+          )}
+
+          {expandedType === "SLEEP" && editingContext && draftSleepEnded && (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="sleep-end-time" className="text-sm font-semibold text-white">
+                Hora de fin
+              </label>
+              <input
+                id="sleep-end-time"
+                type="time"
+                value={draftSleepEndTime}
+                onChange={(e) => setDraftSleepEndTime(e.target.value)}
+                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </div>
+          )}
 
           {expandedType === "MEAL" && (
             <PillGroup
@@ -483,7 +777,13 @@ export default function MarAntoniaHomePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={saveActivity}
-              disabled={saving}
+              disabled={
+                saving ||
+                (expandedType === "SLEEP" &&
+                  !editingContext &&
+                  draftSleepPhase === "END" &&
+                  (!openSleepSession || openSleepSession === "loading"))
+              }
               className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
               {saving ? "Guardando…" : editingContext ? "Guardar cambios" : "Guardar"}

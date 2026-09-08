@@ -483,6 +483,12 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "Title" ADD COLUMN "reviewsFetchedAt" DATETIME`,
   `ALTER TABLE "ChildActivity" ADD COLUMN "diaperAmount" TEXT`,
   `ALTER TABLE "ChildActivity" ADD COLUMN "diaperConsistency" TEXT`,
+  `ALTER TABLE "ChildActivity" ADD COLUMN "sleepType" TEXT`,
+  `ALTER TABLE "ChildActivity" ADD COLUMN "sleepEndedAt" DATETIME`,
+  // Migrates any pre-existing single-instant NAP rows to SLEEP/SIESTA,
+  // closed out immediately -- see the matching migration.sql. Idempotent:
+  // a second run finds no more rows with type = 'NAP' to touch.
+  `UPDATE "ChildActivity" SET "type" = 'SLEEP', "sleepType" = 'SIESTA', "sleepEndedAt" = "occurredAt" WHERE "type" = 'NAP'`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { requireAnyChild, authzErrorResponse } from "@/lib/marAntonia/authz";
-import { validateActivityDetail } from "@/lib/marAntonia/activityTypes";
+import { validateActivityDetail, SLEEP_TYPE_LABEL } from "@/lib/marAntonia/activityTypes";
 
 const CAREGIVER_SELECT = { id: true, name: true, email: true } as const;
 
@@ -36,10 +36,12 @@ export async function GET(request: Request) {
 }
 
 const createSchema = z.object({
-  type: z.enum(["MEAL", "NAP", "MILK", "NIGHT_WAKE", "DIAPER"]),
+  type: z.enum(["MEAL", "SLEEP", "MILK", "NIGHT_WAKE", "DIAPER"]),
   caregiverId: z.string(),
   // Defaults to now() at the DB level when omitted -- the UI always sends
-  // one (pre-filled with the current time, editable before saving).
+  // one (pre-filled with the current time, editable before saving). For
+  // SLEEP this is the session's *start* time -- there's no end yet, that's
+  // only set later via POST /api/mar-antonia/activities/sleep ("fin").
   occurredAt: z.string().datetime().optional(),
   mealQuality: z.enum(["GOOD", "REGULAR", "BAD"]).optional(),
   milkOunces: z.number().positive().optional(),
@@ -47,6 +49,7 @@ const createSchema = z.object({
   diaperContent: z.enum(["PEE", "POOP"]).optional(),
   diaperAmount: z.enum(["LITTLE", "A_LOT"]).nullable().optional(),
   diaperConsistency: z.enum(["NORMAL", "HARD", "DIARRHEA"]).nullable().optional(),
+  sleepType: z.enum(["SIESTA", "NOCHE"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -76,6 +79,23 @@ export async function POST(request: Request) {
   });
   if (!targetCaregiver) return NextResponse.json({ error: "Cuidador inválido" }, { status: 400 });
 
+  if (parsed.data.type === "SLEEP") {
+    // Only one open (not-yet-ended) session per sleepType at a time -- an
+    // "inicio" tap while one's already running would otherwise leave the
+    // earlier one stuck open forever with no way to tell them apart.
+    const open = await prisma.childActivity.findFirst({
+      where: { childId: caregiver.childId, type: "SLEEP", sleepType: parsed.data.sleepType, sleepEndedAt: null },
+    });
+    if (open) {
+      return NextResponse.json(
+        {
+          error: `Ya hay un registro de ${SLEEP_TYPE_LABEL[parsed.data.sleepType!].toLowerCase()} en curso. Termínalo antes de iniciar uno nuevo.`,
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   const activity = await prisma.childActivity.create({
     data: {
       childId: caregiver.childId,
@@ -88,6 +108,7 @@ export async function POST(request: Request) {
       diaperContent: parsed.data.diaperContent,
       diaperAmount: parsed.data.diaperAmount,
       diaperConsistency: parsed.data.diaperConsistency,
+      sleepType: parsed.data.sleepType,
     },
     include: { caregiver: { select: CAREGIVER_SELECT } },
   });

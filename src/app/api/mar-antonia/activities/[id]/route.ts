@@ -27,6 +27,10 @@ const patchSchema = z.object({
   diaperContent: z.enum(["PEE", "POOP"]).optional(),
   diaperAmount: z.enum(["LITTLE", "A_LOT"]).nullable().optional(),
   diaperConsistency: z.enum(["NORMAL", "HARD", "DIARRHEA"]).nullable().optional(),
+  sleepType: z.enum(["SIESTA", "NOCHE"]).optional(),
+  // Explicit null clears it back to "still in progress" -- e.g. fixing a
+  // premature "fin" tap.
+  sleepEndedAt: z.string().datetime().nullable().optional(),
 });
 
 // undefined = field wasn't sent, keep the activity's existing value;
@@ -80,6 +84,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     diaperContent: mergedField(parsed.data.diaperContent, activity.diaperContent),
     diaperAmount: mergedField(parsed.data.diaperAmount, activity.diaperAmount),
     diaperConsistency: mergedField(parsed.data.diaperConsistency, activity.diaperConsistency),
+    sleepType: mergedField(parsed.data.sleepType, activity.sleepType),
+    sleepEndedAt: mergedField(parsed.data.sleepEndedAt, activity.sleepEndedAt?.toISOString() ?? null),
   });
   if (detailError) return NextResponse.json({ error: detailError }, { status: 400 });
 
@@ -94,6 +100,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       diaperContent: parsed.data.diaperContent,
       diaperAmount: parsed.data.diaperAmount,
       diaperConsistency: parsed.data.diaperConsistency,
+      sleepType: parsed.data.sleepType,
+      sleepEndedAt:
+        parsed.data.sleepEndedAt === undefined
+          ? undefined
+          : parsed.data.sleepEndedAt === null
+            ? null
+            : new Date(parsed.data.sleepEndedAt),
     },
     include: { caregiver: { select: CAREGIVER_SELECT } },
   });

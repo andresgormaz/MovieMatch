@@ -1,11 +1,20 @@
-import type { ChildActivityType } from "@/generated/prisma/enums";
+import type { ChildActivityType, SleepType } from "@/generated/prisma/enums";
 
 export const ACTIVITY_TYPE_LABEL: Record<ChildActivityType, string> = {
   MEAL: "Comida",
-  NAP: "Siesta",
+  SLEEP: "Dormir",
   MILK: "Leche",
   NIGHT_WAKE: "Despertada",
   DIAPER: "Pañal",
+};
+
+// Display label only -- the enum value stays NOCHE (matches the schema/
+// migration history), but the user-facing category is called "Dormir" now
+// that siesta and overnight sleep are two fully separate quick-log buttons
+// instead of one "Dormir" button with a siesta/noche picker inside it.
+export const SLEEP_TYPE_LABEL: Record<SleepType, string> = {
+  SIESTA: "Siesta",
+  NOCHE: "Dormir",
 };
 
 export type DetailField =
@@ -14,7 +23,9 @@ export type DetailField =
   | "wakeMood"
   | "diaperContent"
   | "diaperAmount"
-  | "diaperConsistency";
+  | "diaperConsistency"
+  | "sleepType"
+  | "sleepEndedAt";
 
 export const DETAIL_FIELDS: DetailField[] = [
   "mealQuality",
@@ -23,21 +34,22 @@ export const DETAIL_FIELDS: DetailField[] = [
   "diaperContent",
   "diaperAmount",
   "diaperConsistency",
+  "sleepType",
+  "sleepEndedAt",
 ];
 
-// MEAL/NAP/MILK/NIGHT_WAKE each have at most one detail field. DIAPER is the
-// exception -- see validateDiaperDetail below -- so it's left out here and
-// handled on its own.
+// MEAL/MILK/NIGHT_WAKE each have at most one detail field. DIAPER and SLEEP
+// are the exceptions -- see validateDiaperDetail/validateSleepDetail below --
+// so they're left out here and handled on their own.
 const SIMPLE_REQUIRED_FIELD: Partial<Record<ChildActivityType, DetailField | null>> = {
   MEAL: "mealQuality",
-  NAP: null,
   MILK: "milkOunces",
   NIGHT_WAKE: "wakeMood",
 };
 
 const SIMPLE_DETAIL_FIELDS = DETAIL_FIELDS.filter(
-  (f) => f !== "diaperAmount" && f !== "diaperConsistency",
-) as Exclude<DetailField, "diaperAmount" | "diaperConsistency">[];
+  (f) => f !== "diaperAmount" && f !== "diaperConsistency" && f !== "sleepType" && f !== "sleepEndedAt",
+) as Exclude<DetailField, "diaperAmount" | "diaperConsistency" | "sleepType" | "sleepEndedAt">[];
 
 // `== null` (loose) on purpose everywhere below -- both an omitted field
 // (undefined) and an explicit null (how a patch clears a field, e.g.
@@ -48,6 +60,7 @@ export function validateActivityDetail(
   data: Partial<Record<DetailField, unknown>>,
 ): string | null {
   if (type === "DIAPER") return validateDiaperDetail(data);
+  if (type === "SLEEP") return validateSleepDetail(data);
 
   const required = SIMPLE_REQUIRED_FIELD[type] ?? null;
   for (const field of SIMPLE_DETAIL_FIELDS) {
@@ -62,6 +75,9 @@ export function validateActivityDetail(
   if (data.diaperAmount != null || data.diaperConsistency != null) {
     return "Ese detalle no aplica a este tipo de registro";
   }
+  if (data.sleepType != null || data.sleepEndedAt != null) {
+    return "Ese detalle no aplica a este tipo de registro";
+  }
   return null;
 }
 
@@ -73,6 +89,9 @@ function validateDiaperDetail(data: Partial<Record<DetailField, unknown>>): stri
   if (data.mealQuality != null || data.milkOunces != null || data.wakeMood != null) {
     return "Ese detalle no aplica a este tipo de registro";
   }
+  if (data.sleepType != null || data.sleepEndedAt != null) {
+    return "Ese detalle no aplica a este tipo de registro";
+  }
   if (data.diaperContent == null) return "Falta el detalle de pañal";
 
   if (data.diaperContent === "POOP") {
@@ -81,5 +100,23 @@ function validateDiaperDetail(data: Partial<Record<DetailField, unknown>>): stri
   } else if (data.diaperAmount != null || data.diaperConsistency != null) {
     return "La cantidad y consistencia solo aplican cuando el pañal tiene caca";
   }
+  return null;
+}
+
+// SLEEP always needs sleepType (siesta/noche). sleepEndedAt is optional --
+// present means the session already ended, absent/null means it's still in
+// progress -- so it's never checked for presence here.
+function validateSleepDetail(data: Partial<Record<DetailField, unknown>>): string | null {
+  if (
+    data.mealQuality != null ||
+    data.milkOunces != null ||
+    data.wakeMood != null ||
+    data.diaperContent != null ||
+    data.diaperAmount != null ||
+    data.diaperConsistency != null
+  ) {
+    return "Ese detalle no aplica a este tipo de registro";
+  }
+  if (data.sleepType == null) return "Elige si es siesta o noche";
   return null;
 }
