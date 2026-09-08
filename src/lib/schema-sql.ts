@@ -485,6 +485,7 @@ export const ALTER_STATEMENTS = [
   `ALTER TABLE "ChildActivity" ADD COLUMN "diaperConsistency" TEXT`,
   `ALTER TABLE "ChildActivity" ADD COLUMN "sleepType" TEXT`,
   `ALTER TABLE "ChildActivity" ADD COLUMN "sleepEndedAt" DATETIME`,
+  `ALTER TABLE "ChildActivity" ADD COLUMN "sleepAchievedAt" DATETIME`,
   // Migrates any pre-existing single-instant NAP rows to SLEEP/SIESTA,
   // closed out immediately -- see the matching migration.sql. Idempotent:
   // a second run finds no more rows with type = 'NAP' to touch.

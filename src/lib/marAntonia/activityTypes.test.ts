@@ -30,4 +30,16 @@ describe("validateActivityDetail: SLEEP", () => {
       validateActivityDetail("DIAPER", { diaperContent: "PEE", sleepEndedAt: "2026-09-08T06:00:00.000Z" }),
     ).toBe("Ese detalle no aplica a este tipo de registro");
   });
+
+  it("accepts sleepAchievedAt on a NOCHE session", () => {
+    expect(
+      validateActivityDetail("SLEEP", { sleepType: "NOCHE", sleepAchievedAt: "2026-09-08T02:00:00.000Z" }),
+    ).toBeNull();
+  });
+
+  it("rejects sleepAchievedAt on a SIESTA session -- no 'logrado' step for naps", () => {
+    expect(
+      validateActivityDetail("SLEEP", { sleepType: "SIESTA", sleepAchievedAt: "2026-09-08T02:00:00.000Z" }),
+    ).toBe("Eso no aplica a la siesta");
+  });
 });

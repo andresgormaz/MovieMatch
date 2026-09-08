@@ -802,6 +802,12 @@ model ChildActivity {
   // that sleepType still has sleepEndedAt null for this child.
   sleepType    SleepType?
   sleepEndedAt DateTime?
+  // NOCHE only -- when the child actually fell asleep, distinct from
+  // occurredAt (when the bedtime routine/attempt started). Lets "cuánto nos
+  // tardamos en lograr hacerla dormir" (occurredAt -> sleepAchievedAt) be
+  // shown separately from the total sleep duration (sleepAchievedAt ->
+  // sleepEndedAt). Always null for SIESTA, which has no such middle step.
+  sleepAchievedAt DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 

@@ -29,9 +29,21 @@ const patchSchema = z.object({
   diaperConsistency: z.enum(["NORMAL", "HARD", "DIARRHEA"]).nullable().optional(),
   sleepType: z.enum(["SIESTA", "NOCHE"]).optional(),
   // Explicit null clears it back to "still in progress" -- e.g. fixing a
-  // premature "fin" tap.
+  // premature "fin"/"despertar" tap.
   sleepEndedAt: z.string().datetime().nullable().optional(),
+  // Explicit null clears it back to "not yet fallen asleep" -- e.g. fixing
+  // a premature "logrado" tap. NOCHE only, enforced by validateSleepDetail.
+  sleepAchievedAt: z.string().datetime().nullable().optional(),
 });
+
+// undefined = don't touch, null = clear it, a string = the new value --
+// converts the datetime string patchSchema validated into what Prisma's
+// update() expects for a nullable DateTime field.
+function dateOrNull(value: string | null | undefined): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return new Date(value);
+}
 
 // undefined = field wasn't sent, keep the activity's existing value;
 // null = explicitly cleared; anything else = the new value. Used only to
@@ -86,6 +98,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     diaperConsistency: mergedField(parsed.data.diaperConsistency, activity.diaperConsistency),
     sleepType: mergedField(parsed.data.sleepType, activity.sleepType),
     sleepEndedAt: mergedField(parsed.data.sleepEndedAt, activity.sleepEndedAt?.toISOString() ?? null),
+    sleepAchievedAt: mergedField(parsed.data.sleepAchievedAt, activity.sleepAchievedAt?.toISOString() ?? null),
   });
   if (detailError) return NextResponse.json({ error: detailError }, { status: 400 });
 
@@ -101,12 +114,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       diaperAmount: parsed.data.diaperAmount,
       diaperConsistency: parsed.data.diaperConsistency,
       sleepType: parsed.data.sleepType,
-      sleepEndedAt:
-        parsed.data.sleepEndedAt === undefined
-          ? undefined
-          : parsed.data.sleepEndedAt === null
-            ? null
-            : new Date(parsed.data.sleepEndedAt),
+      sleepEndedAt: dateOrNull(parsed.data.sleepEndedAt),
+      sleepAchievedAt: dateOrNull(parsed.data.sleepAchievedAt),
     },
     include: { caregiver: { select: CAREGIVER_SELECT } },
   });

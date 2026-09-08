@@ -25,7 +25,8 @@ export type DetailField =
   | "diaperAmount"
   | "diaperConsistency"
   | "sleepType"
-  | "sleepEndedAt";
+  | "sleepEndedAt"
+  | "sleepAchievedAt";
 
 export const DETAIL_FIELDS: DetailField[] = [
   "mealQuality",
@@ -36,6 +37,7 @@ export const DETAIL_FIELDS: DetailField[] = [
   "diaperConsistency",
   "sleepType",
   "sleepEndedAt",
+  "sleepAchievedAt",
 ];
 
 // MEAL/MILK/NIGHT_WAKE each have at most one detail field. DIAPER and SLEEP
@@ -47,9 +49,10 @@ const SIMPLE_REQUIRED_FIELD: Partial<Record<ChildActivityType, DetailField | nul
   NIGHT_WAKE: "wakeMood",
 };
 
+const SLEEP_ONLY_FIELDS = ["sleepType", "sleepEndedAt", "sleepAchievedAt"] as const;
 const SIMPLE_DETAIL_FIELDS = DETAIL_FIELDS.filter(
-  (f) => f !== "diaperAmount" && f !== "diaperConsistency" && f !== "sleepType" && f !== "sleepEndedAt",
-) as Exclude<DetailField, "diaperAmount" | "diaperConsistency" | "sleepType" | "sleepEndedAt">[];
+  (f) => f !== "diaperAmount" && f !== "diaperConsistency" && !(SLEEP_ONLY_FIELDS as readonly string[]).includes(f),
+) as Exclude<DetailField, "diaperAmount" | "diaperConsistency" | (typeof SLEEP_ONLY_FIELDS)[number]>[];
 
 // `== null` (loose) on purpose everywhere below -- both an omitted field
 // (undefined) and an explicit null (how a patch clears a field, e.g.
@@ -75,7 +78,7 @@ export function validateActivityDetail(
   if (data.diaperAmount != null || data.diaperConsistency != null) {
     return "Ese detalle no aplica a este tipo de registro";
   }
-  if (data.sleepType != null || data.sleepEndedAt != null) {
+  if (data.sleepType != null || data.sleepEndedAt != null || data.sleepAchievedAt != null) {
     return "Ese detalle no aplica a este tipo de registro";
   }
   return null;
@@ -89,7 +92,7 @@ function validateDiaperDetail(data: Partial<Record<DetailField, unknown>>): stri
   if (data.mealQuality != null || data.milkOunces != null || data.wakeMood != null) {
     return "Ese detalle no aplica a este tipo de registro";
   }
-  if (data.sleepType != null || data.sleepEndedAt != null) {
+  if (data.sleepType != null || data.sleepEndedAt != null || data.sleepAchievedAt != null) {
     return "Ese detalle no aplica a este tipo de registro";
   }
   if (data.diaperContent == null) return "Falta el detalle de pañal";
@@ -103,9 +106,12 @@ function validateDiaperDetail(data: Partial<Record<DetailField, unknown>>): stri
   return null;
 }
 
-// SLEEP always needs sleepType (siesta/noche). sleepEndedAt is optional --
-// present means the session already ended, absent/null means it's still in
-// progress -- so it's never checked for presence here.
+// SLEEP always needs sleepType (siesta/noche). sleepEndedAt/sleepAchievedAt
+// are optional -- present means that checkpoint already happened,
+// absent/null means it hasn't yet -- so neither is checked for presence
+// here. sleepAchievedAt (the "logrado" checkpoint, tracking how long it
+// takes to fall asleep) only makes sense for NOCHE -- siesta has no such
+// middle step.
 function validateSleepDetail(data: Partial<Record<DetailField, unknown>>): string | null {
   if (
     data.mealQuality != null ||
@@ -118,5 +124,8 @@ function validateSleepDetail(data: Partial<Record<DetailField, unknown>>): strin
     return "Ese detalle no aplica a este tipo de registro";
   }
   if (data.sleepType == null) return "Elige si es siesta o noche";
+  if (data.sleepType === "SIESTA" && data.sleepAchievedAt != null) {
+    return "Eso no aplica a la siesta";
+  }
   return null;
 }

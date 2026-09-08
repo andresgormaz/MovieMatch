@@ -112,16 +112,15 @@ async function main() {
     // Seeds an activity directly, optionally back-dated -- covers a
     // "previous day" grouping without waiting a real day, and lets a test
     // start from an existing entry without driving the quick-log UI for it.
-    // A second field/value pair (extraField/extraValue) covers SLEEP, whose
-    // sleepType + sleepEndedAt don't fit in a single detailField/detailValue
-    // pair.
-    const [childId, caregiverUserId, type, occurredAtIso, detailField, detailValue, extraField, extraValue] = args;
+    // Any number of extra field/value pairs after occurredAtIso covers
+    // SLEEP, whose sleepType/sleepEndedAt/sleepAchievedAt don't fit in a
+    // single field/value pair.
+    const [childId, caregiverUserId, type, occurredAtIso, ...fieldPairs] = args;
     const detail: Record<string, string | number> = {};
-    if (detailField && detailField !== "-") {
-      detail[detailField] = detailField === "milkOunces" ? Number(detailValue) : detailValue;
-    }
-    if (extraField && extraField !== "-") {
-      detail[extraField] = extraValue;
+    for (let i = 0; i < fieldPairs.length; i += 2) {
+      const [field, value] = [fieldPairs[i], fieldPairs[i + 1]];
+      if (!field || field === "-") continue;
+      detail[field] = field === "milkOunces" ? Number(value) : value;
     }
     const activity = await prisma.childActivity.create({
       data: {
