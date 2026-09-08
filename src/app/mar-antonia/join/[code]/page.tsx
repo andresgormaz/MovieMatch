@@ -7,6 +7,7 @@ import { RolePicker, type CaregiverRole } from "@/components/marAntonia/RolePick
 interface Preview {
   child: { id: string; name: string; caregivers: { label: string; role: CaregiverRole }[] };
   alreadyCaregiver: boolean;
+  belongsToAnotherProfile: boolean;
 }
 
 export default function JoinChildPage({ params }: { params: Promise<{ code: string }> }) {
@@ -64,6 +65,10 @@ export default function JoinChildPage({ params }: { params: Promise<{ code: stri
             </p>
             {preview.alreadyCaregiver ? (
               <p className="text-sm text-white">Ya eres parte de este perfil.</p>
+            ) : preview.belongsToAnotherProfile ? (
+              <p className="text-sm text-red-400">
+                Ya perteneces a otro perfil de MarAntonia. No puedes unirte a este también.
+              </p>
             ) : (
               <>
                 <RolePicker value={role} onChange={setRole} />

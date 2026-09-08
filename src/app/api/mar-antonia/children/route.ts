@@ -9,12 +9,23 @@ const createSchema = z.object({
 });
 
 // Creates a child profile, makes the caller its owner, and links them as a
-// caregiver with the role they picked. A user isn't restricted to one child
-// at the data level, but this app's UI only ever guides them through
-// creating/joining a single one (see mar-antonia/(guarded)/layout.tsx).
+// caregiver with the role they picked. Blocked if the caller already
+// belongs to one -- this app only ever intends one shared profile per
+// couple, and silently letting someone end up with a second, disconnected
+// profile is exactly the bug that caused a caregiver to stop seeing their
+// partner's entries (requireAnyChild always resolves to the earliest-joined
+// one, so a stray extra profile silently "wins" and hides the shared one).
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  const existing = await prisma.childCaregiver.findFirst({ where: { userId: session.user.id } });
+  if (existing) {
+    return NextResponse.json(
+      { error: "Ya perteneces a un perfil de MarAntonia. No puedes crear otro." },
+      { status: 400 },
+    );
+  }
 
   const body = await request.json().catch(() => ({}));
   const parsed = createSchema.safeParse(body);

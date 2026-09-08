@@ -17,6 +17,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
 
   const alreadyCaregiver = child.caregivers.some((c) => c.userId === session.user.id);
 
+  // Surfaced so the join page can block *before* the user picks a role and
+  // taps "Unirme" -- see the POST handler below for why this matters.
+  const belongsToAnotherProfile =
+    !alreadyCaregiver &&
+    (await prisma.childCaregiver.findFirst({ where: { userId: session.user.id, childId: { not: child.id } } })) !=
+      null;
+
   return NextResponse.json({
     child: {
       id: child.id,
@@ -24,6 +31,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
       caregivers: child.caregivers.map((c) => ({ label: c.user.name || c.user.email, role: c.role })),
     },
     alreadyCaregiver,
+    belongsToAnotherProfile,
   });
 }
 
@@ -41,6 +49,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
   const parsed = joinSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos" }, { status: 400 });
+  }
+
+  // Block joining a *different* profile than the one the caller already
+  // belongs to -- this app only ever intends one shared profile per couple.
+  // Without this, a user who created (or joined) their own profile earlier
+  // could silently end up on two, and since requireAnyChild always resolves
+  // to whichever one they joined first, the shared profile everyone actually
+  // uses can end up permanently hidden from them.
+  const existingElsewhere = await prisma.childCaregiver.findFirst({
+    where: { userId: session.user.id, childId: { not: child.id } },
+  });
+  if (existingElsewhere) {
+    return NextResponse.json(
+      { error: "Ya perteneces a otro perfil de MarAntonia. No puedes unirte a este también." },
+      { status: 400 },
+    );
   }
 
   // Upsert rather than insert -- revisiting an invite link after already

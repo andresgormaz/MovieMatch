@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 import { RolePicker, type CaregiverRole } from "@/components/marAntonia/RolePicker";
@@ -8,7 +8,13 @@ import { RolePicker, type CaregiverRole } from "@/components/marAntonia/RolePick
 // First-run screen for MarAntonia: create a new child profile, or join one
 // your partner already shared a code/link for. Reached automatically by the
 // (guarded) layout whenever the current user isn't a caregiver of any child
-// yet -- see src/app/mar-antonia/(guarded)/layout.tsx.
+// yet -- see src/app/mar-antonia/(guarded)/layout.tsx. That guard only
+// redirects *into* onboarding, not away from it, and this page lives outside
+// the guarded route group -- so someone who already has a profile (a stale
+// bookmark, a link opened twice) could otherwise still land here and,
+// without the create/join API's own guard against a second profile
+// (src/app/api/mar-antonia/children/route.ts), end up confusingly split
+// across two disconnected profiles. This check is the extra safety net.
 export default function MarAntoniaOnboardingPage() {
   const router = useRouter();
   const [name, setName] = useState("MarAntonia");
@@ -16,6 +22,13 @@ export default function MarAntoniaOnboardingPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch("/api/mar-antonia/children/current");
+      if (res.ok) router.replace("/mar-antonia");
+    })();
+  }, [router]);
 
   async function createChild(e: React.FormEvent) {
     e.preventDefault();
