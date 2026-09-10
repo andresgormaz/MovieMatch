@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SLEEP_TYPE_LABEL, OUTING_TYPE_LABEL, MILK_OUNCES_OPTIONS } from "@/lib/marAntonia/activityTypes";
 
 interface ChildInfo {
@@ -198,6 +198,11 @@ export default function MarAntoniaHomePage() {
   // which bucket to refresh regardless of where the row being edited lives.
   const [expandedType, setExpandedType] = useState<ActivityType | null>(null);
   const [editingContext, setEditingContext] = useState<{ id: string; dayKey: string } | null>(null);
+  // Scrolled into view whenever the quick-log panel opens -- tapping a row
+  // buried in an already-expanded past day (far down the page) otherwise
+  // opens the editor off-screen above, at the same spot every panel opens,
+  // making it look like nothing happened.
+  const panelRef = useRef<HTMLDivElement>(null);
   const [draftCaregiverId, setDraftCaregiverId] = useState<string | null>(null);
   // The calendar day the entry is logged under ("YYYY-MM-DD"), independently
   // editable from draftTime -- both default to now, but either can be
@@ -282,6 +287,10 @@ export default function MarAntoniaHomePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load on mount
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (expandedType) panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [expandedType, editingContext]);
 
   useEffect(() => {
     if (editingContext || expandedType !== "SLEEP" || !draftSleepType) return;
@@ -790,7 +799,7 @@ export default function MarAntoniaHomePage() {
       </div>
 
       {expandedType && (
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+        <div ref={panelRef} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
           <div className="flex flex-col gap-2">
             <span className="text-sm font-semibold text-white">¿Quién lo registra?</span>
             <div className="flex gap-2">

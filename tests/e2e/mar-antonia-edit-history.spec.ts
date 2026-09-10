@@ -25,6 +25,16 @@ function daysAgoDateStr(daysAgo: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// Same idea, but as a full ISO timestamp fixed at local noon -- for seeding
+// activities on distinct past calendar days without landing on today or
+// colliding with each other.
+function daysAgoIso(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(12, 0, 0, 0);
+  return d.toISOString();
+}
+
 test.describe("MarAntonia edit/delete and day history", () => {
   test("edit an activity's caregiver and detail, then delete it", async ({ page }) => {
     const email = "e2e-marantonia-edit@example.com";
@@ -158,6 +168,43 @@ test.describe("MarAntonia edit/delete and day history", () => {
 
       await summary.click();
       await expect(page.locator("li", { hasText: "Comida" })).toContainText("Bien");
+    } finally {
+      runFixture("delete", email);
+    }
+  });
+
+  test("clicking a row scrolls the edit panel into view, even when opened far down the page", async ({ page }) => {
+    // A short viewport, like a real phone: the editor panel always opens
+    // back up at the same fixed spot near the top of the page, so scrolling
+    // down first (to reach a past day's row) leaves it off-screen above
+    // unless something scrolls it back into view.
+    await page.setViewportSize({ width: 390, height: 300 });
+
+    const email = "e2e-marantonia-scroll-into-view@example.com";
+    const output = runFixture("create-with-child", email, "Bebé Scroll", "MAMA");
+    const { childId, ownerUserId } = JSON.parse(output.trim().split("\n").pop()!) as {
+      childId: string;
+      ownerUserId: string;
+    };
+    for (let daysAgo = 1; daysAgo <= 10; daysAgo++) {
+      runFixture("add-activity", childId, ownerUserId, "MEAL", daysAgoIso(daysAgo), "mealQuality", "GOOD");
+    }
+
+    try {
+      await login(page, email);
+      await page.goto("/mar-antonia");
+
+      const summaries = page.locator("summary");
+      await expect(summaries).toHaveCount(10);
+      // The last summary is the oldest day (sorted newest-first) -- expand
+      // it and click its row, both scrolled well past the bottom of this
+      // short viewport.
+      await summaries.last().click();
+      const row = page.locator("li", { hasText: "Comida" }).last();
+      await row.scrollIntoViewIfNeeded();
+      await row.click();
+
+      await expect(page.getByRole("button", { name: "Guardar cambios" })).toBeInViewport();
     } finally {
       runFixture("delete", email);
     }
