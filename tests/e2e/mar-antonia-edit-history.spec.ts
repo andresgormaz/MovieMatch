@@ -15,6 +15,16 @@ async function login(page: Page, email: string) {
   await page.waitForURL((url) => url.pathname === "/");
 }
 
+// Local-calendar-day arithmetic, matching how the app itself buckets
+// activities by day (see toDateInputValue/GET .../activities/days in
+// page.tsx and its API route) -- using UTC or ISO slicing here could pick
+// the wrong day near a local midnight.
+function daysAgoDateStr(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 test.describe("MarAntonia edit/delete and day history", () => {
   test("edit an activity's caregiver and detail, then delete it", async ({ page }) => {
     const email = "e2e-marantonia-edit@example.com";
@@ -148,6 +158,63 @@ test.describe("MarAntonia edit/delete and day history", () => {
 
       await summary.click();
       await expect(page.locator("li", { hasText: "Comida" })).toContainText("Bien");
+    } finally {
+      runFixture("delete", email);
+    }
+  });
+
+  test("creating an entry with a backdated date puts it under that day, not today", async ({ page }) => {
+    const email = "e2e-marantonia-backdate-create@example.com";
+    runFixture("create-with-child", email, "Bebé Fecha", "MAMA");
+
+    try {
+      await login(page, email);
+      await page.goto("/mar-antonia");
+
+      const threeDaysAgo = daysAgoDateStr(3);
+      await page.getByRole("button", { name: "Comida" }).click();
+      await page.fill("#activity-date", threeDaysAgo);
+      await page.getByRole("button", { name: "Bien" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+
+      // Doesn't show up in today's feed -- it was backdated.
+      await expect(page.getByText("Todavía no registraste nada hoy.")).toBeVisible();
+
+      // Shows up under the correct past day instead.
+      const summary = page.locator("summary", { hasText: "(1)" });
+      await expect(summary).toBeVisible();
+      await summary.click();
+      await expect(page.locator("li", { hasText: "Comida" })).toContainText("Bien");
+    } finally {
+      runFixture("delete", email);
+    }
+  });
+
+  test("editing an entry's date moves it out of today's feed into the right past day", async ({ page }) => {
+    const email = "e2e-marantonia-backdate-edit@example.com";
+    runFixture("create-with-child", email, "Bebé Fecha", "MAMA");
+
+    try {
+      await login(page, email);
+      await page.goto("/mar-antonia");
+
+      await page.getByRole("button", { name: "Baño" }).click();
+      await page.getByRole("button", { name: "Guardar" }).click();
+      await expect(page.locator("ul li", { hasText: "Baño" })).toBeVisible();
+
+      const twoDaysAgo = daysAgoDateStr(2);
+      await page.locator("ul li", { hasText: "Baño" }).click();
+      await page.fill("#activity-date", twoDaysAgo);
+      await page.getByRole("button", { name: "Guardar cambios" }).click();
+
+      // No longer in today's feed.
+      await expect(page.getByText("Todavía no registraste nada hoy.")).toBeVisible();
+
+      // Shows up under the day it was moved to.
+      const summary = page.locator("summary", { hasText: "(1)" });
+      await expect(summary).toBeVisible();
+      await summary.click();
+      await expect(page.locator("li", { hasText: "Baño" })).toBeVisible();
     } finally {
       runFixture("delete", email);
     }

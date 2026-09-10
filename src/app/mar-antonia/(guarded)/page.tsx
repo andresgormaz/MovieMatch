@@ -167,6 +167,23 @@ function toTimeInputValue(date: Date) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function toDateInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function isSameLocalDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// Builds a Date from separate "YYYY-MM-DD" and "HH:mm" input values, both in
+// local time -- used instead of a single Date-typed draft so the date and
+// time pickers can be two independent, directly-editable fields.
+function combineDateTime(dateStr: string, timeStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+}
+
 const TODAY = "today";
 
 export default function MarAntoniaHomePage() {
@@ -182,10 +199,11 @@ export default function MarAntoniaHomePage() {
   const [expandedType, setExpandedType] = useState<ActivityType | null>(null);
   const [editingContext, setEditingContext] = useState<{ id: string; dayKey: string } | null>(null);
   const [draftCaregiverId, setDraftCaregiverId] = useState<string | null>(null);
-  // The calendar day the edited/created entry belongs to -- draftTime only
-  // carries the hour/minute, this supplies the rest so an edit never jumps
-  // to a different day-bucket just because the clock advanced.
-  const [draftBaseDate, setDraftBaseDate] = useState<Date>(() => new Date());
+  // The calendar day the entry is logged under ("YYYY-MM-DD"), independently
+  // editable from draftTime -- both default to now, but either can be
+  // changed to backdate an entry (e.g. logging something from yesterday
+  // that was forgotten in the moment).
+  const [draftDate, setDraftDate] = useState("");
   const [draftTime, setDraftTime] = useState("");
   const [draftMealQuality, setDraftMealQuality] = useState<ActivityInfo["mealQuality"]>(null);
   const [draftMilkOunces, setDraftMilkOunces] = useState("");
@@ -214,12 +232,12 @@ export default function MarAntoniaHomePage() {
   // back to in-progress" on save).
   const [draftSleepEnded, setDraftSleepEnded] = useState(false);
   const [draftSleepEndTime, setDraftSleepEndTime] = useState("");
-  const [draftSleepEndBaseDate, setDraftSleepEndBaseDate] = useState<Date>(() => new Date());
+  const [draftSleepEndDate, setDraftSleepEndDate] = useState("");
   // Edit-mode only, NOCHE entries only: same idea as draftSleepEnded/
   // draftSleepEndTime but for the "logrado" (sleepAchievedAt) checkpoint.
   const [draftSleepAchieved, setDraftSleepAchieved] = useState(false);
   const [draftSleepAchievedTime, setDraftSleepAchievedTime] = useState("");
-  const [draftSleepAchievedBaseDate, setDraftSleepAchievedBaseDate] = useState<Date>(() => new Date());
+  const [draftSleepAchievedDate, setDraftSleepAchievedDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -327,7 +345,7 @@ export default function MarAntoniaHomePage() {
     // one was tapped -- no picker needed to choose it.
     if (button.sleepType) setDraftSleepType(button.sleepType);
     const now = new Date();
-    setDraftBaseDate(now);
+    setDraftDate(toDateInputValue(now));
     setDraftTime(toTimeInputValue(now));
   }
 
@@ -345,17 +363,17 @@ export default function MarAntoniaHomePage() {
     setDraftOutingType(activity.outingType);
     setDraftSleepType(activity.sleepType);
     const occurredAt = new Date(activity.occurredAt);
-    setDraftBaseDate(occurredAt);
+    setDraftDate(toDateInputValue(occurredAt));
     setDraftTime(toTimeInputValue(occurredAt));
     const ended = activity.sleepEndedAt != null;
     setDraftSleepEnded(ended);
     const endBase = ended ? new Date(activity.sleepEndedAt!) : new Date();
-    setDraftSleepEndBaseDate(endBase);
+    setDraftSleepEndDate(toDateInputValue(endBase));
     setDraftSleepEndTime(toTimeInputValue(endBase));
     const achieved = activity.sleepAchievedAt != null;
     setDraftSleepAchieved(achieved);
     const achievedBase = achieved ? new Date(activity.sleepAchievedAt!) : new Date();
-    setDraftSleepAchievedBaseDate(achievedBase);
+    setDraftSleepAchievedDate(toDateInputValue(achievedBase));
     setDraftSleepAchievedTime(toTimeInputValue(achievedBase));
   }
 
@@ -371,6 +389,27 @@ export default function MarAntoniaHomePage() {
       await reloadPastDay(dayKey);
       await reloadPastDaysSummary();
     }
+  }
+
+  // Like afterMutation, but for a save where the date itself may have just
+  // changed (creating or editing with a picked date, not just a time) -- the
+  // entry can move to a completely different day-bucket than the one it was
+  // opened from. Always refreshes today's feed and the day summary, and also
+  // re-fetches whichever *past*-day buckets (the old one, the new one, or
+  // both) are already cached/expanded, so neither shows stale data.
+  async function refreshAfterSave(originalDayKey: string | null, occurredAtIso: string) {
+    const occurredDate = new Date(occurredAtIso);
+    const newDayKey = isSameLocalDay(occurredDate, new Date()) ? TODAY : toDateInputValue(occurredDate);
+
+    await Promise.all([reloadToday(), reloadPastDaysSummary()]);
+
+    const staleDayKeys = new Set<string>();
+    if (originalDayKey && originalDayKey !== TODAY) staleDayKeys.add(originalDayKey);
+    if (newDayKey !== TODAY) staleDayKeys.add(newDayKey);
+
+    await Promise.all(
+      [...staleDayKeys].filter((d) => pastDayActivities[d] !== undefined).map((d) => reloadPastDay(d)),
+    );
   }
 
   async function saveActivity() {
@@ -389,6 +428,10 @@ export default function MarAntoniaHomePage() {
       return;
     }
 
+    if (!draftDate) {
+      setError("Elige una fecha.");
+      return;
+    }
     if (!draftTime) {
       setError("Elige una hora.");
       return;
@@ -422,9 +465,7 @@ export default function MarAntoniaHomePage() {
       return;
     }
 
-    const [hours, minutes] = draftTime.split(":").map(Number);
-    const occurredAt = new Date(draftBaseDate);
-    occurredAt.setHours(hours, minutes, 0, 0);
+    const occurredAt = combineDateTime(draftDate, draftTime);
 
     const isPoop = expandedType === "DIAPER" && draftDiaperContent === "POOP";
     const detail = {
@@ -459,9 +500,9 @@ export default function MarAntoniaHomePage() {
       setError(body.error ?? "No se pudo guardar. Inténtalo de nuevo.");
       return;
     }
-    const dayKey = editingContext?.dayKey ?? TODAY;
+    const originalDayKey = editingContext?.dayKey ?? null;
     closePanel();
-    afterMutation(dayKey);
+    await refreshAfterSave(originalDayKey, occurredAt.toISOString());
   }
 
   async function saveSleepActivity() {
@@ -471,38 +512,34 @@ export default function MarAntoniaHomePage() {
     }
 
     if (editingContext) {
-      // Editing an existing session: both times are directly fixable, and
-      // an end time can be cleared back to "en curso".
+      // Editing an existing session: both times (and now both dates) are
+      // directly fixable, and an end time can be cleared back to "en curso".
+      if (!draftDate) {
+        setError("Elige una fecha.");
+        return;
+      }
       if (!draftTime) {
         setError("Elige una hora.");
         return;
       }
-      if (draftSleepEnded && !draftSleepEndTime) {
-        setError("Elige la hora de fin.");
+      if (draftSleepEnded && (!draftSleepEndDate || !draftSleepEndTime)) {
+        setError("Elige la fecha y hora de fin.");
         return;
       }
-      if (draftSleepType === "NOCHE" && draftSleepAchieved && !draftSleepAchievedTime) {
-        setError("Elige la hora en que logró dormir.");
+      if (draftSleepType === "NOCHE" && draftSleepAchieved && (!draftSleepAchievedDate || !draftSleepAchievedTime)) {
+        setError("Elige la fecha y hora en que logró dormir.");
         return;
       }
-      const [hours, minutes] = draftTime.split(":").map(Number);
-      const occurredAt = new Date(draftBaseDate);
-      occurredAt.setHours(hours, minutes, 0, 0);
+      const occurredAt = combineDateTime(draftDate, draftTime);
 
       let sleepEndedAt: string | null = null;
       if (draftSleepEnded) {
-        const [endHours, endMinutes] = draftSleepEndTime.split(":").map(Number);
-        const endedAt = new Date(draftSleepEndBaseDate);
-        endedAt.setHours(endHours, endMinutes, 0, 0);
-        sleepEndedAt = endedAt.toISOString();
+        sleepEndedAt = combineDateTime(draftSleepEndDate, draftSleepEndTime).toISOString();
       }
 
       let sleepAchievedAt: string | null = null;
       if (draftSleepType === "NOCHE" && draftSleepAchieved) {
-        const [achievedHours, achievedMinutes] = draftSleepAchievedTime.split(":").map(Number);
-        const achievedAt = new Date(draftSleepAchievedBaseDate);
-        achievedAt.setHours(achievedHours, achievedMinutes, 0, 0);
-        sleepAchievedAt = achievedAt.toISOString();
+        sleepAchievedAt = combineDateTime(draftSleepAchievedDate, draftSleepAchievedTime).toISOString();
       }
 
       setSaving(true);
@@ -524,9 +561,9 @@ export default function MarAntoniaHomePage() {
         setError(body.error ?? "No se pudo guardar. Inténtalo de nuevo.");
         return;
       }
-      const dayKey = editingContext.dayKey;
+      const originalDayKey = editingContext.dayKey;
       closePanel();
-      afterMutation(dayKey);
+      await refreshAfterSave(originalDayKey, occurredAt.toISOString());
       return;
     }
 
@@ -569,13 +606,15 @@ export default function MarAntoniaHomePage() {
         }
       }
 
+      if (!draftDate) {
+        setError("Elige una fecha.");
+        return;
+      }
       if (!draftTime) {
         setError("Elige una hora.");
         return;
       }
-      const [hours, minutes] = draftTime.split(":").map(Number);
-      const occurredAt = new Date(draftBaseDate);
-      occurredAt.setHours(hours, minutes, 0, 0);
+      const occurredAt = combineDateTime(draftDate, draftTime);
 
       setSaving(true);
       setError(null);
@@ -596,7 +635,7 @@ export default function MarAntoniaHomePage() {
         return;
       }
       closePanel();
-      afterMutation(TODAY);
+      await refreshAfterSave(null, occurredAt.toISOString());
       return;
     }
 
@@ -789,17 +828,31 @@ export default function MarAntoniaHomePage() {
           {(expandedType !== "SLEEP" ||
             editingContext ||
             (draftSleepPhase === "START" && (draftSleepType !== "NOCHE" || draftSleepSubPhase === "INICIO"))) && (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="activity-time" className="text-sm font-semibold text-white">
-                {expandedType === "SLEEP" ? "Hora de inicio" : "¿A qué hora?"}
-              </label>
-              <input
-                id="activity-time"
-                type="time"
-                value={draftTime}
-                onChange={(e) => setDraftTime(e.target.value)}
-                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
-              />
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-2">
+                <label htmlFor="activity-date" className="text-sm font-semibold text-white">
+                  {expandedType === "SLEEP" ? "Día de inicio" : "¿Qué día?"}
+                </label>
+                <input
+                  id="activity-date"
+                  type="date"
+                  value={draftDate}
+                  onChange={(e) => setDraftDate(e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-2">
+                <label htmlFor="activity-time" className="text-sm font-semibold text-white">
+                  {expandedType === "SLEEP" ? "Hora de inicio" : "¿A qué hora?"}
+                </label>
+                <input
+                  id="activity-time"
+                  type="time"
+                  value={draftTime}
+                  onChange={(e) => setDraftTime(e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
             </div>
           )}
 
@@ -818,17 +871,31 @@ export default function MarAntoniaHomePage() {
           )}
 
           {expandedType === "SLEEP" && editingContext && draftSleepType === "NOCHE" && draftSleepAchieved && (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="sleep-achieved-time" className="text-sm font-semibold text-white">
-                Hora en que logró dormir
-              </label>
-              <input
-                id="sleep-achieved-time"
-                type="time"
-                value={draftSleepAchievedTime}
-                onChange={(e) => setDraftSleepAchievedTime(e.target.value)}
-                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
-              />
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-2">
+                <label htmlFor="sleep-achieved-date" className="text-sm font-semibold text-white">
+                  Día en que logró dormir
+                </label>
+                <input
+                  id="sleep-achieved-date"
+                  type="date"
+                  value={draftSleepAchievedDate}
+                  onChange={(e) => setDraftSleepAchievedDate(e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-2">
+                <label htmlFor="sleep-achieved-time" className="text-sm font-semibold text-white">
+                  Hora en que logró dormir
+                </label>
+                <input
+                  id="sleep-achieved-time"
+                  type="time"
+                  value={draftSleepAchievedTime}
+                  onChange={(e) => setDraftSleepAchievedTime(e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
             </div>
           )}
 
@@ -845,17 +912,31 @@ export default function MarAntoniaHomePage() {
           )}
 
           {expandedType === "SLEEP" && editingContext && draftSleepEnded && (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="sleep-end-time" className="text-sm font-semibold text-white">
-                Hora de fin
-              </label>
-              <input
-                id="sleep-end-time"
-                type="time"
-                value={draftSleepEndTime}
-                onChange={(e) => setDraftSleepEndTime(e.target.value)}
-                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
-              />
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-2">
+                <label htmlFor="sleep-end-date" className="text-sm font-semibold text-white">
+                  Día de fin
+                </label>
+                <input
+                  id="sleep-end-date"
+                  type="date"
+                  value={draftSleepEndDate}
+                  onChange={(e) => setDraftSleepEndDate(e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-2">
+                <label htmlFor="sleep-end-time" className="text-sm font-semibold text-white">
+                  Hora de fin
+                </label>
+                <input
+                  id="sleep-end-time"
+                  type="time"
+                  value={draftSleepEndTime}
+                  onChange={(e) => setDraftSleepEndTime(e.target.value)}
+                  className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
             </div>
           )}
 
