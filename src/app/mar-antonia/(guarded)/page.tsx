@@ -287,7 +287,8 @@ export default function MarAntoniaHomePage() {
     if (editingContext || expandedType !== "SLEEP" || !draftSleepType) return;
     const needsOpenSession =
       draftSleepPhase === "END" ||
-      (draftSleepType === "NOCHE" && draftSleepPhase === "START" && draftSleepSubPhase === "LOGRADO");
+      (draftSleepType === "NOCHE" && draftSleepPhase === "START" && draftSleepSubPhase === "LOGRADO") ||
+      (draftSleepPhase === "START" && (draftSleepType !== "NOCHE" || draftSleepSubPhase === "INICIO"));
     if (!needsOpenSession) return;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- kicks off the open-session lookup for the "fin"/"logrado" panel
@@ -688,9 +689,22 @@ export default function MarAntoniaHomePage() {
     const isLogrado =
       draftSleepType === "NOCHE" && draftSleepPhase === "START" && draftSleepSubPhase === "LOGRADO";
     const isEnd = draftSleepPhase === "END";
-    if (!isLogrado && !isEnd) return null;
+    // The plain "start a new session" path (Inicio, or Siesta's own single
+    // START phase) -- checked against any already-open session up front so
+    // the block is explained before Guardar is even tapped, instead of only
+    // surfacing as a raw server error after the fact.
+    const isStartCreate =
+      draftSleepPhase === "START" && (draftSleepType !== "NOCHE" || draftSleepSubPhase === "INICIO");
+    if (!isLogrado && !isEnd && !isStartCreate) return null;
 
     if (openSleepSession === "loading") return "Buscando…";
+
+    if (isStartCreate) {
+      if (!openSleepSession) return null;
+      const closeVerb = draftSleepType === "NOCHE" ? "“Despertar”" : "“Fin”";
+      return `Ya hay una sesión de ${SLEEP_TYPE_LABEL[draftSleepType].toLowerCase()} en curso, iniciada a las ${formatTime(openSleepSession.occurredAt)}. Ciérrala en ${closeVerb} antes de iniciar una nueva.`;
+    }
+
     if (openSleepSession === null) {
       return `No hay ninguna sesión de ${SLEEP_TYPE_LABEL[draftSleepType].toLowerCase()} en curso.`;
     }
@@ -706,14 +720,20 @@ export default function MarAntoniaHomePage() {
 
   // Whether Guardar should be disabled because this SLEEP create-mode
   // action needs a usable open session and doesn't have one yet (still
-  // loading, none found, or -- for "logrado" -- already marked).
+  // loading, none found, or -- for "logrado" -- already marked), or --
+  // for starting a brand new session -- because one is already open.
   function sleepActionBlocked(): boolean {
     if (editingContext || expandedType !== "SLEEP") return false;
     const isLogrado =
       draftSleepType === "NOCHE" && draftSleepPhase === "START" && draftSleepSubPhase === "LOGRADO";
     const isEnd = draftSleepPhase === "END";
-    if (!isLogrado && !isEnd) return false;
-    if (!openSleepSession || openSleepSession === "loading") return true;
+    const isStartCreate =
+      draftSleepPhase === "START" && (draftSleepType !== "NOCHE" || draftSleepSubPhase === "INICIO");
+    if (!isLogrado && !isEnd && !isStartCreate) return false;
+
+    if (openSleepSession === "loading") return true;
+    if (isStartCreate) return openSleepSession != null;
+    if (!openSleepSession) return true;
     return isLogrado && openSleepSession.sleepAchievedAt != null;
   }
 
@@ -809,6 +829,7 @@ export default function MarAntoniaHomePage() {
               onChange={(v) => {
                 setDraftSleepPhase(v);
                 setDraftSleepSubPhase(null);
+                setError(null);
               }}
             />
           )}
@@ -821,7 +842,10 @@ export default function MarAntoniaHomePage() {
                 { value: "LOGRADO" as const, label: "Logrado" },
               ]}
               value={draftSleepSubPhase}
-              onChange={setDraftSleepSubPhase}
+              onChange={(v) => {
+                setDraftSleepSubPhase(v);
+                setError(null);
+              }}
             />
           )}
 

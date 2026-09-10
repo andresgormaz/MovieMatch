@@ -173,8 +173,57 @@ test.describe("MarAntonia Siesta and Dormir (start-end sleep sessions)", () => {
 
       await gridButton(page, "Siesta").click();
       await panelButton(page, "Inicio").click();
+      // Detected up front (before Guardar is even tapped) from the already-open
+      // session, not just as a failed-save error after the fact.
+      await expect(page.getByText(/Ya hay una sesión de siesta en curso/)).toBeVisible();
+      await expect(panelButton(page, "Guardar")).toBeDisabled();
+      await expect(page.locator("ul li")).toHaveCount(1);
+    } finally {
+      runFixture("delete", email);
+    }
+  });
+
+  test("an open Dormir session blocks starting a new one, and switching to Logrado doesn't carry over a stale error", async ({
+    page,
+  }) => {
+    const email = "e2e-marantonia-sleep-dormir-open@example.com";
+    runFixture("create-with-child", email, "Bebé Sueño", "MAMA");
+
+    try {
+      await login(page, email);
+      await page.goto("/mar-antonia");
+
+      // Start a night's sleep and mark it achieved, but never end it (as if
+      // "Despertar" was forgotten) -- this is the session that stays open.
+      await gridButton(page, "Dormir").click();
+      await panelButton(page, "Hacer dormir").click();
+      await panelButton(page, "Inicio").click();
       await panelButton(page, "Guardar").click();
-      await expect(page.getByText(/en curso\. Termínalo antes de iniciar uno nuevo\./)).toBeVisible();
+      await expect(page.locator("ul li")).toHaveCount(1);
+
+      await gridButton(page, "Dormir").click();
+      await panelButton(page, "Hacer dormir").click();
+      await panelButton(page, "Logrado").click();
+      await panelButton(page, "Guardar").click();
+      await expect(page.locator("ul li", { hasText: "Dormir" })).toContainText("durmiendo");
+
+      // Trying to start a brand new Dormir session while that one is still
+      // open is blocked up front, with a message that actually explains why
+      // (not the old session's already-achieved status, and not a stale
+      // error left over from a previous tab).
+      await gridButton(page, "Dormir").click();
+      await panelButton(page, "Hacer dormir").click();
+      await panelButton(page, "Inicio").click();
+      await expect(page.getByText(/Ya hay una sesión de dormir en curso, iniciada a las/)).toBeVisible();
+      await expect(panelButton(page, "Guardar")).toBeDisabled();
+
+      // Switching to "Logrado" replaces that message with the (unrelated)
+      // reason *that* action is blocked -- it already happened -- instead of
+      // leaving the "Inicio" one stuck on screen.
+      await panelButton(page, "Logrado").click();
+      await expect(page.getByText(/Ya se registró que logró dormir a las/)).toBeVisible();
+      await expect(page.getByText(/Ya hay una sesión de dormir en curso, iniciada a las/)).not.toBeVisible();
+      await expect(panelButton(page, "Guardar")).toBeDisabled();
       await expect(page.locator("ul li")).toHaveCount(1);
     } finally {
       runFixture("delete", email);
