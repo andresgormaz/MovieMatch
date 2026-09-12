@@ -140,11 +140,27 @@ const MAR_ANTONIA_ITEMS: NavItem[] = [
   {
     href: "/mar-antonia",
     label: "Inicio",
+    // The base path is shared with /mar-antonia/analisis, so this needs its
+    // own exact-match prefix -- pickActiveIndex's longest-prefix-wins logic
+    // handles the rest as long as this one isn't a prefix of that one too.
     activePrefixes: ["/mar-antonia"],
     icon: (
       <svg {...ICON_PROPS}>
         <path d="M4 11.5 12 4l8 7.5" />
         <path d="M6 10v9.5a.5.5 0 0 0 .5.5H10v-5.5h4V20h3.5a.5.5 0 0 0 .5-.5V10" />
+      </svg>
+    ),
+  },
+  {
+    href: "/mar-antonia/analisis",
+    label: "Análisis",
+    activePrefixes: ["/mar-antonia/analisis"],
+    icon: (
+      <svg {...ICON_PROPS}>
+        <path d="M4 20V10.5" />
+        <path d="M10 20V6" />
+        <path d="M16 20v-7.5" />
+        <path d="M20.5 20V4" />
       </svg>
     ),
   },
