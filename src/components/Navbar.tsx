@@ -1,0 +1,40 @@
+import Link from "next/link";
+import { auth } from "@/lib/auth";
+import { LogoutButton } from "@/components/LogoutButton";
+import { TitleSearch } from "@/components/TitleSearch";
+import { NavbarLinks } from "@/components/NavbarLinks";
+
+export async function Navbar() {
+  const session = await auth();
+
+  return (
+    <header className="sticky top-0 z-30 border-b border-white/5 bg-gradient-to-b from-black/95 to-black/70 backdrop-blur-md">
+      <nav aria-label="Barra superior" className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6">
+        <Link href="/" className="flex flex-shrink-0 items-center gap-1.5 text-xl font-black tracking-tight text-white">
+          <span className="text-accent">Movie</span>Match
+        </Link>
+        {session?.user && <TitleSearch />}
+        <div className="ml-auto flex items-center gap-3 text-sm sm:gap-5">
+          {session?.user ? (
+            <>
+              <NavbarLinks />
+              <LogoutButton />
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="text-neutral-300 hover:text-white transition-colors">
+                Iniciar sesión
+              </Link>
+              <Link
+                href="/register"
+                className="rounded-lg bg-accent px-3.5 py-1.5 font-semibold text-white hover:bg-accent-hover transition-colors"
+              >
+                Registrarme
+              </Link>
+            </>
+          )}
+        </div>
+      </nav>
+    </header>
+  );
+}

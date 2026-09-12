@@ -1,0 +1,830 @@
+// MovieMatch data model.
+// Content-based recommender: users rate titles (movies/series) they've seen,
+// rate actors/directors, and set genre/country weights. Recommendations score
+// unrated titles against those signals.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum TitleType {
+  MOVIE
+  SERIES
+}
+
+// Audience reach: how widely-seen/mass-market a title is, derived from
+// popularity/vote count (primary) and budget (reinforcement) -- see
+// classifyAudienceTier in src/lib/titleAttributes.ts. Independent from
+// BudgetTier: reach and production spend are correlated but not the same
+// thing (a low-budget film can go viral; a mega-budget one can flop).
+enum AudienceTier {
+  MAINSTREAM
+  INDIE
+}
+
+// Pure production-scale signal, from budget alone (movies only -- TMDB
+// doesn't report series budgets).
+enum BudgetTier {
+  MEGA
+  SMALL
+}
+
+enum RuntimeBucket {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+// Raw TMDB vote-count tier -- see classifyPopularityRange in
+// src/lib/titleAttributes.ts. Deliberately much lower thresholds than
+// AudienceTier: a separate signal, not a restatement of mainstream/indie.
+enum PopularityRange {
+  LOW
+  MID
+  HIGH
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  passwordHash          String
+  name                  String?
+  country               String? // ISO 3166-1 code -- which country's streaming catalog to show
+  originalTitles        Boolean   @default(false) // show each title's original-language name instead of the Spanish one
+  createdAt             DateTime  @default(now())
+  onboardingCompletedAt DateTime?
+  homeVisitedAt         DateTime? // last time the home screen was opened -- used for the "new since your last visit" count
+  tourSeenAt            DateTime? // set once the home coach-mark tutorial has been shown/skipped -- null means show it on next home visit
+  // Personal, stable invite code for "agregar como amigo" -- shared via link,
+  // same idea as Group.inviteCode but per-user instead of per-group since a
+  // friendship isn't scoped to any one group.
+  friendCode            String    @unique @default(cuid())
+
+  titleRatings       UserTitleRating[]
+  personRatings      UserPersonRating[]
+  genrePreferences   UserGenrePreference[]
+  countryPreferences UserCountryPreference[]
+  typePreferences    UserTypePreference[]
+  audiencePreferences UserAudiencePreference[]
+  budgetPreferences   UserBudgetPreference[]
+  runtimePreferences  UserRuntimePreference[]
+  popularityPreferences UserPopularityPreference[]
+  wishlist           Wishlist[]
+  onboardingChoices  OnboardingChoice[]
+  ownedGroups        Group[]       @relation("GroupOwner")
+  groupMemberships   GroupMember[]
+  savedFilters       SavedFilter[]
+  pageToursSeen      UserPageTourSeen[]
+  friendshipsAsA        Friendship[]         @relation("FriendshipA")
+  friendshipsAsB        Friendship[]         @relation("FriendshipB")
+  sentRecommendations     SentRecommendation[] @relation("SentRecFrom")
+  receivedRecommendations SentRecommendation[] @relation("SentRecTo")
+  ownedHouseholds        Household[]       @relation("HouseholdOwner")
+  householdMemberships   HouseholdMember[]
+  ownedChildren          Child[]           @relation("ChildOwner")
+  childCaregiving        ChildCaregiver[]
+  childActivitiesLogged  ChildActivity[]   @relation("ChildActivityCaregiver")
+}
+
+// A friendship is one row per pair, regardless of who sent the invite --
+// userAId is always the lexicographically smaller id (see lib/friends.ts),
+// so there's exactly one row per pair and no risk of a mirrored duplicate.
+model Friendship {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+  userA     User     @relation("FriendshipA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+// "Te recomendaron X" -- a friend pushing one specific title at you, not the
+// joint/pooled recommendations Group already does. seenAt is set in bulk the
+// first time the recipient opens /friends (not per-item), just enough to
+// drive an unread-count badge without over-engineering read tracking.
+model SentRecommendation {
+  id         String    @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  titleId    String
+  createdAt  DateTime  @default(now())
+  seenAt     DateTime?
+
+  fromUser User  @relation("SentRecFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User  @relation("SentRecTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  title    Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([toUserId])
+  @@index([fromUserId])
+  @@index([titleId])
+}
+
+// Per-page coach-mark tutorials (recomendaciones, ficha de título, ficha de
+// persona, catálogo, novedades, mi lista, vs, calificar vistas, calificar
+// populares) -- separate from the home tour above (User.tourSeenAt), which
+// predates this and works fine as-is. One row per page a user has already
+// seen the tutorial for; absence of a row means "show it".
+model UserPageTourSeen {
+  id      String   @id @default(cuid())
+  userId  String
+  pageKey String
+  seenAt  DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pageKey])
+  @@index([userId])
+}
+
+// One "which do you like more" round from onboarding -- titleAId/titleBId
+// are shown, winnerId is which one was picked. Not a rating (we don't know
+// they actually watched either one), just a preference-inference signal and
+// a log of what's already been shown, so onboarding doesn't repeat itself
+// and can pick genres it hasn't covered yet.
+model OnboardingChoice {
+  id        String   @id @default(cuid())
+  userId    String
+  titleAId  String
+  titleBId  String
+  winnerId  String
+  skipped   Boolean  @default(false) // true = "no vi ninguna de las dos" -- winnerId is meaningless, no preference bump
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// "Linked accounts": a group of users who get joint recommendations that
+// factor in everyone's tastes and exclude anything any member has seen.
+model Group {
+  id         String   @id @default(cuid())
+  name       String?
+  inviteCode String   @unique @default(cuid())
+  ownerId    String
+  createdAt  DateTime @default(now())
+
+  owner   User          @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+model Title {
+  id             String    @id @default(cuid())
+  // Not globally unique on its own: TMDB movie ids and TV ids are separate
+  // number spaces, so a movie and a series can legitimately share the same
+  // tmdbId. Uniqueness only holds combined with type.
+  tmdbId         Int
+  type           TitleType
+  name           String
+  originalName   String?
+  overview       String?
+  releaseYear    Int?
+  releaseDate    DateTime? // full date (movies) -- used to flag "still in theaters"
+  posterPath     String?
+  backdropPath   String?
+  popularity     Float?
+  voteAverage    Float?
+  voteCount      Int? // TMDB vote count -- used as the "masividad" filter
+  budget         Int? // USD, movies only (TMDB doesn't report it for series)
+  runtime        Int? // minutes -- movie runtime, or a representative episode runtime for series
+  seasonsCount   Int? // series only -- total number of seasons
+  episodesCount  Int? // series only -- total number of episodes across all seasons
+  nextEpisodeAirDate DateTime? // series only -- next episode's scheduled air date, null if none scheduled
+  status         String? // series only -- raw TMDB status: "Returning Series", "Planned", "In Production", "Ended", "Canceled", "Pilot"
+  inProduction   Boolean? // series only -- actively producing new episodes right now
+  lastAirDate    DateTime? // series only -- most recently aired episode's date
+  collectionId   Int? // TMDB "belongs_to_collection" id, movies only -- lets sequels/trilogies
+  // (Lord of the Rings 1-2-3, the Harry Potter films...) count as one unit of
+  // evidence instead of N when inferring an actor/director preference, so a
+  // single franchise binge can't manufacture a preference on its own.
+  originCountry  String? // primary ISO 3166-1 country code
+  onboardingRank Int? // lower = shown earlier during onboarding ("top 100")
+  // YouTube video key for the best trailer TMDB has, fetched lazily the
+  // first time someone opens this title's detail page (see /api/titles/[id],
+  // same pattern as Person.detailsFetchedAt). Null key with a non-null
+  // trailerFetchedAt means "we checked, TMDB has none" -- distinct from
+  // never having checked, so we don't refetch on every single page view.
+  trailerKey       String?
+  trailerFetchedAt DateTime?
+  // Same lazy-fetch-once idea as trailerFetchedAt, for TMDB's community
+  // reviews (see lib/reviews.ts) -- null means "never tried", non-null with
+  // zero TitleReview rows means "checked, TMDB has none for this title".
+  reviewsFetchedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  genres    TitleGenre[]
+  cast      TitleCast[]
+  crew      TitleCrew[]
+  ratings   UserTitleRating[]
+  providers TitleProvider[]
+  similar   TitleSimilar[]
+  wishlist  Wishlist[]
+  sentRecommendations SentRecommendation[]
+  reviews   TitleReview[]
+
+  @@unique([tmdbId, type])
+  @@index([tmdbId])
+  @@index([onboardingRank])
+  @@index([type])
+  @@index([releaseYear])
+  @@index([voteAverage])
+  @@index([voteCount])
+  // `orderBy: popularity desc` is the single most common query shape in the
+  // app -- the recommendation candidate pool, search, the import/backfill
+  // batches, onboarding's popularity fallback -- all of it, on every
+  // request. Without this the catalog gets sorted from scratch every time,
+  // getting slower as more titles get imported.
+  @@index([popularity])
+}
+
+// A streaming service (Netflix, HBO Max, etc) per TMDB/JustWatch.
+model Provider {
+  id       Int    @id // TMDB provider_id
+  name     String
+  logoPath String?
+
+  titles TitleProvider[]
+}
+
+// Where a title streams (subscription/"flatrate" only), per country -- the
+// same title is on different services in different countries.
+model TitleProvider {
+  titleId     String
+  providerId  Int
+  countryCode String
+  title       Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, providerId, countryCode])
+  @@index([countryCode])
+}
+
+// "People who liked this also liked that" -- TMDB's own recommendations for
+// a title (fetched alongside credits/watch-providers, no extra API cost),
+// used to boost candidates related to titles the user rated highly. Not a
+// relation to another Title row: the related title might not be in our
+// catalog (yet), so it's resolved by tmdbId+type lookup at scoring time.
+model TitleSimilar {
+  titleId       String
+  relatedTmdbId Int
+  relatedType   TitleType
+  rank          Int // position in TMDB's response, 0 = most relevant
+  title         Title     @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, relatedTmdbId, relatedType])
+  @@index([relatedTmdbId, relatedType])
+}
+
+// "La voy a ver": titles a user wants to watch, saved from a recommendation
+// or the catalog for later. Excluded from future recommendations same as a
+// rating; converts into one (and disappears from here) once marked as seen.
+model Wishlist {
+  id      String   @id @default(cuid())
+  userId  String
+  titleId String
+  addedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId])
+}
+
+model Genre {
+  id   Int    @id // TMDB genre id
+  name String @unique
+
+  titles      TitleGenre[]
+  preferences UserGenrePreference[]
+}
+
+model TitleGenre {
+  titleId String
+  genreId Int
+  title   Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, genreId])
+  // The composite primary key above only serves "titleId -> its genres"
+  // lookups (titleId leads it) -- filtering "titles that have genre X"
+  // (explore/recommendations/wishlist's genre filter) needs genreId as its
+  // own leading column, which nothing else here provides.
+  @@index([genreId])
+}
+
+model Person {
+  id                 String  @id @default(cuid())
+  tmdbId             Int     @unique
+  name               String
+  profilePath        String?
+  knownForDepartment String?
+  biography          String?
+  birthday           DateTime?
+  deathday           DateTime?
+  placeOfBirth       String?
+  // Set once we've pulled biography/birthday/etc from TMDB for this person
+  // (see /api/people/[id]) -- null means "never tried yet, fetch on next
+  // view", distinct from an empty biography (which TMDB genuinely has
+  // nothing for) so we don't re-fetch on every single page load.
+  detailsFetchedAt   DateTime?
+  // TMDB convention: 0 = not set, 1 = female, 2 = male, 3 = non-binary. Null
+  // means "never fetched" (same idea as detailsFetchedAt) -- captured from
+  // credits on import going forward, and self-healed a handful of people at
+  // a time wherever it's actually needed (see lib/tasteVisuals.ts) for
+  // people imported before this field existed.
+  gender             Int?
+
+  castRoles TitleCast[]
+  crewRoles TitleCrew[]
+  ratings   UserPersonRating[]
+
+  @@index([knownForDepartment])
+}
+
+model TitleCast {
+  titleId   String
+  personId  String
+  character String?
+  order     Int     @default(0)
+  title     Title   @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  person    Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, personId])
+  @@index([personId])
+}
+
+// Directors / creators (job = "Director" for movies, "Creator" for series)
+model TitleCrew {
+  titleId  String
+  personId String
+  job      String
+  title    Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, personId, job])
+  @@index([personId])
+}
+
+model UserTitleRating {
+  id      String   @id @default(cuid())
+  userId  String
+  titleId String
+  seen    Boolean  @default(true)
+  score   Int? // 1-5 stars, null when seen=false or seen but not yet rated
+  // Only meaningful when seen=false: true = "no me interesa" (explicit
+  // rejection, excluded from future recommendations for good), false =
+  // neutral "no la he visto" (e.g. a VS swap-out, or Explore's "No la vi")
+  // -- still a perfectly good recommendation candidate. Always false when
+  // seen=true (can't reject something you've watched).
+  notInterested Boolean @default(false)
+  // Series only ("WATCHING" | "FINISHED" | "ABANDONED"), only meaningful
+  // when seen=true -- captured alongside marking a series as seen. Null for
+  // movies, and for series marked seen without going through a UI flow that
+  // asks (e.g. a "vs" win records seen=true but doesn't ask this).
+  watchProgress String?
+  ratedAt DateTime @default(now())
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, titleId])
+  @@index([userId])
+}
+
+// Manual actor/director adjustment (set from "Mis gustos", shared between
+// both roles since Person covers both) -- ADDED to the derived score, not a
+// replacement. `score` is an accumulated total of every +1/-1 click, not a
+// bounded scale. The onboarding "rate people you know" step also writes
+// here directly (an absolute set, not an increment) as a starting point.
+// The derived component comes from accumulated "vs" wins + 4-5-star
+// ratings requiring several corroborating titles (see
+// computeDerivedPreferences in src/lib/preferenceCounts.ts) -- this table
+// only ever holds the manual layer on top of that.
+model UserPersonRating {
+  id       String @id @default(cuid())
+  userId   String
+  personId String
+  score    Int // accumulated manual adjustment, added to the derived actor/director score
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, personId])
+  @@index([userId])
+}
+
+// Manual adjustment tables below (genre/country/type/audience/budget/
+// runtime/popularity) all follow the same pattern: `weight` is an
+// accumulated total of every +1/-1 click from "Mis gustos", ADDED to
+// (never replacing) the dimension's derived score from
+// computeDerivedPreferences -- see preferenceCounts.ts.
+
+model UserGenrePreference {
+  id      String @id @default(cuid())
+  userId  String
+  genreId Int
+  weight  Int
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, genreId])
+  @@index([userId])
+}
+
+model UserCountryPreference {
+  id          String @id @default(cuid())
+  userId      String
+  countryCode String
+  weight      Int
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, countryCode])
+  @@index([userId])
+}
+
+model UserTypePreference {
+  id     String    @id @default(cuid())
+  userId String
+  type   TitleType
+  weight Int
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+model UserAudiencePreference {
+  id     String       @id @default(cuid())
+  userId String
+  tier   AudienceTier
+  weight Int
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier])
+  @@index([userId])
+}
+
+model UserBudgetPreference {
+  id     String     @id @default(cuid())
+  userId String
+  tier   BudgetTier
+  weight Int
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier])
+  @@index([userId])
+}
+
+model UserRuntimePreference {
+  id     String        @id @default(cuid())
+  userId String
+  bucket RuntimeBucket
+  weight Int
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bucket])
+  @@index([userId])
+}
+
+model UserPopularityPreference {
+  id     String          @id @default(cuid())
+  userId String
+  range  PopularityRange
+  weight Int
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, range])
+  @@index([userId])
+}
+
+// Named, reusable filter presets from the "Aplicar y guardar" button on the
+// filter panel -- the same CatalogFilters shape (src/components/explore/
+// FilterPanel.tsx) is meaningful on /explore, /recommendations, and
+// /wishlist, so a preset isn't scoped to whichever page it was created on.
+// `filters` is the whole CatalogFilters object, JSON-serialized -- there's
+// no relational precedent in this schema for a struct this shaped (ranges,
+// arrays, a nested actor/director pick), and it's only ever read back
+// through the same shape it was written in.
+model SavedFilter {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  filters   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// Cached items from a handful of movie/series news RSS feeds (see
+// lib/news.ts) -- shared across every user, not per-account, since the
+// articles themselves aren't personal. Refreshed on-demand (whoever opens
+// /news first after the cache goes stale triggers the refetch) rather than
+// on a schedule, the same lazy-refresh idea used elsewhere in this app
+// (Person.detailsFetchedAt, Title.trailerFetchedAt) since there's no
+// standalone cron worker here. "Relevant to your taste" is computed at
+// request time by matching title/summary against the user's preferred
+// actors/directors/genres/titles -- not stored here, so it can't go stale.
+model NewsArticle {
+  id          String   @id @default(cuid())
+  source      String // feed display name, e.g. "Variety"
+  title       String
+  link        String   @unique
+  summary     String?
+  imageUrl    String?
+  publishedAt DateTime
+  fetchedAt   DateTime @default(now())
+
+  @@index([publishedAt])
+}
+
+// TMDB's own community reviews, cached per title (see Title.reviewsFetchedAt
+// -- lazy, fetched once) instead of hit fresh on every "Para ti" page load.
+// A handful of the most substantial reviews per title, not the full list.
+model TitleReview {
+  id               String   @id @default(cuid())
+  titleId          String
+  tmdbReviewId     String   @unique
+  author           String
+  authorAvatarPath String?
+  authorRating     Int? // TMDB author_details.rating, 1-10, null if the reviewer didn't leave one
+  content          String
+  url              String
+  publishedAt      DateTime // the review's own creation date on TMDB
+  title            Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@index([titleId])
+}
+
+// ---------------------------------------------------------------------------
+// MiSuper: smart supermarket shopping list -- a separate app inside the same
+// project (see the super-app hub at "/"), sharing accounts but not any data
+// with MovieMatch. Fase 0/1 scope only: household + list + item CRUD,
+// categories, checks. No AI ingestion, purchase history, or recommendation
+// engine yet -- those phases add their own tables later (products,
+// purchase_sessions, artifacts, intake_jobs, product_signals, etc).
+// ---------------------------------------------------------------------------
+
+enum HouseholdRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum ListStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Household {
+  id          String   @id @default(cuid())
+  name        String?
+  ownerUserId String
+  inviteCode  String   @unique @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner      User              @relation("HouseholdOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members    HouseholdMember[]
+  categories Category[]
+  lists      ShoppingList[]
+  items      ListItem[]
+}
+
+model HouseholdMember {
+  id          String        @id @default(cuid())
+  householdId String
+  userId      String
+  role        HouseholdRole @default(EDITOR)
+  joinedAt    DateTime      @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, userId])
+  @@index([userId])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  householdId String
+  name        String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  items     ListItem[]
+
+  @@unique([householdId, name])
+  @@index([householdId])
+}
+
+model ShoppingList {
+  id          String     @id @default(cuid())
+  householdId String
+  title       String
+  status      ListStatus @default(DRAFT)
+  plannedAt   DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  household Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  items     ListItem[]
+
+  @@index([householdId, status])
+  @@index([householdId, plannedAt])
+}
+
+model ListItem {
+  id          String    @id @default(cuid())
+  listId      String
+  // Denormalized from list.householdId so every authorization check is a
+  // single indexed WHERE instead of a join -- see lib/miSuper/authz.ts.
+  householdId String
+  categoryId  String?
+  rawName     String // exactly what the user typed, never edited
+  displayName String // editable label shown in the UI, seeded from rawName
+  qty         Float?
+  unit        String?
+  // The timestamp IS the boolean, same idiom as User.onboardingCompletedAt/
+  // tourSeenAt -- "undo" is just nulling it back out.
+  checkedAt   DateTime?
+  // Plain string, not an enum: gains "photo"/"voice"/"receipt" values once
+  // Fase 2 (AI ingestion) exists, without a migration for each new one --
+  // same reasoning as UserTitleRating.watchProgress.
+  sourceType  String    @default("manual")
+  // Always false in Fase 1 -- the field/styling hook exists now for when
+  // Fase 4's recommendation engine starts adding suggested items.
+  isSuggested Boolean   @default(false)
+  // Offline-sync idempotency key (see spec 9.1) -- nullable multiple NULLs
+  // don't collide under the unique index below, only true retries do.
+  clientMutationId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  list      ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  household Household    @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  category  Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([listId, clientMutationId])
+  @@index([listId])
+  @@index([householdId])
+  @@index([categoryId])
+}
+
+// ---------------------------------------------------------------------------
+// MarAntonia: baby-tracking app for the family's daughter -- another separate
+// app inside the same project (see the super-app hub at "/"), sharing
+// accounts but not any data with MovieMatch or MiSuper. Two caregivers
+// (mamá/papá) log feedings, naps, meals, wake-ups and diaper changes; no
+// OWNER/EDITOR/VIEWER hierarchy like MiSuper's Household -- both caregivers
+// have equal rights over their child's data.
+// ---------------------------------------------------------------------------
+
+enum CaregiverRole {
+  MAMA
+  PAPA
+}
+
+enum ChildActivityType {
+  MEAL
+  SLEEP
+  MILK
+  NIGHT_WAKE
+  DIAPER
+  BATH
+  OUTING
+}
+
+// SLEEP only -- siesta (nap) and noche (overnight sleep) are tracked as
+// separate open/closed sessions rather than sharing one "last sleep" slot,
+// so a nap can be logged mid-way through an ongoing night sleep.
+enum SleepType {
+  SIESTA
+  NOCHE
+}
+
+enum MealQuality {
+  GOOD
+  REGULAR
+  BAD
+}
+
+enum WakeMood {
+  CALM
+  CRYING
+}
+
+enum DiaperContent {
+  PEE
+  POOP
+}
+
+// Only meaningful when DiaperContent is POOP -- a pee diaper has neither.
+enum DiaperAmount {
+  LITTLE
+  A_LOT
+}
+
+enum DiaperConsistency {
+  NORMAL
+  HARD
+  DIARRHEA
+}
+
+// OUTING only.
+enum OutingType {
+  CAR
+  PARK
+  FAMILY_VISIT
+  OTHER
+}
+
+model Child {
+  id          String   @id @default(cuid())
+  name        String   @default("MarAntonia")
+  ownerUserId String
+  inviteCode  String   @unique @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner      User             @relation("ChildOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  caregivers ChildCaregiver[]
+  activities ChildActivity[]
+}
+
+model ChildCaregiver {
+  id       String        @id @default(cuid())
+  childId  String
+  userId   String
+  role     CaregiverRole
+  joinedAt DateTime      @default(now())
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, userId])
+  @@index([userId])
+}
+
+model ChildActivity {
+  id          String            @id @default(cuid())
+  childId     String
+  type        ChildActivityType
+  occurredAt  DateTime          @default(now())
+  // Who's credited -- defaults to whoever logged it, but stays editable per
+  // entry (e.g. one parent logging on behalf of the other on a shared
+  // device). SetNull rather than cascade: removing a caregiver account
+  // shouldn't delete the history they logged.
+  caregiverId   String?
+  mealQuality   MealQuality?    // MEAL only
+  milkOunces    Float?          // MILK only -- always 4, 6, or 8 (see validateActivityDetail)
+  wakeMood      WakeMood?       // NIGHT_WAKE only
+  diaperContent DiaperContent?  // DIAPER only
+  diaperAmount      DiaperAmount?      // DIAPER + POOP only
+  diaperConsistency DiaperConsistency? // DIAPER + POOP only
+  outingType    OutingType?     // OUTING only. BATH has no detail field at all -- just occurredAt + caregiver.
+  // SLEEP only -- occurredAt above doubles as the session's start time;
+  // sleepEndedAt stays null while the nap/night is still in progress, and
+  // "the last siesta/noche" a "fin" tap closes is whichever SLEEP row of
+  // that sleepType still has sleepEndedAt null for this child.
+  sleepType    SleepType?
+  sleepEndedAt DateTime?
+  // NOCHE only -- when the child actually fell asleep, distinct from
+  // occurredAt (when the bedtime routine/attempt started). Lets "cuánto nos
+  // tardamos en lograr hacerla dormir" (occurredAt -> sleepAchievedAt) be
+  // shown separately from the total sleep duration (sleepAchievedAt ->
+  // sleepEndedAt). Always null for SIESTA, which has no such middle step.
+  sleepAchievedAt DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  child     Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  caregiver User? @relation("ChildActivityCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
+
+  @@index([childId, occurredAt])
+  @@index([childId, type])
+}
