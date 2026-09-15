@@ -1,0 +1,79 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { requireAnyChild, authzErrorResponse } from "@/lib/marAntonia/authz";
+import { MAX_PHOTO_DATA_URL_LENGTH } from "@/lib/marAntonia/imageCompression";
+
+const CAREGIVER_SELECT = { id: true, name: true, email: true } as const;
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  let caregiver;
+  try {
+    caregiver = await requireAnyChild(session.user.id);
+  } catch (e) {
+    return authzErrorResponse(e);
+  }
+
+  const products = await prisma.childProduct.findMany({
+    where: { childId: caregiver.childId },
+    include: { caregiver: { select: CAREGIVER_SELECT } },
+    orderBy: { name: "asc" },
+  });
+
+  return NextResponse.json({ products });
+}
+
+const photoSchema = z
+  .string()
+  .max(MAX_PHOTO_DATA_URL_LENGTH, "La foto es muy pesada, prueba con otra o recórtala.")
+  .startsWith("data:image/", "Formato de foto inválido.");
+
+const createSchema = z.object({
+  name: z.string().trim().min(1, "El nombre es obligatorio").max(150),
+  category: z
+    .string()
+    .max(60)
+    .optional()
+    .transform((v) => (v?.trim() ? v.trim() : undefined)),
+  notes: z
+    .string()
+    .max(2000)
+    .optional()
+    .transform((v) => (v?.trim() ? v.trim() : undefined)),
+  photoDataUrl: photoSchema.optional(),
+  caregiverId: z.string(),
+});
+
+export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+
+  let caregiver;
+  try {
+    caregiver = await requireAnyChild(session.user.id);
+  } catch (e) {
+    return authzErrorResponse(e);
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Datos inválidos" }, { status: 400 });
+  }
+
+  const targetCaregiver = await prisma.childCaregiver.findUnique({
+    where: { childId_userId: { childId: caregiver.childId, userId: parsed.data.caregiverId } },
+  });
+  if (!targetCaregiver) return NextResponse.json({ error: "Cuidador inválido" }, { status: 400 });
+
+  const product = await prisma.childProduct.create({
+    data: { childId: caregiver.childId, ...parsed.data },
+    include: { caregiver: { select: CAREGIVER_SELECT } },
+  });
+
+  return NextResponse.json({ product }, { status: 201 });
+}

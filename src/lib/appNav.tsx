@@ -188,6 +188,19 @@ const MAR_ANTONIA_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: "/mar-antonia/info",
+    label: "Info",
+    activePrefixes: ["/mar-antonia/info"],
+    icon: (
+      <svg {...ICON_PROPS}>
+        <path d="M7 3.5h7l3 3V20a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 7 20Z" />
+        <path d="M14 3.5V7h3.5" />
+        <path d="M9.5 12h5" />
+        <path d="M9.5 15h5" />
+      </svg>
+    ),
+  },
+  {
     href: "/mar-antonia/ajustes",
     label: "Ajustes",
     activePrefixes: ["/mar-antonia/ajustes"],

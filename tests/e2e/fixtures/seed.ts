@@ -132,6 +132,15 @@ async function main() {
       },
     });
     console.log(JSON.stringify({ activityId: activity.id }));
+  } else if (action === "add-doctor") {
+    // Seeds a doctor directly -- for tests that only need one to already
+    // exist (e.g. picking it on a prescription's form, or an authz check)
+    // without driving the "+ Agregar médico" UI first.
+    const [childId, caregiverUserId, name] = args;
+    const doctor = await prisma.childDoctor.create({
+      data: { childId, caregiverId: caregiverUserId, name: name || "Dr. E2E" },
+    });
+    console.log(JSON.stringify({ doctorId: doctor.id }));
   } else if (action === "get-item-checked") {
     // Reads server-side state directly -- for the offline sync test, this
     // is how we confirm a queued mutation actually reached the database

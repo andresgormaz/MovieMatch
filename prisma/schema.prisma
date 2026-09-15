@@ -91,6 +91,9 @@ model User {
   childActivitiesLogged  ChildActivity[]   @relation("ChildActivityCaregiver")
   childGrowthMeasurementsLogged ChildGrowthMeasurement[] @relation("ChildGrowthMeasurementCaregiver")
   childVaccineDosesLogged       ChildVaccineDose[]       @relation("ChildVaccineDoseCaregiver")
+  childDoctorsLogged            ChildDoctor[]            @relation("ChildDoctorCaregiver")
+  childPrescriptionsLogged      ChildPrescription[]      @relation("ChildPrescriptionCaregiver")
+  childProductsLogged           ChildProduct[]           @relation("ChildProductCaregiver")
 }
 
 // A friendship is one row per pair, regardless of who sent the invite --
@@ -791,6 +794,9 @@ model Child {
   activities         ChildActivity[]
   growthMeasurements ChildGrowthMeasurement[]
   vaccineDoses       ChildVaccineDose[]
+  doctors            ChildDoctor[]
+  prescriptions      ChildPrescription[]
+  products           ChildProduct[]
 }
 
 model ChildCaregiver {
@@ -887,5 +893,74 @@ model ChildVaccineDose {
   caregiver User? @relation("ChildVaccineDoseCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
 
   @@unique([childId, vaccineKey])
+  @@index([childId])
+}
+
+// Contact info for someone Mar sees medically -- pediatrician, dermatologist,
+// etc. Freeform rather than a fixed specialty enum since a family's roster of
+// doctors doesn't fit a small closed set.
+model ChildDoctor {
+  id          String   @id @default(cuid())
+  childId     String
+  name        String
+  specialty   String?
+  location    String? // clinic/consulta name or address
+  phone       String?
+  email       String?
+  notes       String?
+  caregiverId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  child     Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  caregiver User?        @relation("ChildDoctorCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
+  doctorFor ChildPrescription[]
+
+  @@index([childId])
+}
+
+// A prescription/indication given to Mar -- the doctor link is optional
+// (SetNull, not required) so deleting a ChildDoctor entry never deletes the
+// prescription history tied to them. photoDataUrl is a small compressed
+// JPEG encoded as a data: URL (see compressImageFile client-side) -- this
+// app has no external file storage set up, so images live directly in the
+// row rather than adding a new storage dependency for a low-volume, personal
+// use case.
+model ChildPrescription {
+  id            String    @id @default(cuid())
+  childId       String
+  date          DateTime  @default(now())
+  doctorId      String?
+  medication    String
+  instructions  String?
+  photoDataUrl  String?
+  caregiverId   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  child     Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  doctor    ChildDoctor? @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  caregiver User?        @relation("ChildPrescriptionCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
+
+  @@index([childId, date])
+}
+
+// A product Mar uses regularly (crema, gotas, jarabe, etc.) -- notes hold
+// dosage/frequency/whatever's useful to remember, photoDataUrl same
+// data-URL approach as ChildPrescription.
+model ChildProduct {
+  id           String   @id @default(cuid())
+  childId      String
+  name         String
+  category     String?
+  notes        String?
+  photoDataUrl String?
+  caregiverId  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  child     Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  caregiver User? @relation("ChildProductCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
+
   @@index([childId])
 }

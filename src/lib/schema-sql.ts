@@ -378,6 +378,49 @@ export const TABLE_STATEMENTS = [
     CONSTRAINT "ChildVaccineDose_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "ChildVaccineDose_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "ChildDoctor" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "childId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "specialty" TEXT,
+    "location" TEXT,
+    "phone" TEXT,
+    "email" TEXT,
+    "notes" TEXT,
+    "caregiverId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ChildDoctor_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ChildDoctor_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ChildPrescription" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "childId" TEXT NOT NULL,
+    "date" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "doctorId" TEXT,
+    "medication" TEXT NOT NULL,
+    "instructions" TEXT,
+    "photoDataUrl" TEXT,
+    "caregiverId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ChildPrescription_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ChildPrescription_doctorId_fkey" FOREIGN KEY ("doctorId") REFERENCES "ChildDoctor" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "ChildPrescription_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ChildProduct" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "childId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "category" TEXT,
+    "notes" TEXT,
+    "photoDataUrl" TEXT,
+    "caregiverId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ChildProduct_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ChildProduct_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -466,6 +509,9 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "ChildGrowthMeasurement_childId_occurredAt_idx" ON "ChildGrowthMeasurement"("childId", "occurredAt")`,
   `CREATE INDEX IF NOT EXISTS "ChildVaccineDose_childId_idx" ON "ChildVaccineDose"("childId")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "ChildVaccineDose_childId_vaccineKey_key" ON "ChildVaccineDose"("childId", "vaccineKey")`,
+  `CREATE INDEX IF NOT EXISTS "ChildDoctor_childId_idx" ON "ChildDoctor"("childId")`,
+  `CREATE INDEX IF NOT EXISTS "ChildPrescription_childId_date_idx" ON "ChildPrescription"("childId", "date")`,
+  `CREATE INDEX IF NOT EXISTS "ChildProduct_childId_idx" ON "ChildProduct"("childId")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
