@@ -27,7 +27,9 @@ test.describe("MarAntonia Ajustes", () => {
       await expect(page.getByText("Mamá")).toBeVisible();
 
       await page.fill("#child-name", "Perfil Renombrado");
-      await page.getByRole("button", { name: "Guardar" }).click();
+      // Scoped to the rename form specifically -- the birthDate/sex form
+      // added below it has its own "Guardar" button too.
+      await page.locator("form", { has: page.locator("#child-name") }).getByRole("button", { name: "Guardar" }).click();
       await expect(page.locator("#child-name")).toHaveValue("Perfil Renombrado");
     } finally {
       runFixture("delete", email);

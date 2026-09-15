@@ -89,6 +89,8 @@ model User {
   ownedChildren          Child[]           @relation("ChildOwner")
   childCaregiving        ChildCaregiver[]
   childActivitiesLogged  ChildActivity[]   @relation("ChildActivityCaregiver")
+  childGrowthMeasurementsLogged ChildGrowthMeasurement[] @relation("ChildGrowthMeasurementCaregiver")
+  childVaccineDosesLogged       ChildVaccineDose[]       @relation("ChildVaccineDoseCaregiver")
 }
 
 // A friendship is one row per pair, regardless of who sent the invite --
@@ -763,17 +765,32 @@ enum OutingType {
   OTHER
 }
 
-model Child {
-  id          String   @id @default(cuid())
-  name        String   @default("MarAntonia")
-  ownerUserId String
-  inviteCode  String   @unique @default(cuid())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// Which WHO growth-standard reference curves apply -- growth charts differ
+// by sex, unlike everything else this app tracks.
+enum ChildSex {
+  MALE
+  FEMALE
+}
 
-  owner      User             @relation("ChildOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
-  caregivers ChildCaregiver[]
-  activities ChildActivity[]
+model Child {
+  id          String    @id @default(cuid())
+  name        String    @default("MarAntonia")
+  ownerUserId String
+  inviteCode  String    @unique @default(cuid())
+  // Both optional -- an existing profile predates these fields, and neither
+  // is needed for the day-to-day activity log. Growth charts and the
+  // vaccine schedule need them (age-in-months on the x-axis, sex for which
+  // WHO reference curve to plot) and prompt to fill them in when missing.
+  birthDate   DateTime?
+  sex         ChildSex?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  owner              User                      @relation("ChildOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  caregivers         ChildCaregiver[]
+  activities         ChildActivity[]
+  growthMeasurements ChildGrowthMeasurement[]
+  vaccineDoses       ChildVaccineDose[]
 }
 
 model ChildCaregiver {
@@ -827,4 +844,48 @@ model ChildActivity {
 
   @@index([childId, occurredAt])
   @@index([childId, type])
+}
+
+// A pediatrician-visit measurement (weight/height/head circumference), not
+// an "activity" -- occurs every few weeks/months rather than daily, and
+// plotted against WHO reference curves rather than shown in the daily feed.
+// All three measurements are optional and independent (a visit might only
+// take a weight, say), but at least one is required -- enforced in the API,
+// not the schema, same as ChildActivity's per-type detail fields.
+model ChildGrowthMeasurement {
+  id                  String   @id @default(cuid())
+  childId             String
+  occurredAt          DateTime @default(now())
+  caregiverId         String?
+  weightKg            Float?
+  heightCm            Float?
+  headCircumferenceCm Float?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  child     Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  caregiver User? @relation("ChildGrowthMeasurementCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
+
+  @@index([childId, occurredAt])
+}
+
+// One row per dose in the Chile PNI vaccine catalog (src/lib/marAntonia/
+// vaccineSchedule.ts) that's actually been given -- the catalog itself lives
+// in code, not the database, since it's a fixed reference schedule rather
+// than per-child data. vaccineKey matches a catalog entry's own key; a dose
+// with no row here just hasn't been marked as given yet.
+model ChildVaccineDose {
+  id          String    @id @default(cuid())
+  childId     String
+  vaccineKey  String
+  givenAt     DateTime?
+  caregiverId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  child     Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  caregiver User? @relation("ChildVaccineDoseCaregiver", fields: [caregiverId], references: [id], onDelete: SetNull)
+
+  @@unique([childId, vaccineKey])
+  @@index([childId])
 }

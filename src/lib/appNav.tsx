@@ -165,6 +165,29 @@ const MAR_ANTONIA_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: "/mar-antonia/crecimiento",
+    label: "Crecimiento",
+    activePrefixes: ["/mar-antonia/crecimiento"],
+    icon: (
+      <svg {...ICON_PROPS}>
+        <path d="M4 17l5-6 4 4 7-9" />
+        <path d="M15 6h5v5" />
+      </svg>
+    ),
+  },
+  {
+    href: "/mar-antonia/vacunas",
+    label: "Vacunas",
+    activePrefixes: ["/mar-antonia/vacunas"],
+    icon: (
+      <svg {...ICON_PROPS}>
+        <path d="M12 3.5l7 2.5v5c0 5-3 8.5-7 9.5-4-1-7-4.5-7-9.5V6l7-2.5Z" />
+        <path d="M12 8.5v6" />
+        <path d="M9 11.5h6" />
+      </svg>
+    ),
+  },
+  {
     href: "/mar-antonia/ajustes",
     label: "Ajustes",
     activePrefixes: ["/mar-antonia/ajustes"],

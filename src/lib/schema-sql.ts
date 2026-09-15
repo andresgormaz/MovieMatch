@@ -354,6 +354,30 @@ export const TABLE_STATEMENTS = [
     CONSTRAINT "ChildActivity_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "ChildActivity_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS "ChildGrowthMeasurement" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "childId" TEXT NOT NULL,
+    "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "caregiverId" TEXT,
+    "weightKg" REAL,
+    "heightCm" REAL,
+    "headCircumferenceCm" REAL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ChildGrowthMeasurement_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ChildGrowthMeasurement_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS "ChildVaccineDose" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "childId" TEXT NOT NULL,
+    "vaccineKey" TEXT NOT NULL,
+    "givenAt" DATETIME,
+    "caregiverId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ChildVaccineDose_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ChildVaccineDose_caregiverId_fkey" FOREIGN KEY ("caregiverId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+  )`,
 ];
 
 export const INDEX_STATEMENTS = [
@@ -439,6 +463,9 @@ export const INDEX_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "ChildCaregiver_userId_idx" ON "ChildCaregiver"("userId")`,
   `CREATE INDEX IF NOT EXISTS "ChildActivity_childId_occurredAt_idx" ON "ChildActivity"("childId", "occurredAt")`,
   `CREATE INDEX IF NOT EXISTS "ChildActivity_childId_type_idx" ON "ChildActivity"("childId", "type")`,
+  `CREATE INDEX IF NOT EXISTS "ChildGrowthMeasurement_childId_occurredAt_idx" ON "ChildGrowthMeasurement"("childId", "occurredAt")`,
+  `CREATE INDEX IF NOT EXISTS "ChildVaccineDose_childId_idx" ON "ChildVaccineDose"("childId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "ChildVaccineDose_childId_vaccineKey_key" ON "ChildVaccineDose"("childId", "vaccineKey")`,
 ];
 
 // SQLite's ADD COLUMN has no IF NOT EXISTS guard, so these are run through
@@ -491,6 +518,8 @@ export const ALTER_STATEMENTS = [
   // closed out immediately -- see the matching migration.sql. Idempotent:
   // a second run finds no more rows with type = 'NAP' to touch.
   `UPDATE "ChildActivity" SET "type" = 'SLEEP', "sleepType" = 'SIESTA', "sleepEndedAt" = "occurredAt" WHERE "type" = 'NAP'`,
+  `ALTER TABLE "Child" ADD COLUMN "birthDate" DATETIME`,
+  `ALTER TABLE "Child" ADD COLUMN "sex" TEXT`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

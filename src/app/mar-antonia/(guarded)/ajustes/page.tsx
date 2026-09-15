@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { BackToHomeLink } from "@/components/BackToHomeLink";
 
 interface ChildInfo {
@@ -8,6 +8,8 @@ interface ChildInfo {
   name: string;
   inviteCode: string;
   ownerUserId: string;
+  birthDate: string | null;
+  sex: "MALE" | "FEMALE" | null;
 }
 interface CaregiverInfo {
   id: string;
@@ -17,6 +19,12 @@ interface CaregiverInfo {
 }
 
 const ROLE_LABEL: Record<CaregiverInfo["role"], string> = { MAMA: "Mamá", PAPA: "Papá" };
+const SEX_LABEL: Record<NonNullable<ChildInfo["sex"]>, string> = { MALE: "Niño", FEMALE: "Niña" };
+
+function toDateInputValue(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export default function MarAntoniaAjustesPage() {
   const [child, setChild] = useState<ChildInfo | null>(null);
@@ -25,24 +33,35 @@ export default function MarAntoniaAjustesPage() {
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [birthDateDraft, setBirthDateDraft] = useState("");
+  const [sexDraft, setSexDraft] = useState<ChildInfo["sex"]>(null);
+  const [savingBirth, setSavingBirth] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    // Guards against React Strict Mode's dev-only double-invoke of this
+    // effect: without it, the first (discarded) run's fetch can resolve
+    // *after* the second one already populated the drafts -- and after the
+    // caregiver has started typing -- silently wiping out whatever they'd
+    // already entered in nameDraft/birthDateDraft/sexDraft.
+    let cancelled = false;
     // The caregiver check in mar-antonia/(guarded)/layout.tsx already
     // guarantees at least one child exists for this user; this page only
     // ever operates on the first one, same scope as the Inicio page.
-    const currentRes = await fetch("/api/mar-antonia/children/current");
-    const { child: c, caregivers: cg } = await currentRes.json();
-    setChild(c);
-    setNameDraft(c.name);
-    setCaregivers(cg);
-    setLoading(false);
+    fetch("/api/mar-antonia/children/current")
+      .then((res) => res.json())
+      .then(({ child: c, caregivers: cg }) => {
+        if (cancelled) return;
+        setChild(c);
+        setNameDraft(c.name);
+        setBirthDateDraft(c.birthDate ? toDateInputValue(c.birthDate) : "");
+        setSexDraft(c.sex);
+        setCaregivers(cg);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load on mount
-    load();
-  }, [load]);
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -56,6 +75,23 @@ export default function MarAntoniaAjustesPage() {
     const { child: updated } = await res.json();
     setChild(updated);
     setSavingName(false);
+  }
+
+  async function saveBirthInfo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!child) return;
+    setSavingBirth(true);
+    const res = await fetch(`/api/mar-antonia/children/${child.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        birthDate: birthDateDraft ? new Date(`${birthDateDraft}T00:00:00`).toISOString() : null,
+        sex: sexDraft,
+      }),
+    });
+    const { child: updated } = await res.json();
+    setChild(updated);
+    setSavingBirth(false);
   }
 
   function inviteUrl(code: string) {
@@ -109,6 +145,53 @@ export default function MarAntoniaAjustesPage() {
         >
           {copied ? "¡Copiado! ✓" : "Copiar link de invitación"}
         </button>
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+        <h2 className="font-semibold text-white">Nacimiento</h2>
+        <p className="text-xs text-muted">
+          Necesario para las curvas de crecimiento (edad en meses) y para saber qué curva usar (niño/niña).
+        </p>
+        <form onSubmit={saveBirthInfo} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="child-birthdate" className="text-sm font-semibold text-white">
+              Fecha de nacimiento
+            </label>
+            <input
+              id="child-birthdate"
+              type="date"
+              value={birthDateDraft}
+              onChange={(e) => setBirthDateDraft(e.target.value)}
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-semibold text-white">Sexo</span>
+            <div className="flex gap-2">
+              {(["MALE", "FEMALE"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSexDraft(s)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                    sexDraft === s
+                      ? "border-accent bg-accent/15 text-white"
+                      : "border-white/15 text-neutral-300 hover:border-white/30"
+                  }`}
+                >
+                  {SEX_LABEL[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={savingBirth}
+            className="w-fit rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+          >
+            Guardar
+          </button>
+        </form>
       </section>
 
       <section className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">

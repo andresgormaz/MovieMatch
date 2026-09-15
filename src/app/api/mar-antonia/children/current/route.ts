@@ -23,6 +23,8 @@ export async function GET() {
           name: true,
           inviteCode: true,
           ownerUserId: true,
+          birthDate: true,
+          sex: true,
           caregivers: {
             include: { user: { select: { id: true, name: true, email: true } } },
             orderBy: { joinedAt: "asc" },
