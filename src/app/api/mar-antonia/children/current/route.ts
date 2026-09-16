@@ -25,6 +25,11 @@ export async function GET() {
           ownerUserId: true,
           birthDate: true,
           sex: true,
+          legalName: true,
+          rut: true,
+          passportNumber: true,
+          bloodType: true,
+          medicalNotes: true,
           caregivers: {
             include: { user: { select: { id: true, name: true, email: true } } },
             orderBy: { joinedAt: "asc" },

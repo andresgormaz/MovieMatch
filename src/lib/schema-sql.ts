@@ -566,6 +566,11 @@ export const ALTER_STATEMENTS = [
   `UPDATE "ChildActivity" SET "type" = 'SLEEP', "sleepType" = 'SIESTA', "sleepEndedAt" = "occurredAt" WHERE "type" = 'NAP'`,
   `ALTER TABLE "Child" ADD COLUMN "birthDate" DATETIME`,
   `ALTER TABLE "Child" ADD COLUMN "sex" TEXT`,
+  `ALTER TABLE "Child" ADD COLUMN "legalName" TEXT`,
+  `ALTER TABLE "Child" ADD COLUMN "rut" TEXT`,
+  `ALTER TABLE "Child" ADD COLUMN "passportNumber" TEXT`,
+  `ALTER TABLE "Child" ADD COLUMN "bloodType" TEXT`,
+  `ALTER TABLE "Child" ADD COLUMN "medicalNotes" TEXT`,
 ];
 
 // Drops indexes from an older version of the schema that INDEX_STATEMENTS no

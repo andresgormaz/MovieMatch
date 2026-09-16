@@ -10,6 +10,11 @@ interface ChildInfo {
   ownerUserId: string;
   birthDate: string | null;
   sex: "MALE" | "FEMALE" | null;
+  legalName: string | null;
+  rut: string | null;
+  passportNumber: string | null;
+  bloodType: string | null;
+  medicalNotes: string | null;
 }
 interface CaregiverInfo {
   id: string;
@@ -20,6 +25,7 @@ interface CaregiverInfo {
 
 const ROLE_LABEL: Record<CaregiverInfo["role"], string> = { MAMA: "Mamá", PAPA: "Papá" };
 const SEX_LABEL: Record<NonNullable<ChildInfo["sex"]>, string> = { MALE: "Niño", FEMALE: "Niña" };
+const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
 function toDateInputValue(iso: string) {
   const d = new Date(iso);
@@ -35,7 +41,12 @@ export default function MarAntoniaAjustesPage() {
   const [copied, setCopied] = useState(false);
   const [birthDateDraft, setBirthDateDraft] = useState("");
   const [sexDraft, setSexDraft] = useState<ChildInfo["sex"]>(null);
-  const [savingBirth, setSavingBirth] = useState(false);
+  const [legalNameDraft, setLegalNameDraft] = useState("");
+  const [rutDraft, setRutDraft] = useState("");
+  const [passportDraft, setPassportDraft] = useState("");
+  const [bloodTypeDraft, setBloodTypeDraft] = useState("");
+  const [medicalNotesDraft, setMedicalNotesDraft] = useState("");
+  const [savingIdentity, setSavingIdentity] = useState(false);
 
   useEffect(() => {
     // Guards against React Strict Mode's dev-only double-invoke of this
@@ -55,6 +66,11 @@ export default function MarAntoniaAjustesPage() {
         setNameDraft(c.name);
         setBirthDateDraft(c.birthDate ? toDateInputValue(c.birthDate) : "");
         setSexDraft(c.sex);
+        setLegalNameDraft(c.legalName ?? "");
+        setRutDraft(c.rut ?? "");
+        setPassportDraft(c.passportNumber ?? "");
+        setBloodTypeDraft(c.bloodType ?? "");
+        setMedicalNotesDraft(c.medicalNotes ?? "");
         setCaregivers(cg);
         setLoading(false);
       });
@@ -77,21 +93,26 @@ export default function MarAntoniaAjustesPage() {
     setSavingName(false);
   }
 
-  async function saveBirthInfo(e: React.FormEvent) {
+  async function saveIdentityInfo(e: React.FormEvent) {
     e.preventDefault();
     if (!child) return;
-    setSavingBirth(true);
+    setSavingIdentity(true);
     const res = await fetch(`/api/mar-antonia/children/${child.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         birthDate: birthDateDraft ? new Date(`${birthDateDraft}T00:00:00`).toISOString() : null,
         sex: sexDraft,
+        legalName: legalNameDraft || null,
+        rut: rutDraft || null,
+        passportNumber: passportDraft || null,
+        bloodType: bloodTypeDraft || null,
+        medicalNotes: medicalNotesDraft || null,
       }),
     });
     const { child: updated } = await res.json();
     setChild(updated);
-    setSavingBirth(false);
+    setSavingIdentity(false);
   }
 
   function inviteUrl(code: string) {
@@ -148,11 +169,11 @@ export default function MarAntoniaAjustesPage() {
       </section>
 
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
-        <h2 className="font-semibold text-white">Nacimiento</h2>
+        <h2 className="font-semibold text-white">Datos personales</h2>
         <p className="text-xs text-muted">
-          Necesario para las curvas de crecimiento (edad en meses) y para saber qué curva usar (niño/niña).
+          Identidad y datos por si se necesitan a mano (un control médico, un trámite, un viaje, una urgencia).
         </p>
-        <form onSubmit={saveBirthInfo} className="flex flex-col gap-3">
+        <form onSubmit={saveIdentityInfo} className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
             <label htmlFor="child-birthdate" className="text-sm font-semibold text-white">
               Fecha de nacimiento
@@ -184,9 +205,77 @@ export default function MarAntoniaAjustesPage() {
               ))}
             </div>
           </div>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="child-legal-name" className="text-sm font-semibold text-white">
+              Nombre completo (como en sus documentos)
+            </label>
+            <input
+              id="child-legal-name"
+              value={legalNameDraft}
+              onChange={(e) => setLegalNameDraft(e.target.value)}
+              placeholder="María Antonia Gormaz Rodríguez"
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="child-rut" className="text-sm font-semibold text-white">
+                Rut
+              </label>
+              <input
+                id="child-rut"
+                value={rutDraft}
+                onChange={(e) => setRutDraft(e.target.value)}
+                placeholder="12.345.678-9"
+                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="child-passport" className="text-sm font-semibold text-white">
+                N° Pasaporte
+              </label>
+              <input
+                id="child-passport"
+                value={passportDraft}
+                onChange={(e) => setPassportDraft(e.target.value)}
+                className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="child-blood-type" className="text-sm font-semibold text-white">
+              Tipo de sangre
+            </label>
+            <select
+              id="child-blood-type"
+              value={bloodTypeDraft}
+              onChange={(e) => setBloodTypeDraft(e.target.value)}
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+            >
+              <option value="">No indicado</option>
+              {BLOOD_TYPES.map((bt) => (
+                <option key={bt} value={bt}>
+                  {bt}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="child-medical-notes" className="text-sm font-semibold text-white">
+              Otra información relevante
+            </label>
+            <textarea
+              id="child-medical-notes"
+              value={medicalNotesDraft}
+              onChange={(e) => setMedicalNotesDraft(e.target.value)}
+              placeholder="Alergias, Isapre/seguro, contacto de emergencia, condiciones médicas…"
+              rows={3}
+              className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </div>
           <button
             type="submit"
-            disabled={savingBirth}
+            disabled={savingIdentity}
             className="w-fit rounded-lg bg-accent px-4 py-2 text-sm font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
             Guardar

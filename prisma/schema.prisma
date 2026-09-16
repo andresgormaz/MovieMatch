@@ -786,8 +786,19 @@ model Child {
   // WHO reference curve to plot) and prompt to fill them in when missing.
   birthDate   DateTime?
   sex         ChildSex?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  // Identity/emergency info kept on hand for whatever comes up (a clinic
+  // visit, a trip, a school) rather than tracked anywhere else -- legalName
+  // is the name on her documents, distinct from the app's own (often more
+  // casual/short) `name` above. medicalNotes is deliberately freeform
+  // (allergies, health insurance, emergency contacts, anything else) rather
+  // than trying to model every possible field.
+  legalName      String?
+  rut            String?
+  passportNumber String?
+  bloodType      String?
+  medicalNotes   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   owner              User                      @relation("ChildOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   caregivers         ChildCaregiver[]

@@ -36,6 +36,36 @@ test.describe("MarAntonia Ajustes", () => {
     }
   });
 
+  test("identity/emergency info (rut, pasaporte, tipo de sangre, notas) can be saved and edited", async ({ page }) => {
+    const email = "e2e-marantonia-ajustes-identity@example.com";
+    runFixture("create-with-child", email, "Bebé Identidad", "MAMA");
+
+    try {
+      await login(page, email);
+      await page.goto("/mar-antonia/ajustes");
+
+      const identityForm = page.locator("form", { has: page.locator("#child-legal-name") });
+      await page.fill("#child-legal-name", "María Antonia Gormaz Rodríguez");
+      await page.fill("#child-rut", "12.345.678-9");
+      await page.fill("#child-passport", "P1234567");
+      await page.selectOption("#child-blood-type", "O+");
+      await page.fill("#child-medical-notes", "Alérgica a la penicilina");
+      await identityForm.getByRole("button", { name: "Guardar" }).click();
+
+      await expect(page.locator("#child-legal-name")).toHaveValue("María Antonia Gormaz Rodríguez");
+
+      // Confirm it stuck server-side, not just optimistic UI.
+      await page.reload();
+      await expect(page.locator("#child-legal-name")).toHaveValue("María Antonia Gormaz Rodríguez");
+      await expect(page.locator("#child-rut")).toHaveValue("12.345.678-9");
+      await expect(page.locator("#child-passport")).toHaveValue("P1234567");
+      await expect(page.locator("#child-blood-type")).toHaveValue("O+");
+      await expect(page.locator("#child-medical-notes")).toHaveValue("Alérgica a la penicilina");
+    } finally {
+      runFixture("delete", email);
+    }
+  });
+
   test("a caregiver of one child cannot read or rename another child's profile", async ({ page }) => {
     const ownerEmail = "e2e-marantonia-ajustes-owner2@example.com";
     const outsiderEmail = "e2e-marantonia-ajustes-outsider@example.com";
