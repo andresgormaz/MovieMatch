@@ -2,19 +2,18 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAnyChild, authzErrorResponse } from "@/lib/marAntonia/authz";
+import { localDateKey, localDayBounds, parseTzOffsetParam } from "@/lib/marAntonia/localDay";
 
 const DAYS_BACK = 14;
-
-function dateKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 // A summary of the last two weeks' activity, one entry per day that has at
 // least one logged activity, excluding today (already shown expanded on
 // Inicio). Grouped in JS rather than a raw SQL date-trunc -- one child's
 // activity volume is tiny (dozens of rows), so this is simpler than
-// reaching for driver-specific SQL.
-export async function GET() {
+// reaching for driver-specific SQL. ?tz=<minutes>, the caregiver's own UTC
+// offset, decides both "today" (so it's excluded correctly) and which day
+// each row is grouped under -- see localDay.ts.
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -25,8 +24,8 @@ export async function GET() {
     return authzErrorResponse(e);
   }
 
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tzOffset = parseTzOffsetParam(new URL(request.url).searchParams.get("tz"));
+  const { start: todayStart } = localDayBounds(tzOffset);
   const cutoff = new Date(todayStart.getTime() - DAYS_BACK * 24 * 60 * 60 * 1000);
 
   const rows = await prisma.childActivity.findMany({
@@ -36,7 +35,7 @@ export async function GET() {
 
   const counts = new Map<string, number>();
   for (const row of rows) {
-    const key = dateKey(row.occurredAt);
+    const key = localDateKey(row.occurredAt, tzOffset);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 

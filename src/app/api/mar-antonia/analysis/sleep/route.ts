@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAnyChild, authzErrorResponse } from "@/lib/marAntonia/authz";
+import { localDateKey, parseTzOffsetParam } from "@/lib/marAntonia/localDay";
 
 const LOOKBACK_DAYS = 90;
 const MINUTE_MS = 60 * 1000;
-
-function dateKey(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 interface NightRecord {
   date: string;
@@ -72,7 +69,7 @@ function compareGroups(
 // here is the caregiver's own data, fetched under their own session the same
 // way every other MarAntonia route already does -- nothing new is exposed
 // that requireAnyChild doesn't already gate.
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
@@ -83,6 +80,7 @@ export async function GET() {
     return authzErrorResponse(e);
   }
 
+  const tzOffset = parseTzOffsetParam(new URL(request.url).searchParams.get("tz"));
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const activities = await prisma.childActivity.findMany({
     where: { childId: caregiver.childId, occurredAt: { gte: since } },
@@ -92,7 +90,7 @@ export async function GET() {
   const nightSessions = activities.filter((a) => a.type === "SLEEP" && a.sleepType === "NOCHE");
   const activitiesByDay = new Map<string, typeof activities>();
   for (const a of activities) {
-    const key = dateKey(a.occurredAt);
+    const key = localDateKey(a.occurredAt, tzOffset);
     const list = activitiesByDay.get(key) ?? [];
     list.push(a);
     activitiesByDay.set(key, list);
@@ -101,7 +99,7 @@ export async function GET() {
   const nights: NightRecord[] = nightSessions.map((session) => {
     const bedtime = session.occurredAt;
     const wakeTime = session.sleepEndedAt;
-    const dayKey = dateKey(bedtime);
+    const dayKey = localDateKey(bedtime, tzOffset);
     const sameDayActivities = activitiesByDay.get(dayKey) ?? [];
 
     const nightWakeCount = activities.filter(

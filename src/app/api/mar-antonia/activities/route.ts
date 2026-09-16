@@ -4,11 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { requireAnyChild, authzErrorResponse } from "@/lib/marAntonia/authz";
 import { validateActivityDetail, SLEEP_TYPE_LABEL } from "@/lib/marAntonia/activityTypes";
+import { localDayBounds, parseTzOffsetParam } from "@/lib/marAntonia/localDay";
 
 const CAREGIVER_SELECT = { id: true, name: true, email: true } as const;
 
-// GET ?date=YYYY-MM-DD (defaults to today, local server time) -- one day's
-// worth of activities, newest first.
+// GET ?date=YYYY-MM-DD (defaults to today) &tz=<minutes> -- one day's worth
+// of activities, newest first. `date` and "today" are both in the
+// caregiver's own timezone (tz, their UTC offset in minutes -- see
+// localDay.ts), not the server's.
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -21,10 +24,9 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const dateParam = searchParams.get("date");
-  const date = dateParam ? new Date(`${dateParam}T00:00:00`) : new Date();
-  const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const dateParam = searchParams.get("date") ?? undefined;
+  const tzOffset = parseTzOffsetParam(searchParams.get("tz"));
+  const { start: dayStart, end: dayEnd } = localDayBounds(tzOffset, dateParam);
 
   const activities = await prisma.childActivity.findMany({
     where: { childId: caregiver.childId, occurredAt: { gte: dayStart, lt: dayEnd } },

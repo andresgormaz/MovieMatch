@@ -249,19 +249,19 @@ export default function MarAntoniaHomePage() {
   const myCaregiverId = useMemo(() => caregivers.find((c) => c.isYou)?.id ?? null, [caregivers]);
 
   const reloadToday = useCallback(async () => {
-    const res = await fetch("/api/mar-antonia/activities");
+    const res = await fetch(`/api/mar-antonia/activities?tz=${new Date().getTimezoneOffset()}`);
     const { activities } = await res.json();
     setTodayActivities(activities);
   }, []);
 
   const reloadPastDay = useCallback(async (date: string) => {
-    const res = await fetch(`/api/mar-antonia/activities?date=${date}`);
+    const res = await fetch(`/api/mar-antonia/activities?date=${date}&tz=${new Date().getTimezoneOffset()}`);
     const { activities } = await res.json();
     setPastDayActivities((prev) => ({ ...prev, [date]: activities }));
   }, []);
 
   const reloadPastDaysSummary = useCallback(async () => {
-    const res = await fetch("/api/mar-antonia/activities/days");
+    const res = await fetch(`/api/mar-antonia/activities/days?tz=${new Date().getTimezoneOffset()}`);
     const { days } = await res.json();
     setPastDays(days);
   }, []);

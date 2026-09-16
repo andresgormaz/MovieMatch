@@ -57,7 +57,7 @@ export default function MarAntoniaAnalisisPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/mar-antonia/analysis/sleep")
+    fetch(`/api/mar-antonia/analysis/sleep?tz=${new Date().getTimezoneOffset()}`)
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
