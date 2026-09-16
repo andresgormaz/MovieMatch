@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+:root {
+  --background: #090909;
+  --surface: #161616;
+  --surface-hover: #232323;
+  --foreground: #f5f5f5;
+  --muted: #a3a3a3;
+  /* Deep "premiere" emerald instead of Netflix's exact brand red
+     (#e50914) -- distinctive on its own, still reads as cinematic
+     (marquee/curtain green, "green-lit" in industry parlance). */
+  --accent: #146149;
+  --accent-hover: #1c7c5d;
+  --accent-press: #0f4b38;
+  --border: rgba(255, 255, 255, 0.09);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-press: var(--accent-press);
+  --color-border: var(--border);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--accent);
+  color: white;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Star-rating confirmation pops -- played once when a star lights up gold
+   (see StarRating.tsx's glowClass). 4 stars gets a small pop, 5 stars a
+   bigger one, so a great rating visibly feels like one. */
+@keyframes star-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  65% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes star-pop-big {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.45) rotate(-8deg);
+  }
+  55% {
+    transform: scale(1.1) rotate(6deg);
+  }
+  80% {
+    transform: scale(1.25) rotate(-3deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.star-pop {
+  animation: star-pop 0.45s ease-out;
+}
+.star-pop-big {
+  animation: star-pop-big 0.65s ease-out;
+}
